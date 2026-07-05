@@ -28,6 +28,9 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
     buyerServiceFeeRatePercent: 10,
     sellerServiceFeeRatePercent: 10
   },
+  inviteReward: {
+    buyerServiceFeeRewardRatePercent: 30
+  },
   discoveryThresholds: {
     smallAmountHafuCoinMax: 150,
     highRatioBaseRatioMin: 43,
@@ -116,6 +119,7 @@ export function normalizeBusinessSettings(rawValue = {}) {
   const ratioSource = source.ratioRecommendation && typeof source.ratioRecommendation === 'object' ? source.ratioRecommendation : {}
   const listingSource = source.listingRecommendations && typeof source.listingRecommendations === 'object' ? source.listingRecommendations : {}
   const commissionSource = source.platformCommission && typeof source.platformCommission === 'object' ? source.platformCommission : {}
+  const inviteRewardSource = source.inviteReward && typeof source.inviteReward === 'object' ? source.inviteReward : {}
   const discoverySource = source.discoveryThresholds && typeof source.discoveryThresholds === 'object' ? source.discoveryThresholds : {}
   const operationalSource = source.operationalThresholds && typeof source.operationalThresholds === 'object' ? source.operationalThresholds : {}
   const securitySource = source.securityThresholds && typeof source.securityThresholds === 'object' ? source.securityThresholds : {}
@@ -156,6 +160,13 @@ export function normalizeBusinessSettings(rawValue = {}) {
     platformCommission: {
       buyerServiceFeeRatePercent: normalizeNumber(commissionSource.buyerServiceFeeRatePercent, defaults.platformCommission.buyerServiceFeeRatePercent, { min: 0, max: 100 }),
       sellerServiceFeeRatePercent: normalizeNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100 })
+    },
+    inviteReward: {
+      buyerServiceFeeRewardRatePercent: normalizeNumber(
+        inviteRewardSource.buyerServiceFeeRewardRatePercent,
+        defaults.inviteReward.buyerServiceFeeRewardRatePercent,
+        { min: 0, max: 100 }
+      )
     },
     discoveryThresholds: {
       smallAmountHafuCoinMax: normalizeNumber(discoverySource.smallAmountHafuCoinMax, defaults.discoveryThresholds.smallAmountHafuCoinMax, { min: 0, max: 999999, integer: true }),
@@ -253,6 +264,12 @@ export function getBuyerRentLabel(settings = null) {
   const normalizedSettings = normalizeBusinessSettings(settings || getCachedBusinessSettings())
   const feeRateLabel = formatPercentLabel(normalizedSettings.platformCommission?.buyerServiceFeeRatePercent || 0)
   return `租金（含平台收取${feeRateLabel}手续费）`
+}
+
+export function getInviteRewardRuleText(settings = null) {
+  const normalizedSettings = normalizeBusinessSettings(settings || getCachedBusinessSettings())
+  const rewardRate = Number(normalizedSettings.inviteReward?.buyerServiceFeeRewardRatePercent || 0)
+  return `返现规则：被邀请人发布的商品成交后，邀请人可获得该订单中平台向买家收取服务费的${rewardRate}%返现。`
 }
 
 export function calculateBaseRatio(gridSize, knifeSkinText, settings = null) {

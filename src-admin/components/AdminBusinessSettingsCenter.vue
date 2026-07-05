@@ -31,6 +31,10 @@
           出售额外物品定价
         </button>
       </div>
+      <div class="settings-toolbar-actions">
+        <button type="button" class="toolbar-btn toolbar-btn--ghost" :disabled="loading || saving" @click="loadSettings">刷新</button>
+        <button type="button" class="toolbar-btn" :disabled="loading || saving" @click="saveSettings">{{ saving ? '保存中...' : '保存配置' }}</button>
+      </div>
     </div>
 
     <div v-if="error" class="state-card state-card--error">{{ error }}</div>
@@ -140,6 +144,19 @@
 
           <article class="panel">
             <div class="panel-head">
+              <strong>邀新返现规则</strong>
+              <span>控制邀请人可分得的买家服务费比例</span>
+            </div>
+            <div class="field-grid field-grid--double">
+              <label class="field">
+                <span>买家服务费返现比例（%）</span>
+                <input v-model.number="form.inviteReward.buyerServiceFeeRewardRatePercent" type="number" min="0" max="100" step="0.01">
+              </label>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
               <strong>运营阈值建议</strong>
               <span>这里是我帮你补充的高频参数，适合后续继续接业务逻辑</span>
             </div>
@@ -207,11 +224,6 @@
               </label>
             </div>
           </article>
-
-          <div class="settings-toolbar-actions" style="justify-content: flex-end; padding-top: 8px;">
-            <button type="button" class="toolbar-btn toolbar-btn--ghost" :disabled="loading || saving" @click="loadSettings">刷新</button>
-            <button type="button" class="toolbar-btn" :disabled="loading || saving" @click="saveSettings">{{ saving ? '保存中...' : '保存配置' }}</button>
-          </div>
         </div>
 
         <div v-else-if="activeDisplaySection === 'insurance'" key="insurance" class="overview-stack">
@@ -251,10 +263,6 @@
             </div>
           </article>
 
-          <div class="settings-toolbar-actions" style="justify-content: flex-end; padding-top: 8px;">
-            <button type="button" class="toolbar-btn toolbar-btn--ghost" :disabled="loading || saving" @click="loadSettings">刷新</button>
-            <button type="button" class="toolbar-btn" :disabled="loading || saving" @click="saveSettings">{{ saving ? '保存中...' : '保存配置' }}</button>
-          </div>
         </div>
 
         <div v-else-if="activeDisplaySection === 'items'" key="items" class="overview-stack">
@@ -288,10 +296,6 @@
             </div>
           </article>
 
-          <div class="settings-toolbar-actions" style="justify-content: flex-end; padding-top: 8px;">
-            <button type="button" class="toolbar-btn toolbar-btn--ghost" :disabled="loading || saving" @click="loadSettings">刷新</button>
-            <button type="button" class="toolbar-btn" :disabled="loading || saving" @click="saveSettings">{{ saving ? '保存中...' : '保存配置' }}</button>
-          </div>
         </div>
       </Transition>
 

@@ -213,6 +213,9 @@ const DEFAULT_ADMIN_BUSINESS_SETTINGS = Object.freeze({
     buyerServiceFeeRatePercent: 10,
     sellerServiceFeeRatePercent: 10
   },
+  inviteReward: {
+    buyerServiceFeeRewardRatePercent: 30
+  },
   discoveryThresholds: {
     smallAmountHafuCoinMax: 150,
     highRatioBaseRatioMin: 43,
@@ -314,6 +317,9 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
   const commissionSource = source.platformCommission && typeof source.platformCommission === 'object'
     ? source.platformCommission
     : {}
+  const inviteRewardSource = source.inviteReward && typeof source.inviteReward === 'object'
+    ? source.inviteReward
+    : {}
   const discoverySource = source.discoveryThresholds && typeof source.discoveryThresholds === 'object'
     ? source.discoveryThresholds
     : {}
@@ -367,6 +373,13 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
     platformCommission: {
       buyerServiceFeeRatePercent: normalizeAdminNumber(commissionSource.buyerServiceFeeRatePercent, defaults.platformCommission.buyerServiceFeeRatePercent, { min: 0, max: 100, precision: 2 }),
       sellerServiceFeeRatePercent: normalizeAdminNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100, precision: 2 })
+    },
+    inviteReward: {
+      buyerServiceFeeRewardRatePercent: normalizeAdminNumber(
+        inviteRewardSource.buyerServiceFeeRewardRatePercent,
+        defaults.inviteReward.buyerServiceFeeRewardRatePercent,
+        { min: 0, max: 100, precision: 2 }
+      )
     },
     discoveryThresholds: {
       smallAmountHafuCoinMax: normalizeAdminInteger(discoverySource.smallAmountHafuCoinMax, defaults.discoveryThresholds.smallAmountHafuCoinMax, { min: 0, max: 999999 }),

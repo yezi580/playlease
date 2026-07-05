@@ -372,7 +372,7 @@
               </article>
 
               <article class="invite-summary-card invite-summary-card--full">
-                <span class="invite-summary-label">累计返现（邀请人返现平台收益的5%）</span>
+                <span class="invite-summary-label">{{ inviteRewardRuleText }}</span>
                 <strong>￥{{ formatMoney(invitedRewardTotal) }}</strong>
               </article>
             </div>
@@ -519,6 +519,7 @@ import {
   fetchBusinessSettings,
   getBuyerRentLabel,
   getCachedBusinessSettings,
+  getInviteRewardRuleText,
   getPendingPaymentTimeoutMinutes
 } from '../utils/businessSettings.js'
 import {
@@ -699,6 +700,9 @@ export default {
     },
     buyerRentLabel() {
       return getBuyerRentLabel(this.businessSettings)
+    },
+    inviteRewardRuleText() {
+      return getInviteRewardRuleText(this.businessSettings)
     },
     orderTotalPages() {
       const total = Number(this.orderTotal || 0)
@@ -1770,7 +1774,7 @@ export default {
     getPlaceholderText(sectionKey) {
       const textMap = {
         messages: '消息板块暂未接入公告与通知，后续可在这里统一展示平台消息。',
-        invite: '邀新赚钱板块暂未接入邀请返佣功能，后续可在这里展示邀请链接与收益明细。',
+        invite: '邀新赚钱板块用于展示邀请码、绑定关系和订单返现明细。',
         feedback: '问题反馈板块仅对已登录的普通用户和客服开放。'
       }
       return textMap[sectionKey] || '该板块暂未开放。'

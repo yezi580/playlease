@@ -30,6 +30,9 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
     buyerServiceFeeRatePercent: 10,
     sellerServiceFeeRatePercent: 10
   },
+  inviteReward: {
+    buyerServiceFeeRewardRatePercent: 30
+  },
   discoveryThresholds: {
     smallAmountHafuCoinMax: 150,
     highRatioBaseRatioMin: 43,
@@ -121,6 +124,9 @@ export function normalizeBusinessSettings(rawValue = {}) {
   const commissionSource = source.platformCommission && typeof source.platformCommission === 'object'
     ? source.platformCommission
     : {}
+  const inviteRewardSource = source.inviteReward && typeof source.inviteReward === 'object'
+    ? source.inviteReward
+    : {}
   const discoverySource = source.discoveryThresholds && typeof source.discoveryThresholds === 'object'
     ? source.discoveryThresholds
     : {}
@@ -167,6 +173,13 @@ export function normalizeBusinessSettings(rawValue = {}) {
     platformCommission: {
       buyerServiceFeeRatePercent: normalizeNumber(commissionSource.buyerServiceFeeRatePercent, defaults.platformCommission.buyerServiceFeeRatePercent, { min: 0, max: 100 }),
       sellerServiceFeeRatePercent: normalizeNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100 })
+    },
+    inviteReward: {
+      buyerServiceFeeRewardRatePercent: normalizeNumber(
+        inviteRewardSource.buyerServiceFeeRewardRatePercent,
+        defaults.inviteReward.buyerServiceFeeRewardRatePercent,
+        { min: 0, max: 100 }
+      )
     },
     discoveryThresholds: {
       smallAmountHafuCoinMax: normalizeNumber(discoverySource.smallAmountHafuCoinMax, defaults.discoveryThresholds.smallAmountHafuCoinMax, { min: 0, max: 999999, integer: true }),
@@ -275,6 +288,10 @@ export function calculateBuyerRentFromSellerRent(amount, buyerServiceFeeRatePerc
   const normalizedAmount = Math.max(0, Number(amount || 0))
   const normalizedRate = Math.max(0, Number(buyerServiceFeeRatePercent || 0))
   return normalizedAmount + Math.floor(normalizedAmount * normalizedRate / 100)
+}
+
+export function calculateBuyerServiceFeeAmount(buyerRentAmount, sellerRentAmount) {
+  return Math.max(0, Number(buyerRentAmount || 0) - Number(sellerRentAmount || 0))
 }
 
 export function calculateSellerIncomeRent(amount, sellerServiceFeeRatePercent = 10) {

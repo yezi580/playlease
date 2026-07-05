@@ -4,6 +4,7 @@
 
 import { getSaleItemDisplayName } from '../../constants/saleItems.js'
 import {
+  calculateBuyerServiceFeeAmount,
   calculateBuyerRentFromSellerRent,
   calculateCompensationFeeAmount,
   calculateSellerIncomeRent,
@@ -58,7 +59,6 @@ export function createOrderLifecycleService({
   emitSupportEvent
 }) {
   const createOrderNo = typeof generateOrderNo === 'function' ? generateOrderNo : buildDefaultOrderNo
-  const INVITE_REWARD_RATE_PERCENT = 5
 
   async function runWithDistributedLock(lockKey, busyMessage, executor) {
     const safeLockKey = String(lockKey || '').trim()
@@ -217,6 +217,8 @@ export function createOrderLifecycleService({
         : inferSellerRentFromBuyerRent(buyerRentAmount))
     const businessSettings = await loadBusinessSettings(executor)
     const sellerServiceFeeRatePercent = businessSettings.platformCommission?.sellerServiceFeeRatePercent
+    const buyerServiceFeeAmount = calculateBuyerServiceFeeAmount(buyerRentAmount, sellerRentAmount)
+    const inviteRewardRatePercent = Math.max(0, Number(businessSettings.inviteReward?.buyerServiceFeeRewardRatePercent || 0))
     const platformFeeAmount = calculateServiceFeeFromSellerRent(
       sellerRentAmount,
       sellerServiceFeeRatePercent
@@ -238,6 +240,8 @@ export function createOrderLifecycleService({
       sellerRentAmount,
       depositAmount,
       usedItemsAmount,
+      buyerServiceFeeAmount,
+      inviteRewardRatePercent,
       platformFeeAmount,
       sellerIncomeAmount,
       buyerRefundAmount
@@ -306,6 +310,8 @@ export function createOrderLifecycleService({
       sellerRentAmount: rentAmount,
       depositAmount,
       usedItemsAmount: 0,
+      buyerServiceFeeAmount: 0,
+      inviteRewardRatePercent: 0,
       platformFeeAmount: 0,
       sellerIncomeAmount: 0,
       buyerRefundAmount: buyerRentAmount + depositAmount
@@ -321,6 +327,8 @@ export function createOrderLifecycleService({
       sellerRentAmount: buyerRentAmount,
       depositAmount,
       usedItemsAmount: 0,
+      buyerServiceFeeAmount: 0,
+      inviteRewardRatePercent: 0,
       platformFeeAmount: buyerRentAmount,
       sellerIncomeAmount: 0,
       buyerRefundAmount: depositAmount
@@ -368,8 +376,9 @@ export function createOrderLifecycleService({
   async function awardInviteRewardForSettlement(executor, order, preview) {
     const sellerUserId = Number(order?.seller_id || 0)
     const orderId = Number(order?.id || 0)
-    const platformFeeAmount = Math.max(0, Number(preview?.platformFeeAmount || 0))
-    if (!sellerUserId || !orderId || platformFeeAmount <= 0) {
+    const buyerServiceFeeAmount = Math.max(0, Number(preview?.buyerServiceFeeAmount || 0))
+    const rewardRatePercent = Math.max(0, Number(preview?.inviteRewardRatePercent || 0))
+    if (!sellerUserId || !orderId || buyerServiceFeeAmount <= 0 || rewardRatePercent <= 0) {
       return
     }
 
@@ -397,7 +406,7 @@ export function createOrderLifecycleService({
       return
     }
 
-    const rewardAmount = Math.floor(platformFeeAmount * INVITE_REWARD_RATE_PERCENT / 100)
+    const rewardAmount = Math.floor(buyerServiceFeeAmount * rewardRatePercent / 100)
     if (rewardAmount <= 0) {
       return
     }
@@ -407,7 +416,7 @@ export function createOrderLifecycleService({
       inviterUserId,
       rewardAmount,
       orderId,
-      `邀新返现入账（平台收益的 ${INVITE_REWARD_RATE_PERCENT}%）`,
+      `邀新返现入账（买家服务费的 ${rewardRatePercent}%）`,
       'invite_reward'
     )
     await executor.execute(
@@ -418,8 +427,8 @@ export function createOrderLifecycleService({
         orderId,
         inviterUserId,
         sellerUserId,
-        INVITE_REWARD_RATE_PERCENT,
-        platformFeeAmount,
+        rewardRatePercent,
+        buyerServiceFeeAmount,
         rewardAmount
       ]
     )
