@@ -1,0 +1,27 @@
+{
+  "name": "my-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "dev:admin": "vite --port 5174 --open /admin.html",
+    "dev:server": "node --watch server/index.js",
+    "build": "vite build",
+    "build:all": "vite build",
+    "preview": "vite preview",
+    "load:chat:http": "node scripts/chat-http-load.mjs",
+    "load:chat:socket": "node scripts/chat-socket-load.mjs"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "qrcode": "^1.5.4",
+    "socket.io-client": "^4.8.3",
+    "vue": "^3.5.32",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "vite": "^8.0.10"
+  }
+}

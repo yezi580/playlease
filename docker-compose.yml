@@ -1,0 +1,98 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-suanjueZOU6.6}
+      MYSQL_DATABASE: ${DB_NAME:-game_rental}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./server/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD:-suanjueZOU6.6}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./server
+    restart: always
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      APP_NAME: ${APP_NAME:-my-app-prod}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-change_me_for_prod}
+      DB_NAME: ${DB_NAME:-game_rental}
+      DB_CONNECTION_LIMIT: ${DB_CONNECTION_LIMIT:-30}
+      DB_MAX_IDLE: ${DB_MAX_IDLE:-30}
+      DB_IDLE_TIMEOUT_MS: ${DB_IDLE_TIMEOUT_MS:-60000}
+      DB_QUEUE_LIMIT: ${DB_QUEUE_LIMIT:-0}
+      DB_CONNECT_TIMEOUT_MS: ${DB_CONNECT_TIMEOUT_MS:-10000}
+      DB_ENABLE_KEEP_ALIVE: ${DB_ENABLE_KEEP_ALIVE:-1}
+      DB_KEEP_ALIVE_INITIAL_DELAY_MS: ${DB_KEEP_ALIVE_INITIAL_DELAY_MS:-0}
+      JWT_SECRET: ${JWT_SECRET:-please_change_this_secret_in_production}
+      JWT_EXPIRES_IN: 7d
+      FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-cos}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      RATE_LIMIT_REDIS_PREFIX: ${RATE_LIMIT_REDIS_PREFIX:-my-app:rate-limit:}
+      PUBLIC_READ_LIMIT_MAX_PER_MIN: ${PUBLIC_READ_LIMIT_MAX_PER_MIN:-6000}
+      AUTHENTICATED_READ_LIMIT_MAX_PER_MIN: ${AUTHENTICATED_READ_LIMIT_MAX_PER_MIN:-1800}
+      AUTHENTICATED_WRITE_LIMIT_MAX_PER_MIN: ${AUTHENTICATED_WRITE_LIMIT_MAX_PER_MIN:-120}
+      ORDER_WRITE_LIMIT_MAX_PER_MIN: ${ORDER_WRITE_LIMIT_MAX_PER_MIN:-60}
+      CONVERSATION_API_LIMIT_MAX_PER_MIN: ${CONVERSATION_API_LIMIT_MAX_PER_MIN:-1800}
+      AUTH_LIMIT_MAX_PER_5_MIN: ${AUTH_LIMIT_MAX_PER_5_MIN:-10}
+      PUBLISH_LIMIT_MAX_PER_HOUR: ${PUBLISH_LIMIT_MAX_PER_HOUR:-5}
+      SOCKET_MESSAGE_RATE_LIMIT_MAX: ${SOCKET_MESSAGE_RATE_LIMIT_MAX:-50}
+      ADMIN_PASSKEY_ENABLED: ${ADMIN_PASSKEY_ENABLED:-true}
+      PASSKEY_RP_NAME: ${PASSKEY_RP_NAME:-XYSH Admin}
+      PASSKEY_RP_ID: ${PASSKEY_RP_ID:-xysh88.com}
+      PASSKEY_EXPECTED_ORIGINS: ${PASSKEY_EXPECTED_ORIGINS:-https://admin.xysh88.com}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://xysh88.com,https://www.xysh88.com,https://admin.xysh88.com}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock_payment}
+      WITHDRAW_PROVIDER: ${WITHDRAW_PROVIDER:-mock_payment}
+      MOCK_PAYMENT_AUTO_SUCCESS_SECONDS: ${MOCK_PAYMENT_AUTO_SUCCESS_SECONDS:-3}
+      MOCK_PAYMENT_EXPIRES_MINUTES: ${MOCK_PAYMENT_EXPIRES_MINUTES:-15}
+      MOCK_WITHDRAW_IMMEDIATE_SUCCESS: ${MOCK_WITHDRAW_IMMEDIATE_SUCCESS:-true}
+    volumes:
+      - ./server/uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./dist:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+
+volumes:
+  mysql_data:
+  redis_data:

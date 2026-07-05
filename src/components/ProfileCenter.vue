@@ -1,0 +1,3498 @@
+<template>
+  <section class="profile-center">
+    <aside class="profile-sidebar">
+      <div class="profile-user-card">
+        <p class="profile-user-label">个人中心</p>
+        <h2 v-if="isLoggedIn">{{ `${currentUser}，欢迎回来` }}</h2>
+        <h2 v-else class="profile-login-title">
+          <span>请先</span>
+          <button type="button" class="profile-login-link" @click="triggerLogin">登录</button>
+        </h2>
+      </div>
+
+      <nav class="profile-nav" aria-label="个人中心导航">
+        <button
+          v-for="section in visibleSections"
+          :key="section.key"
+          type="button"
+          class="profile-nav-item"
+          :class="{ active: activeSection === section.key }"
+          @click="switchSection(section.key)"
+        >
+          <span class="profile-nav-label-wrap">
+            <span class="profile-nav-label">{{ section.label }}</span>
+            <span v-if="hasSectionUnreadDot(section.key)" class="profile-nav-dot" aria-hidden="true"></span>
+          </span>
+        </button>
+
+        <div v-if="isLoggedIn" class="profile-nav-divider"></div>
+        <button
+          v-if="isLoggedIn"
+          type="button"
+          class="profile-nav-item profile-nav-logout"
+          @click="handleLogout"
+        >
+          <span>退出登录</span>
+        </button>
+      </nav>
+    </aside>
+
+    <div class="profile-content">
+      <Transition name="profile-section-fade" mode="out-in">
+      <section v-if="activeSection === 'orders'" :key="'orders'" class="profile-panel profile-panel--orders">
+        <div class="profile-panel-card">
+          <div class="profile-order-toolbar">
+            <div class="order-filter-tabs" aria-label="订单状态筛选">
+              <button
+                v-for="tab in visibleOrderStatusTabs"
+                :key="tab.key"
+                type="button"
+                class="order-filter-tab"
+                :class="{ active: orderFilterStatus === tab.key }"
+                @click="changeOrderStatus(tab.key)"
+              >
+                <span>{{ tab.label }}</span>
+                <span class="order-filter-count">{{ getOrderCount(tab.key) }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="orderLoading" class="profile-empty">正在加载订单列表...</div>
+          <div v-else-if="orderError" class="profile-empty profile-error">{{ orderError }}</div>
+          <div v-else-if="!orderList.length" class="profile-empty">当前筛选条件下暂无订单。</div>
+
+          <div v-else class="order-list">
+            <article v-for="order in orderList" :key="order.id" class="order-item" @click="handleOrderCardClick($event, order)">
+              <div class="order-cover">
+                <img v-if="order.cover_image" :src="order.cover_image" :alt="order.listing_title" />
+                <div v-else class="order-cover-placeholder">订单</div>
+              </div>
+
+              <div class="order-main">
+                <div class="order-header">
+                  <div>
+                    <h4>{{ order.listing_title }}</h4>
+                    <p class="order-subtitle">
+                      {{ orderCounterpartyLabel }}：{{ getOrderCounterpartyName(order) }}
+                    </p>
+                  </div>
+                  <div class="order-status-wrap">
+                    <span class="order-status" :class="`status-${order.status}`">{{ order.status_text }}</span>
+                    <span v-if="order.status === 'pending_payment'" class="order-status-countdown">
+                      {{ formatPendingCountdown(order.created_at) }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="order-meta-grid order-meta-grid--orders">
+                  <p class="copy-inline"><span>商品编号</span><span>{{ order.listing_no || '-' }}</span><CopyTextButton :text="order.listing_no || ''" label="商品编号" /></p>
+                  <p><span>订单编号</span>{{ order.order_no }}</p>
+                  <p><span>租用天数</span>{{ order.rent_days || 0 }} 天</p>
+                  <p><span>下单时间</span>{{ formatOrderDate(order.created_at) }}</p>
+                  <p><span>{{ buyerRentLabel }}</span>￥{{ formatMoney(order.amount) }}</p>
+                  <p><span>押金</span>￥{{ formatMoney(order.deposit_amount) }}</p>
+                </div>
+              </div>
+
+              <div class="order-actions">
+                <button
+                  v-for="action in getOrderActions(order)"
+                  :key="action.key"
+                  type="button"
+                  class="order-action-btn"
+                  :class="[{ 'order-action-btn--detail': action.key === 'detail' }, action.tone]"
+                  @click.stop="handleOrderAction(action, order)"
+                >
+                  {{ action.label }}
+                </button>
+              </div>
+            </article>
+          </div>
+
+          <div v-if="orderTotalPages > 1" class="order-pagination">
+            <button type="button" class="order-page-btn" :disabled="orderPage <= 1 || orderLoading" @click="goToOrderPage(orderPage - 1)">
+              上一页
+            </button>
+            <button
+              v-for="page in visibleOrderPages"
+              :key="page"
+              type="button"
+              class="order-page-btn"
+              :class="{ active: page === orderPage }"
+              :disabled="orderLoading"
+              @click="goToOrderPage(page)"
+            >
+              {{ page }}
+            </button>
+            <button type="button" class="order-page-btn" :disabled="orderPage >= orderTotalPages || orderLoading" @click="goToOrderPage(orderPage + 1)">
+              下一页
+            </button>
+            <span class="order-page-summary">第 {{ orderPage }} / {{ orderTotalPages }} 页，共 {{ orderTotal }} 条</span>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="activeSection === 'messages'" :key="'messages'" class="profile-panel">
+        <div class="profile-panel-card">
+          <div class="profile-order-toolbar profile-message-toolbar">
+            <div class="profile-message-summary">
+              <strong>未读消息</strong>
+              <span>{{ totalUnreadCount }} 条</span>
+            </div>
+            <button
+              type="button"
+              class="profile-message-refresh-btn"
+              :disabled="messageLoading"
+              @click="loadMessageData"
+            >
+              刷新
+            </button>
+          </div>
+
+          <div v-if="messageLoading" class="profile-empty">正在加载消息列表...</div>
+          <div v-else-if="messageError" class="profile-empty profile-error">{{ messageError }}</div>
+          <div v-else-if="!messageList.length" class="profile-empty">暂时还没有消息。</div>
+
+          <div v-else class="profile-message-list">
+            <article
+              v-for="messageItem in messageList"
+              :key="`${messageItem.item_type}-${messageItem.id}`"
+              class="profile-message-item"
+              :class="{ 'profile-message-item--unread': Number(messageItem.unread_count || 0) > 0 }"
+              @click="openMessageItem(messageItem)"
+            >
+              <div class="profile-message-item-main">
+                <div class="profile-message-item-header">
+                  <div class="profile-message-title-wrap">
+                    <h4>{{ messageItem.title }}</h4>
+                    <span v-if="messageItem.unread_count > 0" class="profile-message-unread-badge">
+                      {{ formatBadgeCount(messageItem.unread_count) }}
+                    </span>
+                  </div>
+                  <span class="profile-message-time">{{ formatConversationTime(messageItem.created_at || messageItem.updated_at) }}</span>
+                </div>
+
+                <p class="profile-message-counterpart">
+                  {{ getMessageItemMeta(messageItem) }}
+                </p>
+                <p class="profile-message-preview">
+                  {{ getMessageItemPreview(messageItem) }}
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="activeSection === 'published'" :key="'published'" class="profile-panel profile-panel--published">
+        <div class="profile-panel-card">
+          <div class="profile-order-toolbar">
+            <div class="order-filter-tabs" aria-label="我发布的状态筛选">
+              <button
+                v-for="tab in visibleMyListingStatusTabs"
+                :key="tab.key"
+                type="button"
+                class="order-filter-tab"
+                :class="{ active: myListingFilterStatus === tab.key }"
+                @click="changeMyListingStatus(tab.key)"
+              >
+                <span>{{ tab.label }}</span>
+                <span class="order-filter-count">{{ getMyListingCount(tab.key) }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="myListingsLoading" class="profile-empty">正在加载内容...</div>
+          <div v-else-if="myListingsError" class="profile-empty profile-error">{{ myListingsError }}</div>
+          <div v-else-if="!myListingsList.length" class="profile-empty">{{ myListingsEmptyText }}</div>
+
+          <div v-else class="listing-list">
+            <article
+              v-for="item in myListingsList"
+              :key="`${item.record_type}-${item.id}`"
+              :class="item.record_type === 'seller_order' ? 'order-item' : 'listing-item'"
+            >
+              <template v-if="item.record_type === 'seller_order'">
+                <div class="order-cover" @click="handlePublishedRecordClick($event, item)">
+                  <img v-if="item.cover_image" :src="item.cover_image" :alt="item.listing_title" />
+                  <div v-else class="order-cover-placeholder">订单</div>
+                </div>
+
+                <div class="order-main" @click="handlePublishedRecordClick($event, item)">
+                  <div class="order-header">
+                    <div>
+                      <h4>{{ item.listing_title }}</h4>
+                      <p class="order-subtitle">
+                        买家：{{ item.buyer_name || '未知买家' }}
+                      </p>
+                    </div>
+                    <div class="order-status-wrap">
+                      <span class="order-status" :class="`status-${item.status}`">{{ item.status_text }}</span>
+                      <span v-if="false" class="order-status-countdown">
+                        {{ formatPendingCountdown(item.created_at) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="order-meta-grid">
+                    <p class="copy-inline"><span>商品编号</span><span>{{ item.listing_no || '-' }}</span><CopyTextButton :text="item.listing_no || ''" label="商品编号" /></p>
+                    <p><span>订单编号</span>{{ item.order_no }}</p>
+                    <p><span>租用天数</span>{{ item.rent_days || 0 }} 天</p>
+                    <p><span>下单时间</span>{{ formatOrderDate(item.created_at) }}</p>
+                    <p><span>发布租金</span>￥{{ formatMoney(item.seller_rent_amount) }}</p>
+                    <p><span>预计到帐租金</span>￥{{ formatMoney(getSellerIncomeRent(item)) }}</p>
+                    <p><span>押金</span>￥{{ formatMoney(item.deposit_amount) }}</p>
+                  </div>
+                </div>
+
+                <div class="order-actions">
+                  <button
+                    v-for="action in getPublishedOrderActions(item)"
+                    :key="action.key"
+                    type="button"
+                    class="order-action-btn"
+                    :class="[{ 'order-action-btn--detail': action.key === 'detail' }, action.tone]"
+                    @click.stop="handlePublishedOrderAction(action, item)"
+                  >
+                    {{ action.label }}
+                  </button>
+                </div>
+              </template>
+
+              <template v-else>
+                <div class="listing-cover" @click="handlePublishedRecordClick($event, item)">
+                  <img v-if="item.cover_image" :src="item.cover_image" :alt="item.listing_title" />
+                  <div v-else class="order-cover-placeholder">商品</div>
+                </div>
+
+                <div class="listing-main" @click="handlePublishedRecordClick($event, item)">
+                  <div class="order-header">
+                    <div>
+                      <h4>{{ item.listing_title }}</h4>
+                      <p class="order-subtitle">上号方式：{{ item.login_method || '未设置' }}</p>
+                    </div>
+                    <span class="listing-status" :class="`status-${item.listing_status}`">
+                      {{ item.listing_status_text }}
+                    </span>
+                  </div>
+
+                  <div class="listing-meta-grid">
+                    <p class="copy-inline"><span>商品编号</span><span>#{{ item.listing_no || item.id }}</span><CopyTextButton :text="item.listing_no || item.id || ''" label="商品编号" /></p>
+                    <p><span>租用天数</span>{{ item.rent_days || 0 }} 天</p>
+                    <p><span>发布时间</span>{{ formatOrderDate(item.published_at || item.created_at) }}</p>
+                    <p><span>地区 / 段位</span>{{ item.region || '未设置地区' }} / {{ item.rank_name || '未设置段位' }}</p>
+                    <p><span>租金</span><strong>￥{{ formatMoney(item.rent_price) }}</strong></p>
+                    <p><span>押金</span><strong>￥{{ formatMoney(item.deposit) }}</strong></p>
+                  </div>
+                </div>
+
+                <div class="listing-actions-col">
+                  <button
+                    v-for="action in getMyListingActions(item)"
+                    :key="action.key"
+                    type="button"
+                    class="order-action-btn"
+                    :class="[{ 'order-action-btn--detail': action.key === 'detail' }, action.tone]"
+                    @click.stop="handleMyListingAction(action, item)"
+                  >
+                    {{ action.label }}
+                  </button>
+                </div>
+              </template>
+            </article>
+          </div>
+
+          <div v-if="myListingsTotalPages > 1" class="order-pagination">
+            <button type="button" class="order-page-btn" :disabled="myListingsPage <= 1 || myListingsLoading" @click="goToMyListingPage(myListingsPage - 1)">
+              上一页
+            </button>
+            <button
+              v-for="page in visibleMyListingPages"
+              :key="page"
+              type="button"
+              class="order-page-btn"
+              :class="{ active: page === myListingsPage }"
+              :disabled="myListingsLoading"
+              @click="goToMyListingPage(page)"
+            >
+              {{ page }}
+            </button>
+            <button type="button" class="order-page-btn" :disabled="myListingsPage >= myListingsTotalPages || myListingsLoading" @click="goToMyListingPage(myListingsPage + 1)">
+              下一页
+            </button>
+            <span class="order-page-summary">第 {{ myListingsPage }} / {{ myListingsTotalPages }} 页，共 {{ myListingsTotal }} 条</span>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="activeSection === 'verify'" :key="'verify'" class="profile-panel">
+        <div v-if="!isLoggedIn" class="profile-placeholder-card">
+          <h4>实名认证</h4>
+          <p>完成实名认证后，可用于发布商品、申请提现，并提升交易信任度。</p>
+          <button type="button" class="profile-login-btn" @click="triggerLogin">立即登录</button>
+        </div>
+        <div v-else class="profile-panel-card">
+          <div class="verify-status-card" :class="`verify-status-card--${kycStatus}`">
+            <div class="verify-status-main">
+              <span class="verify-status-label">当前认证状态</span>
+              <strong>{{ getKycStatusText(kycStatus) }}</strong>
+              <p>{{ getKycStatusDescription(kycStatus) }}</p>
+            </div>
+            <span class="verify-status-badge" :class="`status-${kycStatus}`">{{ getKycStatusText(kycStatus) }}</span>
+          </div>
+
+          <div v-if="kycLoading" class="profile-empty">正在加载实名认证信息...</div>
+          <div v-else-if="kycError" class="profile-empty profile-error">{{ kycError }}</div>
+          <div v-else class="verify-panel">
+            <div class="verify-info-grid">
+              <div class="verify-info-item">
+                <span>认证姓名</span>
+                <strong>{{ kycRealNameMasked || '未认证' }}</strong>
+              </div>
+              <div class="verify-info-item">
+                <span>证件号码</span>
+                <strong>{{ kycIdCardMasked || '未认证' }}</strong>
+              </div>
+              <div class="verify-info-item">
+                <span>最近提交</span>
+                <strong>{{ formatOrderDate(kycSubmittedAt) }}</strong>
+              </div>
+              <div class="verify-info-item">
+                <span>认证完成</span>
+                <strong>{{ formatOrderDate(kycVerifiedAt) }}</strong>
+              </div>
+            </div>
+
+            <div v-if="kycFailureReason" class="verify-tips-card verify-tips-card--error">
+              <h4>审核反馈</h4>
+              <p>{{ kycFailureReason }}</p>
+            </div>
+
+            <form v-if="canSubmitKyc" class="verify-form-card" @submit.prevent="submitKyc">
+              <div class="wallet-action-header">
+                <div>
+                  <h4>提交实名认证</h4>
+                  <p>请填写本人真实姓名与有效身份证件号码，提交后系统会根据当前配置完成审核。</p>
+                </div>
+              </div>
+
+              <div class="wallet-form-grid verify-form-grid">
+                <label class="wallet-form-field">
+                  <span>真实姓名</span>
+                  <input v-model.trim="kycForm.realName" type="text" maxlength="30" placeholder="请输入真实姓名" :disabled="kycSubmitting" />
+                </label>
+                <label class="wallet-form-field">
+                  <span>身份证号</span>
+                  <input v-model.trim="kycForm.idCardNo" type="text" maxlength="18" placeholder="请输入身份证号码" :disabled="kycSubmitting" />
+                </label>
+              </div>
+
+              <div class="wallet-form-actions">
+                <button type="submit" class="order-action-btn primary wallet-submit-btn" :disabled="kycSubmitting">
+                  {{ kycSubmitting ? '提交中...' : '提交实名认证' }}
+                </button>
+              </div>
+            </form>
+
+            <div v-else class="verify-tips-card">
+              <h4>{{ kycStatus === 'pending' ? '认证审核中' : '实名认证已完成' }}</h4>
+              <p>
+                {{
+                  kycStatus === 'pending'
+                    ? '你已提交实名认证申请，请继续完成腾讯云刷脸核身；回跳后页面会自动同步最新状态。'
+                    : '当前账号已完成实名认证，可继续发布商品和申请钱包提现。'
+                }}
+              </p>
+              <div v-if="kycStatus === 'pending'" class="verify-action-row">
+                <button
+                  v-if="kycVerifyUrl"
+                  type="button"
+                  class="order-action-btn primary"
+                  :disabled="kycSyncing"
+                  @click="continueKycVerification"
+                >
+                  继续刷脸核身
+                </button>
+                <button
+                  type="button"
+                  class="order-action-btn secondary"
+                  :disabled="kycSyncing"
+                  @click="syncKycResult({}, { showToast: true })"
+                >
+                  {{ kycSyncing ? '同步中...' : '刷新认证结果' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="activeSection === 'wallet'" :key="'wallet'" class="profile-panel">
+        <div v-if="!isLoggedIn" class="profile-placeholder-card">
+          <h4>我的钱包</h4>
+          <p>登录后可查看余额、结算流水、提现申请记录，并发起钱包提现。</p>
+          <button type="button" class="profile-login-btn" @click="triggerLogin">立即登录</button>
+        </div>
+        <div v-else class="profile-panel-card">
+          <div class="wallet-summary-card">
+            <span class="wallet-summary-label">当前钱包概览</span>
+            <div class="wallet-summary-grid">
+              <div>
+                <span class="wallet-summary-caption">钱包余额</span>
+                <strong class="wallet-summary-balance">￥{{ formatMoney(walletBalance) }}</strong>
+              </div>
+              <div>
+                <span class="wallet-summary-caption">冻结金额</span>
+                <strong class="wallet-summary-minor">￥{{ formatMoney(walletFrozenBalance) }}</strong>
+              </div>
+              <div>
+                <span class="wallet-summary-caption">可提现余额</span>
+                <strong class="wallet-summary-minor wallet-summary-minor--highlight">￥{{ formatMoney(walletWithdrawableBalance) }}</strong>
+              </div>
+            </div>
+            <p class="wallet-summary-tip">
+              提现申请提交后，金额会先进入冻结状态，待平台审核及打款完成后更新结果。
+            </p>
+          </div>
+
+          <div class="wallet-action-card">
+            <div class="wallet-action-header">
+              <div>
+                <h4>申请提现</h4>
+                <p>支持支付宝、银行卡等方式，建议填写常用收款账户。</p>
+              </div>
+              <button type="button" class="order-action-btn ghost" :disabled="walletLoading || walletWithdrawSubmitting" @click="loadWalletData">
+                刷新钱包
+              </button>
+            </div>
+
+            <form class="wallet-form-grid" @submit.prevent="submitWithdraw">
+              <label class="wallet-form-field">
+                <span>提现金额</span>
+                <input v-model.trim="withdrawForm.amount" type="number" min="1" step="0.01" placeholder="最低 1 元" :disabled="walletWithdrawSubmitting || !canApplyWithdraw" />
+              </label>
+              <label class="wallet-form-field">
+                <span>提现方式</span>
+                <select v-model="withdrawForm.channel" :disabled="walletWithdrawSubmitting || !canApplyWithdraw">
+                  <option value="alipay">支付宝</option>
+                  <option value="bank">银行卡</option>
+                </select>
+              </label>
+              <label class="wallet-form-field">
+                <span>收款人姓名</span>
+                <input v-model.trim="withdrawForm.accountName" type="text" maxlength="50" placeholder="请输入收款人姓名" :disabled="walletWithdrawSubmitting || !canApplyWithdraw" />
+              </label>
+              <label class="wallet-form-field">
+                <span>收款账号</span>
+                <input v-model.trim="withdrawForm.accountNo" type="text" maxlength="64" placeholder="请输入支付宝账号或银行卡号" :disabled="walletWithdrawSubmitting || !canApplyWithdraw" />
+              </label>
+              <label class="wallet-form-field wallet-form-field--full">
+                <span>备注说明</span>
+                <input v-model.trim="withdrawForm.remark" type="text" maxlength="100" placeholder="选填，如收款账户说明" :disabled="walletWithdrawSubmitting || !canApplyWithdraw" />
+              </label>
+
+              <div class="wallet-form-actions wallet-form-field--full">
+                <button type="submit" class="order-action-btn primary wallet-submit-btn" :disabled="walletWithdrawSubmitting || !canApplyWithdraw">
+                  {{ walletWithdrawSubmitting ? '提交中...' : '提交提现申请' }}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div v-if="walletLoading" class="profile-empty">正在加载钱包数据...</div>
+          <div v-else-if="walletError" class="profile-empty profile-error">{{ walletError }}</div>
+          <div v-else class="wallet-panels">
+            <div class="wallet-subpanel">
+              <div class="wallet-subpanel-header">
+                <h4>余额流水</h4>
+                <span>{{ walletLedger.length }} 条</span>
+              </div>
+              <div v-if="!walletLedger.length" class="profile-empty">当前还没有钱包流水。</div>
+              <div v-else class="wallet-ledger-list">
+                <article v-for="item in walletLedger" :key="item.id" class="wallet-ledger-item">
+                  <div>
+                    <h4>{{ item.remark || '订单结算入账' }}</h4>
+                    <p>订单号：{{ item.order_id || '-' }}</p>
+                    <p>变动后余额：￥{{ formatMoney(item.balance_after) }}</p>
+                  </div>
+                  <div class="wallet-ledger-amount">
+                    <strong :class="{ 'wallet-ledger-amount--credit': item.direction === 'credit' }">
+                      {{ item.direction === 'credit' ? '+' : '-' }}￥{{ formatMoney(item.amount) }}
+                    </strong>
+                    <span>{{ formatOrderDate(item.created_at) }}</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div class="wallet-subpanel">
+              <div class="wallet-subpanel-header">
+                <h4>提现记录</h4>
+                <span>{{ walletWithdrawList.length }} 条</span>
+              </div>
+              <div v-if="!walletWithdrawList.length" class="profile-empty">当前还没有提现记录。</div>
+              <div v-else class="wallet-ledger-list">
+                <article v-for="item in walletWithdrawList" :key="item.id" class="wallet-ledger-item wallet-withdraw-item">
+                  <div>
+                    <div class="wallet-withdraw-title-row">
+                      <h4>提现申请 {{ item.request_no }}</h4>
+                      <span class="order-status" :class="`status-${item.status}`">{{ getWithdrawStatusText(item.status) }}</span>
+                    </div>
+                    <p>提现方式：{{ getWithdrawChannelText(item.channel) }}</p>
+                    <p>到账账户：{{ item.account_name || '-' }} / {{ item.account_no_masked || '-' }}</p>
+                    <p v-if="item.failure_reason">失败原因：{{ item.failure_reason }}</p>
+                  </div>
+                  <div class="wallet-ledger-amount">
+                    <strong>￥{{ formatMoney(item.amount) }}</strong>
+                    <span>到账金额：￥{{ formatMoney(item.net_amount) }}</span>
+                    <span>{{ formatOrderDate(item.created_at) }}</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="activeSection === 'invite'" :key="'invite'" class="profile-panel profile-panel--invite">
+        <div class="profile-panel-card">
+          <div v-if="inviteLoading" class="profile-empty">正在加载邀新数据...</div>
+          <div v-else-if="inviteError" class="profile-empty profile-error">{{ inviteError }}</div>
+          <div v-else class="invite-panel">
+            <div class="invite-summary-grid">
+              <article class="invite-summary-card">
+                <span class="invite-summary-label">我的邀请码</span>
+                <strong class="invite-summary-code">{{ ownInviteCode || '--' }}</strong>
+              </article>
+
+              <article class="invite-summary-card">
+                <span class="invite-summary-label">我填入的邀请码</span>
+                <template v-if="boundInviteCode">
+                  <strong class="invite-summary-code">{{ boundInviteCode }}</strong>
+                </template>
+                <template v-else>
+                  <div class="invite-bind-row">
+                    <input
+                      v-model.trim="inviteCodeInput"
+                      type="text"
+                      maxlength="16"
+                      class="invite-bind-input"
+                      placeholder="请输入邀请码"
+                      :disabled="inviteSubmitting"
+                      @input="inviteCodeInput = String(inviteCodeInput || '').toUpperCase().replace(/[^A-Z0-9]/g, '')"
+                    />
+                    <button
+                      type="button"
+                      class="order-action-btn primary"
+                      :disabled="inviteSubmitting"
+                      @click="submitInviteCode"
+                    >
+                      {{ inviteSubmitting ? '提交中...' : '确认绑定' }}
+                    </button>
+                  </div>
+                  <p>仅可绑定一次，绑定后不可修改。</p>
+                </template>
+              </article>
+
+              <article class="invite-summary-card invite-summary-card--full">
+                <span class="invite-summary-label">累计返现（邀请人返现平台收益的5%）</span>
+                <strong>￥{{ formatMoney(invitedRewardTotal) }}</strong>
+              </article>
+            </div>
+
+            <div class="invite-order-section">
+              <div class="invite-order-section-header">
+                <h4>我赚的</h4>
+                <span>{{ inviterOrderList.length }} 条</span>
+              </div>
+              <div v-if="!inviterOrderList.length" class="invite-order-list">
+                <article class="invite-order-card invite-order-card--empty">
+                  <div class="profile-empty">暂时还没有通过我的邀请码产生返现的订单</div>
+                </article>
+              </div>
+              <div v-else class="invite-order-list">
+                <article v-for="order in inviterOrderList" :key="`inviter-${order.order_id}`" class="invite-order-card">
+                  <div>
+                    <h4>{{ order.listing_title || '订单' }}</h4>
+                    <p>订单编号：{{ order.order_no || '-' }}</p>
+                    <p>出号用户：{{ order.invitee_username || order.seller_name || '未知用户' }}</p>
+                    <p>订单完成：{{ formatOrderDate(order.finished_at) }}</p>
+                  </div>
+                  <div class="invite-order-amounts">
+                    <strong>返现 ￥{{ formatMoney(order.reward_amount) }}</strong>
+                    <span>到账时间 {{ formatOrderDate(order.awarded_at) }}</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div class="invite-order-section">
+              <div class="invite-order-section-header">
+                <h4>TA赚的</h4>
+                <span>{{ inviteeOrderList.length }} 条</span>
+              </div>
+              <div v-if="!boundInviteCode" class="invite-order-list">
+                <article class="invite-order-card invite-order-card--empty">
+                  <div class="profile-empty">当前还未绑定邀请码。</div>
+                </article>
+              </div>
+              <div v-else-if="!inviteeOrderList.length" class="invite-order-list">
+                <article class="invite-order-card invite-order-card--empty">
+                  <div class="profile-empty">当前还没有因我出号而给邀请人产生返现的订单</div>
+                </article>
+              </div>
+              <div v-else class="invite-order-list">
+                <article v-for="order in inviteeOrderList" :key="`invitee-${order.order_id}`" class="invite-order-card">
+                  <div>
+                    <h4>{{ order.listing_title || '订单' }}</h4>
+                    <p>订单编号：{{ order.order_no || '-' }}</p>
+                    <p>邀请人：{{ order.inviter_username || inviterInfo?.username || '未知用户' }}</p>
+                    <p>订单完成：{{ formatOrderDate(order.finished_at) }}</p>
+                  </div>
+                  <div class="invite-order-amounts">
+                    <strong>邀请人返现 ￥{{ formatMoney(order.reward_amount) }}</strong>
+                    <span>到账时间 {{ formatOrderDate(order.awarded_at) }}</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="activeSection === 'feedback'" :key="'feedback'" class="profile-panel profile-panel--feedback">
+        <div class="profile-panel-card">
+          <article class="feedback-form-card">
+            <label class="feedback-field">
+              <span>问题类别</span>
+              <select
+                v-model="feedbackForm.category"
+                class="feedback-select"
+                :style="feedbackSelectStyle"
+                :disabled="feedbackSubmitting"
+              >
+                <option v-for="item in feedbackCategories" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
+              </select>
+            </label>
+
+            <label class="feedback-field">
+              <span>问题描述</span>
+              <textarea
+                v-model.trim="feedbackForm.description"
+                class="feedback-textarea"
+                rows="6"
+                maxlength="1000"
+                :disabled="feedbackSubmitting"
+                placeholder="请输入问题描述"
+              ></textarea>
+            </label>
+
+            <div class="feedback-form-footer">
+              <span class="feedback-count">{{ String(feedbackForm.description || '').length }}/1000</span>
+              <button type="button" class="order-action-btn primary" :disabled="feedbackSubmitting" @click="submitFeedback">
+                {{ feedbackSubmitting ? '提交中...' : '提交反馈' }}
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section v-else :key="activeSection" class="profile-panel">
+        <div class="profile-placeholder-card">
+          <h4>{{ currentSection.label }}</h4>
+          <p>{{ getPlaceholderText(activeSection) }}</p>
+          <button type="button" class="profile-login-btn" @click="triggerLogin">立即登录</button>
+        </div>
+      </section>
+      </Transition>
+
+    </div>
+
+    <PaymentModal
+      v-if="selectedPaymentOrder"
+      :visible="showPaymentModal"
+      :order-id="selectedPaymentOrder?.id"
+      :order-title="selectedPaymentOrder?.listing_title"
+      :cover-image="selectedPaymentOrder?.cover_image"
+      :listing-no="selectedPaymentOrder?.listing_no || ''"
+      :listing-id="selectedPaymentOrder?.listing_id || ''"
+      :amount="selectedPaymentOrder?.amount"
+      :deposit="selectedPaymentOrder?.deposit_amount"
+      :total="selectedPaymentOrder?.total_amount"
+      :rent-days="selectedPaymentOrder?.rent_days"
+      @close="handlePaymentModalClose"
+      @success="handleOrderPaymentSuccess"
+    />
+    <ConversationPanel
+      :visible="showConversationPanel"
+      :order-id="selectedConversationOrderId"
+      :user-role="selectedConversationUserRole"
+      @close="handleConversationPanelClose"
+    />
+  </section>
+</template>
+
+<script>
+import { apiFetch } from '../utils/api.js'
+import { calculateSellerIncomeRent, formatMoneyFixed } from '../utils/money'
+import {
+  calculateCompensationFeeAmount,
+  fetchBusinessSettings,
+  getBuyerRentLabel,
+  getCachedBusinessSettings,
+  getPendingPaymentTimeoutMinutes
+} from '../utils/businessSettings.js'
+import { showErrorToast, showSuccessToast, showWarningToast } from '../utils/toast.js'
+import { showConfirm } from '../utils/confirm.js'
+import ConversationPanel from './ConversationPanel.vue'
+import PaymentModal from './PaymentModal.vue'
+import CopyTextButton from './CopyTextButton.vue'
+
+const FEEDBACK_CATEGORY_OPTIONS = Object.freeze([
+  { value: 'account_login', label: '账号登录问题' },
+  { value: 'listing_issue', label: '商品信息问题' },
+  { value: 'order_payment', label: '订单/支付问题' },
+  { value: 'chat_report', label: '聊天/违规举报' },
+  { value: 'feature_suggestion', label: '功能建议' },
+  { value: 'other', label: '其他问题' }
+])
+
+export default {
+  name: 'ProfileCenter',
+  components: { ConversationPanel, PaymentModal, CopyTextButton },
+  emits: ['view-listing-detail', 'edit-listing', 'view-order-detail', 'login', 'unread-change', 'logout', 'payment-success'],
+  props: {
+    isLoggedIn: {
+      type: Boolean,
+      default: false
+    },
+    currentUser: {
+      type: String,
+      default: ''
+    },
+    currentUserRole: {
+      type: String,
+      default: ''
+    },
+    unreadMessageCount: {
+      type: Number,
+      default: 0
+    },
+    defaultSection: {
+      type: String,
+      default: 'published'
+    },
+    defaultOrderRole: {
+      type: String,
+      default: ''
+    },
+    defaultOrderFilter: {
+      type: String,
+      default: ''
+    },
+    defaultListingFilter: {
+      type: String,
+      default: ''
+    }
+  },
+  data() {
+    return {
+      sections: [
+        { key: 'published', label: '我发布的' },
+        { key: 'orders', label: '我的订单' },
+        { key: 'messages', label: '我的消息' },
+        { key: 'wallet', label: '我的钱包' },
+        { key: 'invite', label: '邀新赚钱' }
+      ],
+      feedbackCategories: FEEDBACK_CATEGORY_OPTIONS.map((item) => ({ ...item })),
+      feedbackForm: {
+        category: FEEDBACK_CATEGORY_OPTIONS[0].value,
+        description: ''
+      },
+      feedbackSubmitting: false,
+      orderStatusTabs: [
+        { key: 'all', label: '全部' },
+        { key: 'pending_payment', label: '待付款' },
+        { key: 'paid', label: '已支付' },
+        { key: 'settlement_pending', label: '结算中' },
+        { key: 'completed', label: '已完成' },
+        { key: 'cancelled', label: '已取消' },
+        { key: 'support_handling', label: '客服处理中' }
+      ],
+      myListingStatusTabs: [
+        { key: 'all', label: '全部' },
+        { key: 'active', label: '上架中' },
+        { key: 'inactive', label: '已下架' },
+        { key: 'pending_payment', label: '待付款' },
+        { key: 'paid', label: '已支付' },
+        { key: 'settlement_pending', label: '结算中' },
+        { key: 'completed', label: '已完成' },
+        { key: 'cancelled', label: '已取消' },
+        { key: 'support_handling', label: '客服处理中' }
+      ],
+      activeSection: 'published',
+      activeOrderRole: 'buyer',
+      orderFilterStatus: 'all',
+      orderStatsData: {
+        total: 0,
+        pending_payment: 0,
+        paid: 0,
+        support_handling: 0,
+        settlement_pending: 0,
+        in_progress: 0,
+        completed: 0,
+        cancelled: 0
+      },
+      orderList: [],
+      orderLoading: false,
+      orderError: '',
+      orderPage: 1,
+      orderPageSize: 5,
+      orderTotal: 0,
+      countdownNowTs: Date.now(),
+      countdownTimer: null,
+      myListingFilterStatus: 'all',
+      myListingsStatsData: {
+        total: 0,
+        active: 0,
+        inactive: 0,
+        pending_payment: 0,
+        paid: 0,
+        support_handling: 0,
+        settlement_pending: 0,
+        completed: 0,
+        cancelled: 0
+      },
+      myListingsList: [],
+      myListingsLoading: false,
+      myListingsError: '',
+      myListingsPage: 1,
+      myListingsPageSize: 6,
+      myListingsTotal: 0,
+      conversationList: [],
+      conversationPage: 1,
+      conversationPageSize: 20,
+      notificationList: [],
+      notificationPage: 1,
+      notificationPageSize: 20,
+      notificationTotal: 0,
+      conversationUnreadTotal: 0,
+      notificationUnreadTotal: 0,
+      totalUnreadCount: 0,
+      messageLoading: false,
+      messageError: '',
+      showConversationPanel: false,
+      selectedConversationOrderId: 0,
+      selectedConversationUserRole: 'buyer',
+      showPaymentModal: false,
+      selectedPaymentOrder: null,
+      walletBalance: 0,
+      walletFrozenBalance: 0,
+      walletWithdrawableBalance: 0,
+      walletLedger: [],
+      walletWithdrawList: [],
+      walletLoading: false,
+      walletWithdrawSubmitting: false,
+      walletError: '',
+      kycLoading: false,
+      kycSubmitting: false,
+      kycSyncing: false,
+      kycError: '',
+      kycStatus: 'unverified',
+      kycRealNameMasked: '',
+      kycIdCardMasked: '',
+      kycVerifiedAt: null,
+      kycSubmittedAt: null,
+      kycFailureReason: '',
+      kycCompletedAt: null,
+      kycOrderNo: '',
+      kycBizToken: '',
+      kycVerifyUrl: '',
+      kycRuleId: '',
+      kycForm: {
+        realName: '',
+        idCardNo: ''
+      },
+      inviteLoading: false,
+      inviteSubmitting: false,
+      inviteError: '',
+      inviteCodeInput: '',
+      ownInviteCode: '',
+      boundInviteCode: '',
+      inviterInfo: null,
+      invitedRewardTotal: 0,
+      contributedRewardTotal: 0,
+      inviterOrderList: [],
+      inviteeOrderList: [],
+      withdrawForm: {
+        amount: '',
+        channel: 'alipay',
+        accountName: '',
+        accountNo: '',
+        remark: ''
+      },
+      businessSettings: getCachedBusinessSettings()
+    }
+  },
+  computed: {
+    feedbackSelectStyle() {
+      const maxLabelLength = this.feedbackCategories.reduce((max, item) => {
+        return Math.max(max, String(item?.label || '').trim().length)
+      }, 0)
+      return {
+        width: `calc(${Math.max(8, maxLabelLength * 2)}ch + 40px)`,
+        maxWidth: '100%'
+      }
+    },
+    canAccessFeedback() {
+      return this.isLoggedIn && String(this.currentUserRole || '').trim() !== 'admin'
+    },
+    visibleSections() {
+      return this.canAccessFeedback
+        ? [...this.sections, { key: 'feedback', label: '问题反馈' }]
+        : this.sections
+    },
+    currentSection() {
+      return this.visibleSections.find((item) => item.key === this.activeSection) || this.visibleSections[0]
+    },
+    orderCounterpartyLabel() {
+      return '卖家'
+    },
+    buyerRentLabel() {
+      return getBuyerRentLabel(this.businessSettings)
+    },
+    orderTotalPages() {
+      const total = Number(this.orderTotal || 0)
+      return Math.max(1, Math.ceil(total / this.orderPageSize))
+    },
+    myListingsTotalPages() {
+      const total = Number(this.myListingsTotal || 0)
+      return Math.max(1, Math.ceil(total / this.myListingsPageSize))
+    },
+    visibleOrderPages() {
+      return this.buildVisiblePages(this.orderPage, this.orderTotalPages)
+    },
+    visibleMyListingPages() {
+      return this.buildVisiblePages(this.myListingsPage, this.myListingsTotalPages)
+    },
+    visibleOrderStatusTabs() {
+      return this.orderStatusTabs.filter((tab) => this.shouldShowStatusTab(tab.key, this.orderStatsData))
+    },
+    visibleMyListingStatusTabs() {
+      return this.myListingStatusTabs.filter((tab) => this.shouldShowStatusTab(tab.key, this.myListingsStatsData))
+    },
+    myListingsEmptyText() {
+      return this.isSellerOrderStatus(this.myListingFilterStatus)
+        ? '当前状态下暂无我卖出的订单。'
+        : '当前状态下暂无已发布商品。'
+    },
+    hasUnreadMessages() {
+      return Number(this.totalUnreadCount || this.unreadMessageCount || 0) > 0
+    },
+    canSubmitKyc() {
+      return this.kycStatus === 'unverified' || this.kycStatus === 'failed'
+    },
+    canApplyWithdraw() {
+      return this.isLoggedIn
+    },
+    messageList() {
+      const conversationItems = this.conversationList.map((item) => ({
+        ...item,
+        item_type: 'conversation',
+        created_at: item.last_message_at || item.updated_at
+      }))
+      const notificationItems = this.notificationList.map((item) => ({
+        ...item,
+        item_type: item.item_type || 'notification'
+      }))
+
+      return [...conversationItems, ...notificationItems]
+        .sort((a, b) => {
+          const unreadA = Number(a.unread_count || 0) > 0 ? 1 : 0
+          const unreadB = Number(b.unread_count || 0) > 0 ? 1 : 0
+          if (unreadA !== unreadB) {
+            return unreadB - unreadA
+          }
+          const timeA = new Date(a.created_at || a.updated_at || 0).getTime() || 0
+          const timeB = new Date(b.created_at || b.updated_at || 0).getTime() || 0
+          return timeB - timeA
+        })
+    }
+  },
+  watch: {
+    unreadMessageCount: {
+      immediate: true,
+      handler(count, previousCount) {
+        const normalizedCount = Math.max(0, Number(count || 0))
+        const normalizedPreviousCount = Math.max(0, Number(previousCount || 0))
+        this.totalUnreadCount = normalizedCount
+
+        if (normalizedCount === normalizedPreviousCount) return
+        if (!this.isLoggedIn || this.activeSection !== 'messages' || this.messageLoading) return
+        if (normalizedCount === this.computeLocalUnreadCount()) return
+
+        this.loadMessageData({ silent: true })
+      }
+    }
+  },
+  created() {
+    if (this.defaultSection) {
+      this.activeSection = this.isSupportedSection(this.defaultSection) ? this.defaultSection : 'published'
+    }
+    if (this.defaultOrderRole) {
+      this.activeOrderRole = 'buyer'
+    }
+    if (this.defaultOrderFilter) {
+      this.orderFilterStatus = this.normalizeOrderFilter(this.defaultOrderFilter)
+    }
+    if (this.defaultListingFilter) {
+      this.myListingFilterStatus = this.normalizeListingFilter(this.defaultListingFilter)
+    }
+  },
+  mounted() {
+    this.startCountdownTicker()
+    void this.loadBusinessSettings()
+    if (!this.isLoggedIn) return
+    if (this.activeSection === 'orders') {
+      this.loadOrderData()
+    } else if (this.activeSection === 'messages') {
+      this.loadMessageData()
+    } else if (this.activeSection === 'published') {
+      this.loadMyListingsData()
+    } else if (this.activeSection === 'wallet') {
+      this.loadWalletData()
+    } else if (this.activeSection === 'invite') {
+      this.loadInviteData()
+    }
+  },
+  beforeUnmount() {
+    this.stopCountdownTicker()
+  },
+  methods: {
+    async loadBusinessSettings() {
+      this.businessSettings = await fetchBusinessSettings()
+    },
+    startCountdownTicker() {
+      this.stopCountdownTicker()
+      this.countdownTimer = window.setInterval(() => {
+        this.countdownNowTs = Date.now()
+      }, 1000)
+    },
+    stopCountdownTicker() {
+      if (this.countdownTimer) {
+        window.clearInterval(this.countdownTimer)
+        this.countdownTimer = null
+      }
+    },
+    buildVisiblePages(current, total) {
+      if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1)
+      if (current <= 3) return [1, 2, 3, 4, total]
+      if (current >= total - 2) return [1, total - 3, total - 2, total - 1, total]
+      return [1, current - 1, current, current + 1, total]
+    },
+    switchSection(sectionKey) {
+      this.activeSection = sectionKey
+      if (!this.isLoggedIn) return
+      if (sectionKey === 'orders') {
+        this.loadOrderData()
+      } else if (sectionKey === 'messages') {
+        this.loadMessageData()
+      } else if (sectionKey === 'published') {
+        this.loadMyListingsData()
+      } else if (sectionKey === 'wallet') {
+        this.loadWalletData()
+      } else if (sectionKey === 'invite') {
+        this.loadInviteData()
+      }
+    },
+    isSupportedSection(sectionKey) {
+      const normalized = String(sectionKey || '').trim()
+      return [...this.visibleSections.map((item) => item.key), 'verify'].includes(normalized)
+    },
+    async submitFeedback() {
+      const category = String(this.feedbackForm.category || '').trim()
+      const description = String(this.feedbackForm.description || '').trim()
+
+      if (!category) {
+        showWarningToast('请先选择问题类别')
+        return
+      }
+      if (description.length < 5) {
+        showWarningToast('问题描述至少填写 5 个字')
+        return
+      }
+
+      this.feedbackSubmitting = true
+      try {
+        const data = await apiFetch('/api/feedback', {
+          method: 'POST',
+          body: JSON.stringify({
+            category,
+            description
+          })
+        })
+        this.feedbackForm = {
+          category: this.feedbackCategories[0]?.value || FEEDBACK_CATEGORY_OPTIONS[0].value,
+          description: ''
+        }
+        showSuccessToast(data.message || '反馈已提交')
+      } catch (error) {
+        showErrorToast(error.message || '提交反馈失败')
+      } finally {
+        this.feedbackSubmitting = false
+      }
+    },
+    changeOrderStatus(statusKey) {
+      if (statusKey === this.orderFilterStatus) return
+      this.orderFilterStatus = this.normalizeOrderFilter(statusKey)
+      this.orderPage = 1
+      this.fetchOrderList()
+    },
+    changeMyListingStatus(statusKey) {
+      if (statusKey === this.myListingFilterStatus) return
+      this.myListingFilterStatus = this.normalizeListingFilter(statusKey)
+      this.myListingsPage = 1
+      this.fetchMyListingsList()
+    },
+    normalizeOrderFilter(statusKey) {
+      const normalized = String(statusKey || '').trim()
+      if (normalized === 'in_progress') {
+        return 'all'
+      }
+      return this.orderStatusTabs.some((item) => item.key === normalized) ? normalized : 'all'
+    },
+    normalizeListingFilter(statusKey) {
+      const normalized = String(statusKey || '').trim()
+      if (['in_progress', 'pending_review', 'verify'].includes(normalized)) {
+        return 'active'
+      }
+      return this.myListingStatusTabs.some((item) => item.key === normalized) ? normalized : 'active'
+    },
+    async loadOrderData() {
+      await this.fetchOrderStats()
+      this.ensureVisibleOrderFilter()
+      await this.fetchOrderList()
+    },
+    async loadMyListingsData() {
+      await this.fetchMyListingsStats()
+      this.ensureVisibleMyListingFilter()
+      await this.fetchMyListingsList()
+    },
+    async loadMessageData(options = {}) {
+      const silent = Boolean(options?.silent)
+      if (!silent) {
+        this.messageLoading = true
+      }
+      this.messageError = ''
+
+      const [conversationResult, notificationResult] = await Promise.allSettled([
+        this.fetchConversationList(),
+        this.fetchNotificationList()
+      ])
+
+      if (conversationResult.status === 'rejected' && notificationResult.status === 'rejected') {
+        this.messageError = conversationResult.reason?.message
+          || notificationResult.reason?.message
+          || '消息列表加载失败'
+      } else {
+        this.applyUnreadSummary(
+          this.computeConversationUnreadCount(),
+          this.computeNotificationUnreadCount()
+        )
+      }
+
+      if (!silent) {
+        this.messageLoading = false
+      }
+    },
+    async loadWalletData() {
+      this.walletLoading = true
+      this.walletError = ''
+      try {
+        await Promise.all([this.fetchWalletBalance(), this.fetchWalletLedger(), this.fetchWalletWithdrawList()])
+      } catch (error) {
+        this.walletError = error.message || '钱包数据加载失败'
+      } finally {
+        this.walletLoading = false
+      }
+    },
+    applyInvitePayload(data = {}) {
+      this.ownInviteCode = String(data.own_invite_code || '').trim()
+      this.boundInviteCode = String(data.bound_invite_code || '').trim()
+      this.inviterInfo = data.inviter && typeof data.inviter === 'object'
+        ? {
+          id: Number(data.inviter.id || 0),
+          username: String(data.inviter.username || '').trim(),
+          inviteCode: String(data.inviter.invite_code || '').trim()
+        }
+        : null
+      this.invitedRewardTotal = Number(data.invited_reward_total || 0)
+      this.contributedRewardTotal = Number(data.contributed_reward_total || 0)
+      this.inviterOrderList = Array.isArray(data.inviter_order_list) ? data.inviter_order_list : []
+      this.inviteeOrderList = Array.isArray(data.invitee_order_list) ? data.invitee_order_list : []
+      if (this.boundInviteCode) {
+        this.inviteCodeInput = ''
+      }
+    },
+    async loadInviteData() {
+      this.inviteLoading = true
+      this.inviteError = ''
+      try {
+        const data = await apiFetch('/api/invite/overview')
+        this.applyInvitePayload(data)
+      } catch (error) {
+        this.ownInviteCode = ''
+        this.boundInviteCode = ''
+        this.inviterInfo = null
+        this.invitedRewardTotal = 0
+        this.contributedRewardTotal = 0
+        this.inviterOrderList = []
+        this.inviteeOrderList = []
+        this.inviteError = error.status === 401 ? '登录已过期，请重新登录后查看邀新数据' : (error.message || '邀新数据加载失败')
+      } finally {
+        this.inviteLoading = false
+      }
+    },
+    async submitInviteCode() {
+      const inviteCode = String(this.inviteCodeInput || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+      if (!inviteCode) {
+        showWarningToast('请输入邀请码')
+        return
+      }
+      if (!/^[A-Z0-9]{6,16}$/.test(inviteCode)) {
+        showWarningToast('邀请码格式不正确')
+        return
+      }
+      if (this.boundInviteCode) {
+        showWarningToast('邀请码已绑定，当前账号不可修改')
+        return
+      }
+      if (inviteCode === this.ownInviteCode) {
+        showWarningToast('不能填写自己的邀请码')
+        return
+      }
+
+      this.inviteSubmitting = true
+      try {
+        const data = await apiFetch('/api/invite/bind', {
+          method: 'POST',
+          body: JSON.stringify({
+            invite_code: inviteCode
+          })
+        })
+        showSuccessToast(data.message || '邀请码绑定成功')
+        this.inviteCodeInput = ''
+        await this.loadInviteData()
+      } catch (error) {
+        showErrorToast(error.message || '绑定邀请码失败')
+      } finally {
+        this.inviteSubmitting = false
+      }
+    },
+    getKycCallbackParams() {
+      const searchParams = new URLSearchParams(window.location.search || '')
+      const bizToken = String(
+        searchParams.get('biz_token')
+        || searchParams.get('bizToken')
+        || searchParams.get('BizToken')
+        || ''
+      ).trim()
+      const orderNo = String(
+        searchParams.get('order_no')
+        || searchParams.get('orderNo')
+        || searchParams.get('OrderNo')
+        || ''
+      ).trim()
+      return {
+        bizToken,
+        orderNo
+      }
+    },
+    clearKycCallbackParams() {
+      const url = new URL(window.location.href)
+      const keys = ['biz_token', 'bizToken', 'BizToken', 'order_no', 'orderNo', 'OrderNo']
+      keys.forEach((key) => url.searchParams.delete(key))
+      window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
+    },
+    applyKycStatusPayload(data = {}) {
+      this.kycStatus = this.normalizeKycStatus(data.status)
+      this.kycRealNameMasked = String(data.real_name_masked || '').trim()
+      this.kycIdCardMasked = String(data.id_card_masked || '').trim()
+      this.kycVerifiedAt = data.verified_at || data.latest_record?.verified_at || null
+      this.kycSubmittedAt = data.latest_record?.submitted_at || data.latest_record?.created_at || this.kycSubmittedAt || null
+      this.kycCompletedAt = data.completed_at || data.latest_record?.completed_at || null
+      this.kycFailureReason = String(data.failure_reason || data.latest_record?.failure_reason || '').trim()
+      this.kycOrderNo = String(data.order_no || data.latest_record?.order_no || '').trim()
+      this.kycBizToken = String(data.biz_token || data.latest_record?.biz_token || '').trim()
+      this.kycVerifyUrl = String(data.redirect_url || data.verify_url || data.latest_record?.verify_url || '').trim()
+      this.kycRuleId = String(data.rule_id || data.latest_record?.rule_id || '').trim()
+    },
+    async syncKycResult(payload = {}, options = {}) {
+      const bizToken = String(payload.bizToken || payload.biz_token || this.kycBizToken || '').trim()
+      const orderNo = String(payload.orderNo || payload.order_no || this.kycOrderNo || '').trim()
+      if (!bizToken && !orderNo) {
+        if (options.showToast) {
+          showWarningToast('当前没有可同步的实名认证会话')
+        }
+        return null
+      }
+
+      this.kycSyncing = true
+      try {
+        const data = await apiFetch('/api/kyc/result/sync', {
+          method: 'POST',
+          body: JSON.stringify({
+            biz_token: bizToken || undefined,
+            order_no: orderNo || undefined
+          })
+        })
+        this.applyKycStatusPayload(data)
+        this.clearKycCallbackParams()
+        await this.loadKycData({ skipRedirectSync: true })
+
+        if (options.showToast) {
+          if (this.kycStatus === 'verified') {
+            showSuccessToast('实名认证已完成')
+          } else if (this.kycStatus === 'failed') {
+            showWarningToast(this.kycFailureReason || '实名认证未通过，请核对后重试')
+          } else {
+            showSuccessToast('实名认证结果已刷新')
+          }
+        }
+        return data
+      } catch (error) {
+        if (options.showToast !== false) {
+          showErrorToast(error.message || '同步实名认证结果失败')
+        }
+        throw error
+      } finally {
+        this.kycSyncing = false
+      }
+    },
+    continueKycVerification() {
+      if (!this.kycVerifyUrl) {
+        showWarningToast('当前没有可继续的实名认证会话')
+        return
+      }
+      window.location.assign(this.kycVerifyUrl)
+    },
+    async loadKycData(options = {}) {
+      const skipRedirectSync = Boolean(options?.skipRedirectSync)
+      this.kycLoading = true
+      this.kycError = ''
+      try {
+        const data = await apiFetch('/api/kyc/status')
+        this.applyKycStatusPayload(data)
+
+        if (!skipRedirectSync) {
+          const callbackParams = this.getKycCallbackParams()
+          if (callbackParams.bizToken || callbackParams.orderNo) {
+            try {
+              await this.syncKycResult(callbackParams, { showToast: true })
+            } catch (syncError) {
+              this.kycError = syncError.message || '同步实名认证结果失败'
+            }
+          }
+        }
+      } catch (error) {
+        this.kycStatus = 'unverified'
+        this.kycRealNameMasked = ''
+        this.kycIdCardMasked = ''
+        this.kycVerifiedAt = null
+        this.kycSubmittedAt = null
+        this.kycFailureReason = ''
+        this.kycCompletedAt = null
+        this.kycOrderNo = ''
+        this.kycBizToken = ''
+        this.kycVerifyUrl = ''
+        this.kycRuleId = ''
+        this.kycError = error.status === 401 ? '登录已过期，请重新登录后查看实名认证信息' : (error.message || '实名认证信息加载失败')
+      } finally {
+        this.kycLoading = false
+      }
+    },
+    async fetchOrderStats() {
+      try {
+        const data = await apiFetch('/api/orders/stats')
+        this.orderStatsData = {
+          total: Number(data.total || 0),
+          pending_payment: Number(data.pending_payment || 0),
+          paid: Number(data.paid || 0),
+          support_handling: Number(data.support_handling || 0),
+          settlement_pending: Number(data.settlement_pending || 0),
+          in_progress: Number(data.in_progress || 0),
+          completed: Number(data.completed || 0),
+          cancelled: Number(data.cancelled || 0)
+        }
+      } catch (error) {
+        this.orderStatsData = {
+          total: 0,
+          pending_payment: 0,
+          paid: 0,
+          support_handling: 0,
+          settlement_pending: 0,
+          in_progress: 0,
+          completed: 0,
+          cancelled: 0
+        }
+        if (!this.orderError) {
+          this.orderError = error.message || '订单统计加载失败'
+        }
+      }
+    },
+    async fetchOrderList() {
+      this.orderLoading = true
+      this.orderError = ''
+      try {
+        const params = new URLSearchParams({
+          page: String(this.orderPage),
+          pageSize: String(this.orderPageSize),
+          status: this.orderFilterStatus
+        })
+        const data = await apiFetch(`/api/orders?${params.toString()}`)
+        this.orderList = Array.isArray(data.list) ? data.list : []
+        this.orderTotal = Number(data.total || 0)
+        this.orderPage = Number(data.page || this.orderPage)
+      } catch (error) {
+        this.orderList = []
+        this.orderTotal = 0
+        this.orderError = error.status === 401 ? '登录已过期，请重新登录后查看订单' : (error.message || '订单列表加载失败')
+      } finally {
+        this.orderLoading = false
+      }
+    },
+    async fetchMyListingsStats() {
+      try {
+        const [listingStats, sellerOrderStats] = await Promise.all([
+          apiFetch('/api/my-listings/stats'),
+          apiFetch('/api/seller/orders/stats')
+        ])
+        this.myListingsStatsData = {
+          total: Number(listingStats.total || 0),
+          active: Number(listingStats.active || 0),
+          inactive: Number(listingStats.inactive || 0),
+          pending_payment: Number(sellerOrderStats.pending_payment || 0),
+          paid: Number(sellerOrderStats.paid || 0),
+          support_handling: Number(sellerOrderStats.support_handling || 0),
+          settlement_pending: Number(sellerOrderStats.settlement_pending || 0),
+          completed: Number(sellerOrderStats.completed || 0),
+          cancelled: Number(sellerOrderStats.cancelled || 0)
+        }
+      } catch (error) {
+        this.myListingsStatsData = {
+          total: 0,
+          active: 0,
+          inactive: 0,
+          pending_payment: 0,
+          paid: 0,
+          support_handling: 0,
+          settlement_pending: 0,
+          completed: 0,
+          cancelled: 0
+        }
+        if (!this.myListingsError) {
+          this.myListingsError = error.message || '我发布的统计加载失败'
+        }
+      }
+    },
+    async fetchMyListingsList() {
+      this.myListingsLoading = true
+      this.myListingsError = ''
+      try {
+        const isSellerOrderTab = this.isSellerOrderStatus(this.myListingFilterStatus)
+        const params = new URLSearchParams({
+          page: String(this.myListingsPage),
+          pageSize: String(this.myListingsPageSize),
+          status: this.myListingFilterStatus
+        })
+        const endpoint = isSellerOrderTab ? '/api/seller/orders' : '/api/my-listings'
+        const data = await apiFetch(`${endpoint}?${params.toString()}`)
+        this.myListingsList = (Array.isArray(data.list) ? data.list : []).map((item) => ({
+          ...item,
+          record_type: isSellerOrderTab ? 'seller_order' : 'listing'
+        }))
+        this.myListingsTotal = Number(data.total || 0)
+        this.myListingsPage = Number(data.page || this.myListingsPage)
+      } catch (error) {
+        this.myListingsList = []
+        this.myListingsTotal = 0
+        this.myListingsError = error.status === 401 ? '登录已过期，请重新登录后查看我发布的商品' : (error.message || '我发布的列表加载失败')
+      } finally {
+        this.myListingsLoading = false
+      }
+    },
+    async fetchAllPagedItems(baseUrl, pageSize = 100) {
+      const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 100))
+      const list = []
+      let page = 1
+      let total = 0
+      let totalPages = 1
+
+      while (page <= totalPages) {
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(safePageSize)
+        })
+        const data = await apiFetch(`${baseUrl}?${params.toString()}`)
+        const currentList = Array.isArray(data.list) ? data.list : []
+        const currentTotal = Number(data.total || currentList.length || 0)
+        const responsePageSize = Math.min(100, Math.max(1, Number(data.pageSize || safePageSize) || safePageSize))
+
+        list.push(...currentList)
+        total = currentTotal
+        totalPages = Math.max(1, Math.ceil(currentTotal / responsePageSize))
+
+        if (!currentList.length || list.length >= currentTotal) {
+          break
+        }
+
+        page += 1
+      }
+
+      return {
+        list,
+        total,
+        pageSize: safePageSize
+      }
+    },
+    async fetchConversationList() {
+      try {
+        const data = await this.fetchAllPagedItems('/api/conversations', this.conversationPageSize)
+        this.conversationList = Array.isArray(data.list) ? data.list : []
+        this.conversationPage = 1
+      } catch (error) {
+        this.conversationList = []
+        throw error
+      }
+    },
+    async fetchNotificationList() {
+      try {
+        const data = await this.fetchAllPagedItems('/api/notifications', this.notificationPageSize)
+        this.notificationList = Array.isArray(data.list) ? data.list : []
+        this.notificationTotal = Number(data.total || 0)
+        this.notificationPage = 1
+      } catch (error) {
+        this.notificationList = []
+        this.notificationTotal = 0
+        throw error
+      }
+    },
+    applyUnreadSummary(conversationUnreadTotal, notificationUnreadTotal) {
+      this.conversationUnreadTotal = Math.max(0, Number(conversationUnreadTotal || 0))
+      this.notificationUnreadTotal = Math.max(0, Number(notificationUnreadTotal || 0))
+      this.totalUnreadCount = this.conversationUnreadTotal + this.notificationUnreadTotal
+      this.$emit('unread-change', {
+        total: this.totalUnreadCount,
+        conversationUnreadTotal: this.conversationUnreadTotal,
+        notificationUnreadTotal: this.notificationUnreadTotal
+      })
+    },
+    computeConversationUnreadCount() {
+      return this.conversationList.reduce(
+        (sum, item) => sum + Number(item?.unread_count || 0),
+        0
+      )
+    },
+    computeNotificationUnreadCount() {
+      return this.notificationList.reduce(
+        (sum, item) => sum + Number(item?.unread_count || 0),
+        0
+      )
+    },
+    computeLocalUnreadCount() {
+      const conversationUnread = this.computeConversationUnreadCount()
+      const notificationUnread = this.computeNotificationUnreadCount()
+      return conversationUnread + notificationUnread
+    },
+    async fetchWalletBalance() {
+      const data = await apiFetch('/api/wallet')
+      this.walletBalance = Number(data.balance || 0)
+      this.walletFrozenBalance = Number(data.frozen_balance || 0)
+      this.walletWithdrawableBalance = Number(data.withdrawable_balance || data.balance || 0)
+    },
+    async fetchWalletLedger() {
+      const data = await apiFetch('/api/wallet/ledger')
+      this.walletLedger = Array.isArray(data.list) ? data.list : []
+    },
+    async fetchWalletWithdrawList() {
+      const data = await apiFetch('/api/wallet/withdraw/list')
+      this.walletWithdrawList = Array.isArray(data.list) ? data.list : []
+    },
+    normalizeKycStatus(value = '') {
+      const normalized = String(value || '').trim().toLowerCase()
+      return ['unverified', 'pending', 'verified', 'failed'].includes(normalized) ? normalized : 'unverified'
+    },
+    getKycStatusText(status = '') {
+      const textMap = {
+        unverified: '未认证',
+        pending: '审核中',
+        verified: '已认证',
+        failed: '认证失败'
+      }
+      return textMap[this.normalizeKycStatus(status)] || '未认证'
+    },
+    getKycStatusDescription(status = '') {
+      const normalized = this.normalizeKycStatus(status)
+      if (normalized === 'verified') return '你的实名信息已通过审核，可正常发布商品并申请钱包提现。'
+      if (normalized === 'pending') return '实名功能当前已停用。'
+      if (normalized === 'failed') return '本次实名申请未通过，请根据审核反馈修正信息后重新提交。'
+      return '实名功能当前已停用，不影响钱包提现申请。'
+    },
+    async submitKyc() {
+      const realName = String(this.kycForm.realName || '').trim()
+      const idCardNo = String(this.kycForm.idCardNo || '').trim().toUpperCase()
+
+      if (!/^[A-Za-z\u4e00-\u9fa5·\s]{2,30}$/.test(realName)) {
+        showWarningToast('请输入真实有效的姓名')
+        return
+      }
+      if (!/^(\d{15}|\d{17}[\dXx])$/.test(idCardNo)) {
+        showWarningToast('请输入真实有效的证件号码')
+        return
+      }
+
+      this.kycSubmitting = true
+      try {
+        const data = await apiFetch('/api/kyc/submit', {
+          method: 'POST',
+          body: JSON.stringify({
+            real_name: realName,
+            id_card_no: idCardNo
+          })
+        })
+        this.applyKycStatusPayload({
+          ...data,
+          latest_record: {
+            order_no: data.order_no || '',
+            biz_token: data.biz_token || '',
+            verify_url: data.redirect_url || '',
+            rule_id: data.rule_id || '',
+            submitted_at: new Date().toISOString()
+          }
+        })
+        this.kycSubmittedAt = new Date().toISOString()
+        this.kycForm.realName = ''
+        this.kycForm.idCardNo = ''
+
+        if (data.redirect_url) {
+          showSuccessToast('实名认证会话已创建，正在进入腾讯云刷脸核身页面')
+          window.location.assign(data.redirect_url)
+          return
+        }
+
+        if (data.sync_required) {
+          await this.syncKycResult({
+            bizToken: data.biz_token,
+            orderNo: data.order_no
+          }, {
+            showToast: true
+          })
+        } else {
+          showSuccessToast(data.is_mock ? '实名认证申请已提交，当前为测试模式' : '实名认证申请已提交')
+          await this.loadKycData({ skipRedirectSync: true })
+        }
+      } catch (error) {
+        showErrorToast(error.message || '提交实名认证失败')
+      } finally {
+        this.kycSubmitting = false
+      }
+    },
+    getWithdrawStatusText(status = '') {
+      const textMap = {
+        pending_review: '待审核',
+        processing: '处理中',
+        success: '已打款',
+        failed: '打款失败',
+        rejected: '已驳回',
+        cancelled: '已取消'
+      }
+      return textMap[String(status || '').trim()] || '处理中'
+    },
+    getWithdrawChannelText(channel = '') {
+      const textMap = {
+        alipay: '支付宝',
+        bank: '银行卡',
+        wechat: '微信零钱'
+      }
+      return textMap[String(channel || '').trim().toLowerCase()] || '其他方式'
+    },
+    async submitWithdraw() {
+      if (!this.canApplyWithdraw) {
+        showWarningToast('请先登录后再申请提现')
+        return
+      }
+
+      const amount = Number(this.withdrawForm.amount || 0)
+      const accountName = String(this.withdrawForm.accountName || '').trim()
+      const accountNo = String(this.withdrawForm.accountNo || '').trim()
+
+      if (!Number.isFinite(amount) || amount < 1) {
+        showWarningToast('提现金额至少 1 元')
+        return
+      }
+      if (amount > Number(this.walletWithdrawableBalance || 0)) {
+        showWarningToast('提现金额不能超过可提现余额')
+        return
+      }
+      if (!accountName) {
+        showWarningToast('请输入收款人姓名')
+        return
+      }
+      if (!accountNo) {
+        showWarningToast('请输入收款账号')
+        return
+      }
+
+      this.walletWithdrawSubmitting = true
+      try {
+        await apiFetch('/api/wallet/withdraw/apply', {
+          method: 'POST',
+          body: JSON.stringify({
+            amount,
+            channel: this.withdrawForm.channel,
+            account_name: accountName,
+            account_no: accountNo,
+            remark: String(this.withdrawForm.remark || '').trim()
+          })
+        })
+        this.withdrawForm.amount = ''
+        this.withdrawForm.accountName = ''
+        this.withdrawForm.accountNo = ''
+        this.withdrawForm.remark = ''
+        showSuccessToast('提现申请已提交')
+        await this.loadWalletData()
+      } catch (error) {
+        showErrorToast(error.message || '提交提现申请失败')
+      } finally {
+        this.walletWithdrawSubmitting = false
+      }
+    },
+    async updateMyListingStatus(item, nextStatus) {
+      if (!item?.id) return
+      const actionText = nextStatus === 'active' ? '重新上架' : '下架'
+      const confirmed = await showConfirm({
+        title: actionText,
+        message: `确认${actionText}商品 #${item.listing_no || item.id} 吗？`,
+        confirmText: actionText,
+        cancelText: '取消',
+        tone: nextStatus === 'active' ? 'primary' : 'danger'
+      })
+      if (!confirmed) return
+
+      try {
+        const data = await apiFetch(`/api/my-listings/${item.id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: nextStatus })
+        })
+        showSuccessToast(data.message || `${actionText}成功`)
+        await this.loadMyListingsData()
+      } catch (error) {
+        showErrorToast(error.message || `${actionText}失败`)
+      }
+    },
+    goToOrderPage(page) {
+      if (page < 1 || page > this.orderTotalPages || page === this.orderPage) return
+      this.orderPage = page
+      this.fetchOrderList()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
+    goToMyListingPage(page) {
+      if (page < 1 || page > this.myListingsTotalPages || page === this.myListingsPage) return
+      this.myListingsPage = page
+      this.fetchMyListingsList()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
+    formatMoney(value) {
+      return formatMoneyFixed(value, 2)
+    },
+    getSellerIncomeRent(order) {
+      const sellerRentAmount = Number(order?.seller_rent_amount || 0)
+      const compensationFee = calculateCompensationFeeAmount(
+        sellerRentAmount,
+        order?.compensation_plan,
+        this.businessSettings
+      )
+      return Math.max(
+        0,
+        calculateSellerIncomeRent(
+          sellerRentAmount,
+          this.businessSettings.platformCommission?.sellerServiceFeeRatePercent
+        ) - compensationFee
+      )
+    },
+    formatPendingCountdown(createdAt) {
+      const createdTime = new Date(createdAt).getTime()
+      if (!Number.isFinite(createdTime)) return '--:--'
+      const remainingMs = Math.max(0, createdTime + getPendingPaymentTimeoutMinutes(this.businessSettings) * 60 * 1000 - this.countdownNowTs)
+      const totalSeconds = Math.floor(remainingMs / 1000)
+      const minutes = Math.floor(totalSeconds / 60)
+      const seconds = totalSeconds % 60
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    },
+    formatOrderDate(value) {
+      if (!value) return '--'
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return String(value)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hour = String(date.getHours()).padStart(2, '0')
+      const minute = String(date.getMinutes()).padStart(2, '0')
+      return `${year}-${month}-${day} ${hour}:${minute}`
+    },
+    formatConversationTime(value) {
+      if (!value) return '--'
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return String(value)
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hour = String(date.getHours()).padStart(2, '0')
+      const minute = String(date.getMinutes()).padStart(2, '0')
+      return `${month}-${day} ${hour}:${minute}`
+    },
+    formatBadgeCount(value) {
+      const count = Number(value || 0)
+      if (count > 99) return '99+'
+      return String(count)
+    },
+    hasSectionUnreadDot(sectionKey) {
+      return sectionKey === 'messages' && this.hasUnreadMessages
+    },
+    getOrderCounterpartyName(order) {
+      return order.seller_name || '平台卖家'
+    },
+    getOrderCount(statusKey) {
+      if (statusKey === 'all') return this.orderStatsData.total || 0
+      return this.orderStatsData[statusKey] || 0
+    },
+    getMyListingCount(statusKey) {
+      if (statusKey === 'all') return this.myListingsStatsData.total || 0
+      return this.myListingsStatsData[statusKey] || 0
+    },
+    shouldShowStatusTab(statusKey, statsData) {
+      if (statusKey === 'all') return true
+      return Number(statsData?.[statusKey] || 0) > 0
+    },
+    ensureVisibleOrderFilter() {
+      if (this.visibleOrderStatusTabs.some((item) => item.key === this.orderFilterStatus)) {
+        return
+      }
+      this.orderFilterStatus = 'all'
+      this.orderPage = 1
+    },
+    ensureVisibleMyListingFilter() {
+      if (this.visibleMyListingStatusTabs.some((item) => item.key === this.myListingFilterStatus)) {
+        return
+      }
+      this.myListingFilterStatus = 'all'
+      this.myListingsPage = 1
+    },
+    isSellerOrderStatus(statusKey) {
+      return ['pending_payment', 'paid', 'support_handling', 'settlement_pending', 'completed', 'cancelled'].includes(statusKey)
+    },
+    getOrderActions(order) {
+      if (order.status === 'pending_payment') {
+        return [
+          { key: 'detail', label: '查看订单', tone: 'ghost' },
+          { key: 'pay', label: '立即支付', tone: 'primary' }
+        ]
+      }
+      return [{ key: 'detail', label: '查看订单', tone: 'ghost' }]
+    },
+    getPublishedOrderActions(order) {
+      if (order.status === 'pending_payment') {
+        return [{ key: 'detail', label: '查看订单', tone: 'ghost' }]
+      }
+      return [{ key: 'detail', label: '查看订单', tone: 'ghost' }]
+    },
+    getMyListingActions(item) {
+      if (item.listing_status === 'active') {
+        return [
+          { key: 'detail', label: '查看详情', tone: 'ghost' },
+          { key: 'edit', label: '编辑商品', tone: 'ghost' },
+          { key: 'off_shelf', label: '下架商品', tone: 'danger' }
+        ]
+      }
+      if (item.listing_status === 'rented') {
+        return [{ key: 'detail', label: '查看详情', tone: 'ghost' }]
+      }
+      if (item.listing_status === 'inactive') {
+        return [
+          { key: 'edit', label: '编辑商品', tone: 'ghost' },
+          { key: 'relist', label: '重新上架', tone: 'primary' }
+        ]
+      }
+      return []
+    },
+    canViewListingDetail(item) {
+      return ['active', 'rented'].includes(String(item?.listing_status || '').trim())
+    },
+    isMobileProfileViewport() {
+      return typeof window !== 'undefined' && window.matchMedia('(max-width: 960px)').matches
+    },
+    shouldIgnoreCardClick(event) {
+      const target = event?.target
+      return Boolean(target && target.closest('button, a, input, select, textarea, label'))
+    },
+    handleOrderCardClick(event, order) {
+      if (!this.isMobileProfileViewport() || this.shouldIgnoreCardClick(event)) return
+      this.handleOrderAction({ key: 'detail' }, order)
+    },
+    handlePublishedRecordClick(event, item) {
+      if (!this.isMobileProfileViewport() || this.shouldIgnoreCardClick(event)) return
+      if (item.record_type === 'seller_order') {
+        this.handlePublishedOrderAction({ key: 'detail' }, item)
+        return
+      }
+      if (!this.canViewListingDetail(item)) {
+        return
+      }
+      this.handleMyListingAction({ key: 'detail' }, item)
+    },
+    handleOrderAction(action, order) {
+      if (action.key === 'detail') {
+        this.$emit(
+          'view-order-detail',
+          order.id,
+          'profile',
+          'buyer',
+          this.orderFilterStatus,
+          this.myListingFilterStatus,
+          'orders'
+        )
+        return
+      }
+      if (action.key === 'pay') {
+        this.selectedPaymentOrder = order
+        this.showPaymentModal = true
+        return
+      }
+    },
+    handlePublishedOrderAction(action, order) {
+      if (action.key === 'detail') {
+        this.$emit(
+          'view-order-detail',
+          order.id,
+          'profile',
+          'seller',
+          '',
+          this.myListingFilterStatus,
+          'published'
+        )
+        return
+      }
+    },
+    handleMyListingAction(action, item) {
+      if (action.key === 'detail') {
+        if (!this.canViewListingDetail(item)) {
+          return
+        }
+        this.$emit('view-listing-detail', item.listing_no || item.id, this.myListingFilterStatus)
+        return
+      }
+      if (action.key === 'edit') {
+        this.$emit('edit-listing', item.id, this.myListingFilterStatus)
+        return
+      }
+      if (action.key === 'off_shelf') {
+        this.updateMyListingStatus(item, 'inactive')
+        return
+      }
+      if (action.key === 'relist') {
+        this.updateMyListingStatus(item, 'active')
+      }
+    },
+    async openMessageItem(messageItem) {
+      if (messageItem?.item_type === 'conversation') {
+        await this.openConversation(messageItem)
+        return
+      }
+      await this.openNotification(messageItem)
+    },
+    getMessageItemMeta(messageItem) {
+      if (messageItem?.item_type === 'conversation') {
+        const counterpart = messageItem.counterpart_name || '订单成员'
+        const orderNo = messageItem.order_no ? `订单号：${messageItem.order_no}` : '订单聊天室'
+        return `${orderNo} · ${counterpart}`
+      }
+      return '平台通知'
+    },
+    getMessageItemPreview(messageItem) {
+      if (messageItem?.item_type === 'conversation') {
+        return messageItem.last_message_preview || '点击进入订单聊天室。'
+      }
+      return messageItem.preview || messageItem.content || '点击查看通知详情。'
+    },
+    async openConversation(conversation) {
+      const orderId = Number(conversation?.order_id || conversation?.ref_id || 0)
+      if (!orderId) {
+        showErrorToast('该聊天室缺少订单信息，暂时无法打开')
+        return
+      }
+
+      const unreadCount = Number(conversation?.unread_count || 0)
+      if (unreadCount > 0) {
+        this.conversationList = this.conversationList.map((item) => (
+          Number(item.id) === Number(conversation.id)
+            ? { ...item, unread_count: 0 }
+            : item
+        ))
+        this.applyUnreadSummary(
+          Math.max(0, Number(this.conversationUnreadTotal || 0) - unreadCount),
+          this.notificationUnreadTotal
+        )
+      }
+
+      this.selectedConversationOrderId = orderId
+      this.selectedConversationUserRole = conversation?.self_role || 'buyer'
+      this.showConversationPanel = true
+    },
+    async openNotification(notification) {
+      const unreadCount = Number(notification?.unread_count || 0)
+      if (unreadCount > 0 && notification?.id) {
+        try {
+          await apiFetch(`/api/notifications/${notification.id}/read`, { method: 'PUT' })
+          this.notificationList = this.notificationList.map((item) => (
+            Number(item.id) === Number(notification.id)
+              ? { ...item, is_read: true, unread_count: 0 }
+              : item
+          ))
+          this.applyUnreadSummary(
+            this.conversationUnreadTotal,
+            Math.max(0, Number(this.notificationUnreadTotal || 0) - unreadCount)
+          )
+        } catch (_error) {
+          // 通知已读失败时不阻断查看
+        }
+      }
+    },
+    async handleConversationPanelClose() {
+      this.showConversationPanel = false
+      await this.loadMessageData({ silent: true })
+    },
+    handlePaymentModalClose() {
+      this.showPaymentModal = false
+      this.selectedPaymentOrder = null
+    },
+    async handleOrderPaymentSuccess(payload = {}) {
+      this.handlePaymentModalClose()
+      await this.loadOrderData()
+      this.$emit('payment-success', payload)
+    },
+    triggerLogin() {
+      this.$emit('login')
+    },
+    async handleLogout() {
+      const confirmed = await showConfirm({
+        title: '退出登录',
+        message: '确定要退出当前账号吗？',
+        confirmText: '确认退出',
+        cancelText: '取消',
+        tone: 'danger'
+      })
+      if (confirmed) {
+        this.$emit('logout')
+      }
+    },
+    getPlaceholderText(sectionKey) {
+      const textMap = {
+        messages: '消息板块暂未接入公告与通知，后续可在这里统一展示平台消息。',
+        invite: '邀新赚钱板块暂未接入邀请返佣功能，后续可在这里展示邀请链接与收益明细。',
+        feedback: '问题反馈板块仅对已登录的普通用户和客服开放。'
+      }
+      return textMap[sectionKey] || '该板块暂未开放。'
+    }
+  }
+}
+</script>
+
+<style scoped>
+:global(html) {
+  scrollbar-gutter: stable;
+}
+
+.profile-center {
+  display: flex;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 20px 32px;
+  box-sizing: border-box;
+  align-items: flex-start;
+  min-height: calc(100vh - 92px);
+}
+
+.profile-sidebar {
+  width: 220px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 92px;
+  align-self: flex-start;
+}
+
+.profile-user-card,
+.profile-content {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+}
+
+.profile-placeholder-card,
+.profile-panel-card {
+  background: #fff;
+  border-radius: 16px;
+}
+
+.profile-user-card {
+  padding: 18px 16px;
+}
+
+.profile-user-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #6b7280;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-user-card h2,
+.profile-placeholder-card h4 {
+  margin: 0;
+  color: #111827;
+}
+
+.profile-user-card h2 {
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.profile-login-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.profile-login-link,
+.profile-login-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #2563eb;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-login-link:hover,
+.profile-login-btn:hover {
+  color: #1d4ed8;
+}
+
+.profile-login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin-top: 16px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+}
+
+.profile-login-btn:hover {
+  background: #1f2937;
+  color: #fff;
+}
+
+.profile-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #fff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.profile-nav-item:hover {
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+}
+
+.profile-nav-item.active {
+  border-color: #1d4ed8;
+  background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
+  color: #1d4ed8;
+  box-shadow: 0 10px 30px rgba(29, 78, 216, 0.08);
+}
+
+.profile-nav-label-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  position: relative;
+}
+
+.profile-nav-label {
+  display: inline-block;
+}
+
+.profile-nav-dot {
+  display: inline-flex;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #dc2626;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.profile-nav-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 4px 0;
+}
+
+.profile-nav-logout {
+  color: #ef4444;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.profile-nav-logout:hover {
+  border-color: #fca5a5;
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.profile-content {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+  min-height: calc(100vh - 116px);
+  display: flex;
+  flex-direction: column;
+  scrollbar-gutter: stable both-edges;
+}
+
+.profile-section-fade-enter-active,
+.profile-section-fade-leave-active {
+  transition: opacity 0.12s ease;
+}
+
+.profile-section-fade-enter-from,
+.profile-section-fade-leave-to {
+  opacity: 0;
+}
+
+.profile-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+}
+
+.profile-panel-card,
+.profile-placeholder-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-order-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.order-role-tabs,
+.order-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.order-role-tab,
+.order-filter-tab,
+.order-page-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.order-role-tab.active,
+.order-filter-tab.active,
+.order-page-btn.active {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.order-filter-count {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.88;
+}
+
+.profile-empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.verify-status-card,
+.wallet-summary-card {
+  padding: 20px;
+  margin-bottom: 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
+}
+
+.verify-status-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.verify-status-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.verify-status-label,
+.wallet-summary-label {
+  display: block;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.verify-status-main strong {
+  color: #111827;
+  font-size: 28px;
+}
+
+.verify-status-main p {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.verify-status-badge {
+  flex-shrink: 0;
+}
+
+.verify-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.verify-info-grid,
+.wallet-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.verify-info-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.verify-info-item,
+.wallet-summary-grid > div {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.verify-info-item span,
+.wallet-summary-caption {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.verify-info-item strong {
+  display: block;
+  margin-top: 8px;
+  color: #111827;
+  font-size: 18px;
+}
+
+.wallet-summary-balance {
+  display: block;
+  margin-top: 8px;
+  color: #111827;
+  font-size: 30px;
+}
+
+.wallet-summary-minor {
+  display: block;
+  margin-top: 8px;
+  color: #111827;
+  font-size: 24px;
+}
+
+.wallet-summary-minor--highlight {
+  color: #047857;
+}
+
+.wallet-summary-tip {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.verify-tips-card,
+.wallet-action-card,
+.wallet-subpanel,
+.verify-form-card {
+  padding: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.verify-tips-card h4,
+.wallet-action-header h4,
+.wallet-subpanel-header h4 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+}
+
+.verify-tips-card p,
+.wallet-action-header p {
+  margin: 8px 0 0;
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.verify-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.verify-tips-card--error {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.wallet-action-header,
+.wallet-subpanel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wallet-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.wallet-subpanel {
+  min-width: 0;
+}
+
+.wallet-subpanel-header {
+  margin-bottom: 14px;
+}
+
+.wallet-subpanel-header span {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.wallet-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.wallet-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wallet-form-field--full {
+  grid-column: 1 / -1;
+}
+
+.wallet-form-field span {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wallet-form-field input,
+.wallet-form-field select {
+  min-height: 44px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  padding: 0 14px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.wallet-form-field input:focus,
+.wallet-form-field select:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
+}
+
+.wallet-form-field input:disabled,
+.wallet-form-field select:disabled {
+  background: #f8fafc;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.wallet-form-actions {
+  margin-top: 2px;
+}
+
+.invite-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.invite-panel-title {
+  margin: 0;
+  color: #111827;
+  font-size: 22px;
+}
+
+.invite-panel-subtitle {
+  margin: 8px 0 0;
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.invite-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.invite-summary-card,
+.invite-order-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.invite-summary-card {
+  padding: 18px;
+}
+
+.invite-summary-card--full {
+  grid-column: 1 / -1;
+}
+
+.invite-summary-label {
+  display: block;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.invite-summary-card strong {
+  display: block;
+  margin-top: 10px;
+  color: #111827;
+  font-size: 24px;
+}
+
+.invite-summary-code {
+  letter-spacing: 0.08em;
+}
+
+.invite-summary-card p {
+  margin: 10px 0 0;
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.invite-bind-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.invite-bind-input {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  padding: 0 14px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.invite-bind-input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
+}
+
+.invite-order-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.invite-order-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.invite-order-section-header h4 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+}
+
+.invite-order-section-header span {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.invite-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.invite-order-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+}
+
+.invite-order-card--empty {
+  padding: 0;
+}
+
+.invite-order-card--empty .profile-empty {
+  width: 100%;
+  padding: 24px 18px;
+}
+
+.invite-order-card h4 {
+  margin: 0 0 8px;
+  color: #111827;
+  font-size: 18px;
+}
+
+.invite-order-card p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.invite-order-amounts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  text-align: right;
+}
+
+.invite-order-amounts strong {
+  color: #047857;
+  font-size: 18px;
+}
+
+.invite-order-amounts span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.wallet-submit-btn {
+  min-width: 168px;
+}
+
+.wallet-ledger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wallet-ledger-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.wallet-ledger-item h4 {
+  margin: 0 0 6px;
+  color: #111827;
+  font-size: 16px;
+}
+
+.wallet-ledger-item p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.wallet-ledger-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.wallet-ledger-amount strong {
+  color: #111827;
+  font-size: 18px;
+}
+
+.wallet-ledger-amount--credit {
+  color: #047857 !important;
+}
+
+.wallet-ledger-amount span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.wallet-withdraw-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.profile-error {
+  color: #b91c1c;
+}
+
+.order-list,
+.listing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.order-item,
+.listing-item {
+  display: flex;
+  gap: 18px;
+  align-items: stretch;
+  padding: 18px;
+  border: 1px solid #e8eaed;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.04);
+}
+
+.order-cover,
+.listing-cover {
+  width: 150px;
+  min-width: 150px;
+  height: 110px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #eef2f7;
+}
+
+.order-cover img,
+.listing-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.order-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.order-main,
+.listing-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.order-header h4 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  color: #111827;
+}
+
+.order-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.order-status,
+.listing-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.order-status-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.order-status-countdown {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.status-pending_payment {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.status-in_progress,
+.status-paid,
+.status-settlement_pending,
+.status-rented {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.status-completed,
+.status-active {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.status-support_handling,
+.status-pending_review,
+.status-failed,
+.status-rejected {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.status-cancelled,
+.status-inactive,
+.status-sold_out {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.status-pending,
+.status-processing {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.status-verified,
+.status-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.order-meta-grid,
+.listing-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #f1f5f9;
+}
+
+.order-meta-grid p,
+.listing-meta-grid p {
+  margin: 0;
+  color: #374151;
+  font-size: 14px;
+}
+
+.order-meta-grid p.copy-inline,
+.listing-meta-grid p.copy-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.order-meta-grid span,
+.listing-meta-grid span {
+  display: inline-block;
+  min-width: 72px;
+  color: #6b7280;
+}
+
+.order-actions,
+.listing-actions-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 120px;
+}
+
+.order-action-btn {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.order-action-btn.primary {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.order-action-btn.danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
+.order-action-btn.ghost {
+  background: #f8fafc;
+}
+
+.order-pagination {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.order-page-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.order-page-summary {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.profile-message-toolbar {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-message-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #374151;
+  font-size: 14px;
+}
+
+.profile-message-summary strong {
+  color: #111827;
+  font-size: 16px;
+}
+
+.profile-message-refresh-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.profile-message-refresh-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.profile-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.profile-message-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #e8eaed;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.profile-message-item--unread {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.profile-message-item:hover {
+  border-color: #bfdbfe;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+}
+
+.profile-message-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-message-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-message-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.profile-message-title-wrap h4 {
+  margin: 0;
+  font-size: 17px;
+  color: #111827;
+}
+
+.profile-message-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.profile-message-time {
+  flex-shrink: 0;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.profile-message-counterpart,
+.profile-message-preview {
+  margin: 8px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.profile-message-preview {
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-placeholder-card {
+  padding: 28px 24px;
+}
+
+.profile-placeholder-card p {
+  margin: 10px 0 0;
+  color: #6b7280;
+  line-height: 1.8;
+}
+
+.feedback-form-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #fff;
+  padding: 20px;
+}
+
+.feedback-form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.feedback-form-footer,
+.feedback-count {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.feedback-form-footer {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.feedback-count {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.feedback-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feedback-field span {
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.feedback-select,
+.feedback-textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #fff;
+  color: #111827;
+}
+
+.feedback-select {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.feedback-textarea {
+  width: 100%;
+}
+
+.feedback-textarea {
+  padding: 12px 14px;
+  resize: vertical;
+  line-height: 1.7;
+}
+
+@media (max-width: 1200px) {
+  .profile-center {
+    flex-direction: column;
+  }
+
+  .profile-sidebar {
+    width: 100%;
+    min-width: 0;
+    position: static;
+    top: auto;
+  }
+}
+
+@media (max-width: 960px) {
+  .profile-center {
+    padding: 12px 12px 88px 116px;
+    gap: 16px;
+    min-height: calc(100vh - 60px);
+    display: flex;
+    width: 100%;
+  }
+
+  .profile-sidebar {
+    position: fixed;
+    left: 8px;
+    top: 92px;
+    z-index: 20;
+    width: 98px;
+    min-width: 98px;
+    transform: none;
+    gap: 0;
+  }
+
+  .profile-user-card {
+    display: none;
+  }
+
+  .profile-nav {
+    gap: 16px;
+  }
+
+  .profile-nav-item {
+    justify-content: center;
+    min-height: 44px;
+    padding: 8px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    white-space: nowrap;
+  }
+
+  .profile-nav-label-wrap {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: auto;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .profile-nav-dot {
+    position: absolute;
+    left: calc(100% + 4px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    box-shadow: none;
+  }
+
+  .profile-content {
+    padding: 14px 14px 14px 0;
+    min-height: calc(100vh - 160px);
+    width: 100%;
+    background: transparent;
+    border: none;
+  }
+
+  .profile-panel-card,
+  .profile-placeholder-card {
+    padding: 18px 16px;
+  }
+
+  .order-filter-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 8px;
+    width: 100%;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .order-filter-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .order-filter-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .profile-user-card {
+    padding: 16px 14px;
+  }
+
+  .profile-user-card h2 {
+    font-size: 20px;
+  }
+
+  .profile-login-btn {
+    width: 100%;
+  }
+
+  .order-item,
+  .listing-item {
+    flex-direction: column;
+    padding: 14px;
+  }
+
+  .wallet-ledger-item {
+    flex-direction: column;
+  }
+
+  .wallet-ledger-amount {
+    align-items: flex-start;
+  }
+
+  .verify-status-card,
+  .wallet-action-header,
+  .wallet-subpanel-header,
+  .wallet-withdraw-title-row {
+    flex-direction: column;
+  }
+
+  .verify-info-grid,
+  .wallet-summary-grid,
+  .wallet-panels,
+  .wallet-form-grid,
+  .invite-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .order-cover,
+  .listing-cover {
+    width: 100%;
+    min-width: 0;
+    height: 180px;
+  }
+
+  .order-header {
+    flex-direction: column;
+  }
+
+  .order-header h4 {
+    font-size: 18px;
+  }
+
+  .order-meta-grid,
+  .listing-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .order-meta-grid--orders p {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .order-meta-grid--orders span {
+    display: block;
+    min-width: 0;
+    line-height: 1.4;
+  }
+
+  .order-actions,
+  .listing-actions-col {
+    width: 100%;
+    min-width: 0;
+    align-items: stretch;
+  }
+
+  .order-action-btn {
+    width: 100%;
+  }
+
+  .profile-panel--orders .order-item,
+  .profile-panel--published .order-item,
+  .profile-panel--published .listing-item {
+    cursor: pointer;
+  }
+
+  .profile-panel--orders .order-action-btn--detail,
+  .profile-panel--published .listing-actions-col .order-action-btn--detail {
+    display: none;
+  }
+
+  .profile-message-refresh-btn {
+    width: auto;
+    padding: 6px 16px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+
+  .profile-message-item,
+  .profile-message-item-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .profile-message-title-wrap {
+    justify-content: space-between;
+  }
+
+  .profile-message-preview {
+    white-space: normal;
+  }
+
+  .invite-bind-row,
+  .invite-order-card {
+    flex-direction: column;
+  }
+
+  .invite-order-amounts {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .feedback-form-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+</style>

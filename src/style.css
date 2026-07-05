@@ -1,0 +1,54 @@
+:root {
+  /* 品牌主色调 (更具商业感的深绿色/黑金搭配) */
+  --brand-primary: #10b981;
+  --brand-primary-dark: #059669;
+  --brand-secondary: #0f172a;
+  
+  /* 文本颜色 */
+  --text-main: #111827;
+  --text-regular: #374151;
+  --text-muted: #6b7280;
+  
+  /* 背景和边框 - 优化为柔和的浅灰背景，提升商业高级感 */
+  --bg-page: #f3f4f6; /* 加深网页大背景，进一步拉开层次 */
+  --bg-card: #ffffff; /* 卡片底色改为纯白，拉开反差 */
+  --border-color: #e5e7eb; /* 边框同步变淡，勾勒卡片轮廓 */
+  
+  /* 阴影 - 增加商业化层次感 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-width: 320px;
+  background: var(--bg-page);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+}
