@@ -27,12 +27,15 @@
           <article class="panel">
             <div class="panel-head">
               <div class="panel-title">
+                <strong>概览看板</strong>
               </div>
               <div class="panel-head-side">
-                <span>服务状态：{{ healthStatusText }}</span>
-                <span>最近刷新：{{ trendLastLoadedAt || revenueLastLoadedAt || lastLoadedAt || '--' }}</span>
-                <button type="button" class="panel-btn" :disabled="dashboardLoading" @click="loadDashboardData">
-                  {{ dashboardLoading ? '刷新中...' : '刷新看板' }}
+                <button
+                  type="button"
+                  class="panel-btn panel-btn--primary"
+                  @click="activeDisplaySection = 'revenue'"
+                >
+                  查看收益明细
                 </button>
               </div>
             </div>
@@ -205,8 +208,13 @@
               <strong>收益明细</strong>
             </div>
             <div class="panel-head-side">
-              <span>统计范围：{{ dashboardRangeLabel }}</span>
-              <span>最近刷新：{{ revenueLastLoadedAt || lastLoadedAt || '--' }}</span>
+              <button
+                type="button"
+                class="panel-btn"
+                @click="activeDisplaySection = 'dashboard'"
+              >
+                返回概览看板
+              </button>
               <button type="button" class="panel-btn" :disabled="revenueLoading" @click="loadRevenue">
                 {{ revenueLoading ? '刷新中...' : '刷新收益' }}
               </button>
@@ -400,12 +408,6 @@ export default {
   computed: {
     dashboardLoading() {
       return this.trendLoading || this.revenueLoading
-    },
-    healthStatusText() {
-      if (this.healthStatus?.ok) {
-        return '服务正常'
-      }
-      return '服务异常'
     },
     dashboardFilterLabel() {
       if (this.dashboardFilters.granularity === 'month') {
