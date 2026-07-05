@@ -1,0 +1,154 @@
+.profile-placeholder-card,
+.profile-panel-card {
+  background: #fff;
+  border-radius: 16px;
+}
+
+.profile-panel-card,
+.profile-placeholder-card {
+  padding: 20px;
+}
+
+.profile-placeholder-card h4 {
+  margin: 0;
+  color: #111827;
+}
+
+.profile-placeholder-card p {
+  margin: 10px 0 0;
+  color: #6b7280;
+  line-height: 1.8;
+}
+
+.profile-login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin-top: 16px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-login-btn:hover {
+  background: #1f2937;
+}
+
+.profile-empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.profile-error {
+  color: #b91c1c;
+}
+
+.order-action-btn {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.order-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.order-action-btn.primary {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.order-action-btn.secondary,
+.order-action-btn.ghost {
+  background: #f8fafc;
+}
+
+.order-action-btn.danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
+.order-status,
+.listing-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-pending_payment {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.status-in_progress,
+.status-paid,
+.status-settlement_pending,
+.status-rented {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.status-completed,
+.status-active {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.status-support_handling,
+.status-pending_review,
+.status-failed,
+.status-rejected {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.status-cancelled,
+.status-inactive,
+.status-sold_out {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.status-pending,
+.status-processing {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.status-verified,
+.status-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+@media (max-width: 960px) {
+  .profile-panel-card,
+  .profile-placeholder-card {
+    padding: 18px 16px;
+  }
+
+  .profile-login-btn,
+  .order-action-btn {
+    width: 100%;
+  }
+}

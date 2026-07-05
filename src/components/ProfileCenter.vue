@@ -133,55 +133,14 @@
       </section>
 
       <section v-else-if="activeSection === 'messages'" :key="'messages'" class="profile-panel">
-        <div class="profile-panel-card">
-          <div class="profile-order-toolbar profile-message-toolbar">
-            <div class="profile-message-summary">
-              <strong>未读消息</strong>
-              <span>{{ totalUnreadCount }} 条</span>
-            </div>
-            <button
-              type="button"
-              class="profile-message-refresh-btn"
-              :disabled="messageLoading"
-              @click="loadMessageData"
-            >
-              刷新
-            </button>
-          </div>
-
-          <div v-if="messageLoading" class="profile-empty">正在加载消息列表...</div>
-          <div v-else-if="messageError" class="profile-empty profile-error">{{ messageError }}</div>
-          <div v-else-if="!messageList.length" class="profile-empty">暂时还没有消息。</div>
-
-          <div v-else class="profile-message-list">
-            <article
-              v-for="messageItem in messageList"
-              :key="`${messageItem.item_type}-${messageItem.id}`"
-              class="profile-message-item"
-              :class="{ 'profile-message-item--unread': Number(messageItem.unread_count || 0) > 0 }"
-              @click="openMessageItem(messageItem)"
-            >
-              <div class="profile-message-item-main">
-                <div class="profile-message-item-header">
-                  <div class="profile-message-title-wrap">
-                    <h4>{{ messageItem.title }}</h4>
-                    <span v-if="messageItem.unread_count > 0" class="profile-message-unread-badge">
-                      {{ formatBadgeCount(messageItem.unread_count) }}
-                    </span>
-                  </div>
-                  <span class="profile-message-time">{{ formatConversationTime(messageItem.created_at || messageItem.updated_at) }}</span>
-                </div>
-
-                <p class="profile-message-counterpart">
-                  {{ getMessageItemMeta(messageItem) }}
-                </p>
-                <p class="profile-message-preview">
-                  {{ getMessageItemPreview(messageItem) }}
-                </p>
-              </div>
-            </article>
-          </div>
-        </div>
+        <ProfileMessagesPanel
+          :total-unread-count="totalUnreadCount"
+          :loading="messageLoading"
+          :error="messageError"
+          :message-list="messageList"
+          @refresh="loadMessageData"
+          @open-item="openMessageItem"
+        />
       </section>
 
       <section v-else-if="activeSection === 'published'" :key="'published'" class="profile-panel profile-panel--published">
@@ -326,232 +285,50 @@
       </section>
 
       <section v-else-if="activeSection === 'verify'" :key="'verify'" class="profile-panel">
-        <div v-if="!isLoggedIn" class="profile-placeholder-card">
-          <h4>实名认证</h4>
-          <p>完成实名认证后，可用于发布商品、申请提现，并提升交易信任度。</p>
-          <button type="button" class="profile-login-btn" @click="triggerLogin">立即登录</button>
-        </div>
-        <div v-else class="profile-panel-card">
-          <div class="verify-status-card" :class="`verify-status-card--${kycStatus}`">
-            <div class="verify-status-main">
-              <span class="verify-status-label">当前认证状态</span>
-              <strong>{{ getKycStatusText(kycStatus) }}</strong>
-              <p>{{ getKycStatusDescription(kycStatus) }}</p>
-            </div>
-            <span class="verify-status-badge" :class="`status-${kycStatus}`">{{ getKycStatusText(kycStatus) }}</span>
-          </div>
-
-          <div v-if="kycLoading" class="profile-empty">正在加载实名认证信息...</div>
-          <div v-else-if="kycError" class="profile-empty profile-error">{{ kycError }}</div>
-          <div v-else class="verify-panel">
-            <div class="verify-info-grid">
-              <div class="verify-info-item">
-                <span>认证姓名</span>
-                <strong>{{ kycRealNameMasked || '未认证' }}</strong>
-              </div>
-              <div class="verify-info-item">
-                <span>证件号码</span>
-                <strong>{{ kycIdCardMasked || '未认证' }}</strong>
-              </div>
-              <div class="verify-info-item">
-                <span>最近提交</span>
-                <strong>{{ formatOrderDate(kycSubmittedAt) }}</strong>
-              </div>
-              <div class="verify-info-item">
-                <span>认证完成</span>
-                <strong>{{ formatOrderDate(kycVerifiedAt) }}</strong>
-              </div>
-            </div>
-
-            <div v-if="kycFailureReason" class="verify-tips-card verify-tips-card--error">
-              <h4>审核反馈</h4>
-              <p>{{ kycFailureReason }}</p>
-            </div>
-
-            <form v-if="canSubmitKyc" class="verify-form-card" @submit.prevent="submitKyc">
-              <div class="wallet-action-header">
-                <div>
-                  <h4>提交实名认证</h4>
-                  <p>请填写本人真实姓名与有效身份证件号码，提交后系统会根据当前配置完成审核。</p>
-                </div>
-              </div>
-
-              <div class="wallet-form-grid verify-form-grid">
-                <label class="wallet-form-field">
-                  <span>真实姓名</span>
-                  <input v-model.trim="kycForm.realName" type="text" maxlength="30" placeholder="请输入真实姓名" :disabled="kycSubmitting" />
-                </label>
-                <label class="wallet-form-field">
-                  <span>身份证号</span>
-                  <input v-model.trim="kycForm.idCardNo" type="text" maxlength="18" placeholder="请输入身份证号码" :disabled="kycSubmitting" />
-                </label>
-              </div>
-
-              <div class="wallet-form-actions">
-                <button type="submit" class="order-action-btn primary wallet-submit-btn" :disabled="kycSubmitting">
-                  {{ kycSubmitting ? '提交中...' : '提交实名认证' }}
-                </button>
-              </div>
-            </form>
-
-            <div v-else class="verify-tips-card">
-              <h4>{{ kycStatus === 'pending' ? '认证审核中' : '实名认证已完成' }}</h4>
-              <p>
-                {{
-                  kycStatus === 'pending'
-                    ? '你已提交实名认证申请，请继续完成腾讯云刷脸核身；回跳后页面会自动同步最新状态。'
-                    : '当前账号已完成实名认证，可继续发布商品和申请钱包提现。'
-                }}
-              </p>
-              <div v-if="kycStatus === 'pending'" class="verify-action-row">
-                <button
-                  v-if="kycVerifyUrl"
-                  type="button"
-                  class="order-action-btn primary"
-                  :disabled="kycSyncing"
-                  @click="continueKycVerification"
-                >
-                  继续刷脸核身
-                </button>
-                <button
-                  type="button"
-                  class="order-action-btn secondary"
-                  :disabled="kycSyncing"
-                  @click="syncKycResult({}, { showToast: true })"
-                >
-                  {{ kycSyncing ? '同步中...' : '刷新认证结果' }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ProfileVerifyPanel
+          :is-logged-in="isLoggedIn"
+          :loading="kycLoading"
+          :error="kycError"
+          :kyc-status="kycStatus"
+          :real-name-masked="kycRealNameMasked"
+          :id-card-masked="kycIdCardMasked"
+          :submitted-at="kycSubmittedAt"
+          :verified-at="kycVerifiedAt"
+          :failure-reason="kycFailureReason"
+          :can-submit="canSubmitKyc"
+          :submitting="kycSubmitting"
+          :syncing="kycSyncing"
+          :verify-url="kycVerifyUrl"
+          :kyc-form="kycForm"
+          :format-order-date="formatOrderDate"
+          @login="triggerLogin"
+          @update:kyc-form="handleKycFormUpdate"
+          @submit="submitKyc"
+          @continue="continueKycVerification"
+          @sync-result="syncKycResult({}, { showToast: true })"
+        />
       </section>
 
       <section v-else-if="activeSection === 'wallet'" :key="'wallet'" class="profile-panel">
-        <div v-if="!isLoggedIn" class="profile-placeholder-card">
-          <h4>我的钱包</h4>
-          <p>登录后可查看余额、结算流水、提现申请记录，并发起钱包提现。</p>
-          <button type="button" class="profile-login-btn" @click="triggerLogin">立即登录</button>
-        </div>
-        <div v-else class="profile-panel-card">
-          <div class="wallet-summary-card">
-            <span class="wallet-summary-label">当前钱包概览</span>
-            <div class="wallet-summary-grid">
-              <div>
-                <span class="wallet-summary-caption">钱包余额</span>
-                <strong class="wallet-summary-balance">￥{{ formatMoney(walletBalance) }}</strong>
-              </div>
-              <div>
-                <span class="wallet-summary-caption">冻结金额</span>
-                <strong class="wallet-summary-minor">￥{{ formatMoney(walletFrozenBalance) }}</strong>
-              </div>
-              <div>
-                <span class="wallet-summary-caption">可提现余额</span>
-                <strong class="wallet-summary-minor wallet-summary-minor--highlight">￥{{ formatMoney(walletWithdrawableBalance) }}</strong>
-              </div>
-            </div>
-            <p class="wallet-summary-tip">
-              提现申请提交后，金额会先进入冻结状态，待平台审核及打款完成后更新结果。
-            </p>
-          </div>
-
-          <div class="wallet-action-card">
-            <div class="wallet-action-header">
-              <div>
-                <h4>申请提现</h4>
-                <p>支持支付宝、银行卡等方式，建议填写常用收款账户。</p>
-              </div>
-              <button type="button" class="order-action-btn ghost" :disabled="walletLoading || walletWithdrawSubmitting" @click="loadWalletData">
-                刷新钱包
-              </button>
-            </div>
-
-            <form class="wallet-form-grid" @submit.prevent="submitWithdraw">
-              <label class="wallet-form-field">
-                <span>提现金额</span>
-                <input v-model.trim="withdrawForm.amount" type="number" min="1" step="0.01" placeholder="最低 1 元" :disabled="walletWithdrawSubmitting || !canApplyWithdraw" />
-              </label>
-              <label class="wallet-form-field">
-                <span>提现方式</span>
-                <select v-model="withdrawForm.channel" :disabled="walletWithdrawSubmitting || !canApplyWithdraw">
-                  <option value="alipay">支付宝</option>
-                  <option value="bank">银行卡</option>
-                </select>
-              </label>
-              <label class="wallet-form-field">
-                <span>收款人姓名</span>
-                <input v-model.trim="withdrawForm.accountName" type="text" maxlength="50" placeholder="请输入收款人姓名" :disabled="walletWithdrawSubmitting || !canApplyWithdraw" />
-              </label>
-              <label class="wallet-form-field">
-                <span>收款账号</span>
-                <input v-model.trim="withdrawForm.accountNo" type="text" maxlength="64" placeholder="请输入支付宝账号或银行卡号" :disabled="walletWithdrawSubmitting || !canApplyWithdraw" />
-              </label>
-              <label class="wallet-form-field wallet-form-field--full">
-                <span>备注说明</span>
-                <input v-model.trim="withdrawForm.remark" type="text" maxlength="100" placeholder="选填，如收款账户说明" :disabled="walletWithdrawSubmitting || !canApplyWithdraw" />
-              </label>
-
-              <div class="wallet-form-actions wallet-form-field--full">
-                <button type="submit" class="order-action-btn primary wallet-submit-btn" :disabled="walletWithdrawSubmitting || !canApplyWithdraw">
-                  {{ walletWithdrawSubmitting ? '提交中...' : '提交提现申请' }}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <div v-if="walletLoading" class="profile-empty">正在加载钱包数据...</div>
-          <div v-else-if="walletError" class="profile-empty profile-error">{{ walletError }}</div>
-          <div v-else class="wallet-panels">
-            <div class="wallet-subpanel">
-              <div class="wallet-subpanel-header">
-                <h4>余额流水</h4>
-                <span>{{ walletLedger.length }} 条</span>
-              </div>
-              <div v-if="!walletLedger.length" class="profile-empty">当前还没有钱包流水。</div>
-              <div v-else class="wallet-ledger-list">
-                <article v-for="item in walletLedger" :key="item.id" class="wallet-ledger-item">
-                  <div>
-                    <h4>{{ item.remark || '订单结算入账' }}</h4>
-                    <p>订单号：{{ item.order_id || '-' }}</p>
-                    <p>变动后余额：￥{{ formatMoney(item.balance_after) }}</p>
-                  </div>
-                  <div class="wallet-ledger-amount">
-                    <strong :class="{ 'wallet-ledger-amount--credit': item.direction === 'credit' }">
-                      {{ item.direction === 'credit' ? '+' : '-' }}￥{{ formatMoney(item.amount) }}
-                    </strong>
-                    <span>{{ formatOrderDate(item.created_at) }}</span>
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            <div class="wallet-subpanel">
-              <div class="wallet-subpanel-header">
-                <h4>提现记录</h4>
-                <span>{{ walletWithdrawList.length }} 条</span>
-              </div>
-              <div v-if="!walletWithdrawList.length" class="profile-empty">当前还没有提现记录。</div>
-              <div v-else class="wallet-ledger-list">
-                <article v-for="item in walletWithdrawList" :key="item.id" class="wallet-ledger-item wallet-withdraw-item">
-                  <div>
-                    <div class="wallet-withdraw-title-row">
-                      <h4>提现申请 {{ item.request_no }}</h4>
-                      <span class="order-status" :class="`status-${item.status}`">{{ getWithdrawStatusText(item.status) }}</span>
-                    </div>
-                    <p>提现方式：{{ getWithdrawChannelText(item.channel) }}</p>
-                    <p>到账账户：{{ item.account_name || '-' }} / {{ item.account_no_masked || '-' }}</p>
-                    <p v-if="item.failure_reason">失败原因：{{ item.failure_reason }}</p>
-                  </div>
-                  <div class="wallet-ledger-amount">
-                    <strong>￥{{ formatMoney(item.amount) }}</strong>
-                    <span>到账金额：￥{{ formatMoney(item.net_amount) }}</span>
-                    <span>{{ formatOrderDate(item.created_at) }}</span>
-                  </div>
-                </article>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ProfileWalletPanel
+          :is-logged-in="isLoggedIn"
+          :loading="walletLoading"
+          :error="walletError"
+          :withdraw-submitting="walletWithdrawSubmitting"
+          :can-apply-withdraw="canApplyWithdraw"
+          :balance="walletBalance"
+          :frozen-balance="walletFrozenBalance"
+          :withdrawable-balance="walletWithdrawableBalance"
+          :ledger="walletLedger"
+          :withdraw-list="walletWithdrawList"
+          :withdraw-form="withdrawForm"
+          :format-money="formatMoney"
+          :format-order-date="formatOrderDate"
+          @login="triggerLogin"
+          @refresh="loadWalletData"
+          @update:withdraw-form="handleWithdrawFormUpdate"
+          @submit="submitWithdraw"
+        />
       </section>
 
       <section v-else-if="activeSection === 'invite'" :key="'invite'" class="profile-panel profile-panel--invite">
@@ -744,24 +521,39 @@ import {
   getCachedBusinessSettings,
   getPendingPaymentTimeoutMinutes
 } from '../utils/businessSettings.js'
+import {
+  createFeedbackCategories,
+  createFeedbackForm,
+  createKycForm,
+  createMyListingsStatsData,
+  createMyListingStatusTabs,
+  createOrderStatsData,
+  createOrderStatusTabs,
+  createProfileSections,
+  createWithdrawForm,
+  formatOrderDateTime,
+  formatPendingCountdown,
+  normalizeKycStatus
+} from '../utils/profileCenter.js'
 import { showErrorToast, showSuccessToast, showWarningToast } from '../utils/toast.js'
 import { showConfirm } from '../utils/confirm.js'
 import ConversationPanel from './ConversationPanel.vue'
 import PaymentModal from './PaymentModal.vue'
 import CopyTextButton from './CopyTextButton.vue'
-
-const FEEDBACK_CATEGORY_OPTIONS = Object.freeze([
-  { value: 'account_login', label: '账号登录问题' },
-  { value: 'listing_issue', label: '商品信息问题' },
-  { value: 'order_payment', label: '订单/支付问题' },
-  { value: 'chat_report', label: '聊天/违规举报' },
-  { value: 'feature_suggestion', label: '功能建议' },
-  { value: 'other', label: '其他问题' }
-])
+import ProfileMessagesPanel from './profile/ProfileMessagesPanel.vue'
+import ProfileVerifyPanel from './profile/ProfileVerifyPanel.vue'
+import ProfileWalletPanel from './profile/ProfileWalletPanel.vue'
 
 export default {
   name: 'ProfileCenter',
-  components: { ConversationPanel, PaymentModal, CopyTextButton },
+  components: {
+    ConversationPanel,
+    PaymentModal,
+    CopyTextButton,
+    ProfileMessagesPanel,
+    ProfileVerifyPanel,
+    ProfileWalletPanel
+  },
   emits: ['view-listing-detail', 'edit-listing', 'view-order-detail', 'login', 'unread-change', 'logout', 'payment-success'],
   props: {
     isLoggedIn: {
@@ -799,52 +591,16 @@ export default {
   },
   data() {
     return {
-      sections: [
-        { key: 'published', label: '我发布的' },
-        { key: 'orders', label: '我的订单' },
-        { key: 'messages', label: '我的消息' },
-        { key: 'wallet', label: '我的钱包' },
-        { key: 'invite', label: '邀新赚钱' }
-      ],
-      feedbackCategories: FEEDBACK_CATEGORY_OPTIONS.map((item) => ({ ...item })),
-      feedbackForm: {
-        category: FEEDBACK_CATEGORY_OPTIONS[0].value,
-        description: ''
-      },
+      sections: createProfileSections(),
+      feedbackCategories: createFeedbackCategories(),
+      feedbackForm: createFeedbackForm(),
       feedbackSubmitting: false,
-      orderStatusTabs: [
-        { key: 'all', label: '全部' },
-        { key: 'pending_payment', label: '待付款' },
-        { key: 'paid', label: '已支付' },
-        { key: 'settlement_pending', label: '结算中' },
-        { key: 'completed', label: '已完成' },
-        { key: 'cancelled', label: '已取消' },
-        { key: 'support_handling', label: '客服处理中' }
-      ],
-      myListingStatusTabs: [
-        { key: 'all', label: '全部' },
-        { key: 'active', label: '上架中' },
-        { key: 'inactive', label: '已下架' },
-        { key: 'pending_payment', label: '待付款' },
-        { key: 'paid', label: '已支付' },
-        { key: 'settlement_pending', label: '结算中' },
-        { key: 'completed', label: '已完成' },
-        { key: 'cancelled', label: '已取消' },
-        { key: 'support_handling', label: '客服处理中' }
-      ],
+      orderStatusTabs: createOrderStatusTabs(),
+      myListingStatusTabs: createMyListingStatusTabs(),
       activeSection: 'published',
       activeOrderRole: 'buyer',
       orderFilterStatus: 'all',
-      orderStatsData: {
-        total: 0,
-        pending_payment: 0,
-        paid: 0,
-        support_handling: 0,
-        settlement_pending: 0,
-        in_progress: 0,
-        completed: 0,
-        cancelled: 0
-      },
+      orderStatsData: createOrderStatsData(),
       orderList: [],
       orderLoading: false,
       orderError: '',
@@ -854,17 +610,7 @@ export default {
       countdownNowTs: Date.now(),
       countdownTimer: null,
       myListingFilterStatus: 'all',
-      myListingsStatsData: {
-        total: 0,
-        active: 0,
-        inactive: 0,
-        pending_payment: 0,
-        paid: 0,
-        support_handling: 0,
-        settlement_pending: 0,
-        completed: 0,
-        cancelled: 0
-      },
+      myListingsStatsData: createMyListingsStatsData(),
       myListingsList: [],
       myListingsLoading: false,
       myListingsError: '',
@@ -911,10 +657,7 @@ export default {
       kycBizToken: '',
       kycVerifyUrl: '',
       kycRuleId: '',
-      kycForm: {
-        realName: '',
-        idCardNo: ''
-      },
+      kycForm: createKycForm(),
       inviteLoading: false,
       inviteSubmitting: false,
       inviteError: '',
@@ -926,13 +669,7 @@ export default {
       contributedRewardTotal: 0,
       inviterOrderList: [],
       inviteeOrderList: [],
-      withdrawForm: {
-        amount: '',
-        channel: 'alipay',
-        accountName: '',
-        accountNo: '',
-        remark: ''
-      },
+      withdrawForm: createWithdrawForm(),
       businessSettings: getCachedBusinessSettings()
     }
   },
@@ -1065,6 +802,8 @@ export default {
       this.loadWalletData()
     } else if (this.activeSection === 'invite') {
       this.loadInviteData()
+    } else if (this.activeSection === 'verify') {
+      this.loadKycData()
     }
   },
   beforeUnmount() {
@@ -1105,6 +844,8 @@ export default {
         this.loadWalletData()
       } else if (sectionKey === 'invite') {
         this.loadInviteData()
+      } else if (sectionKey === 'verify') {
+        this.loadKycData()
       }
     },
     isSupportedSection(sectionKey) {
@@ -1133,10 +874,7 @@ export default {
             description
           })
         })
-        this.feedbackForm = {
-          category: this.feedbackCategories[0]?.value || FEEDBACK_CATEGORY_OPTIONS[0].value,
-          description: ''
-        }
+        this.feedbackForm = createFeedbackForm()
         showSuccessToast(data.message || '反馈已提交')
       } catch (error) {
         showErrorToast(error.message || '提交反馈失败')
@@ -1620,25 +1358,12 @@ export default {
       const data = await apiFetch('/api/wallet/withdraw/list')
       this.walletWithdrawList = Array.isArray(data.list) ? data.list : []
     },
-    normalizeKycStatus(value = '') {
-      const normalized = String(value || '').trim().toLowerCase()
-      return ['unverified', 'pending', 'verified', 'failed'].includes(normalized) ? normalized : 'unverified'
-    },
-    getKycStatusText(status = '') {
-      const textMap = {
-        unverified: '未认证',
-        pending: '审核中',
-        verified: '已认证',
-        failed: '认证失败'
+    normalizeKycStatus,
+    handleKycFormUpdate(nextForm = {}) {
+      this.kycForm = {
+        ...this.kycForm,
+        ...nextForm
       }
-      return textMap[this.normalizeKycStatus(status)] || '未认证'
-    },
-    getKycStatusDescription(status = '') {
-      const normalized = this.normalizeKycStatus(status)
-      if (normalized === 'verified') return '你的实名信息已通过审核，可正常发布商品并申请钱包提现。'
-      if (normalized === 'pending') return '实名功能当前已停用。'
-      if (normalized === 'failed') return '本次实名申请未通过，请根据审核反馈修正信息后重新提交。'
-      return '实名功能当前已停用，不影响钱包提现申请。'
     },
     async submitKyc() {
       const realName = String(this.kycForm.realName || '').trim()
@@ -1699,24 +1424,11 @@ export default {
         this.kycSubmitting = false
       }
     },
-    getWithdrawStatusText(status = '') {
-      const textMap = {
-        pending_review: '待审核',
-        processing: '处理中',
-        success: '已打款',
-        failed: '打款失败',
-        rejected: '已驳回',
-        cancelled: '已取消'
+    handleWithdrawFormUpdate(nextForm = {}) {
+      this.withdrawForm = {
+        ...this.withdrawForm,
+        ...nextForm
       }
-      return textMap[String(status || '').trim()] || '处理中'
-    },
-    getWithdrawChannelText(channel = '') {
-      const textMap = {
-        alipay: '支付宝',
-        bank: '银行卡',
-        wechat: '微信零钱'
-      }
-      return textMap[String(channel || '').trim().toLowerCase()] || '其他方式'
     },
     async submitWithdraw() {
       if (!this.canApplyWithdraw) {
@@ -1823,40 +1535,13 @@ export default {
       )
     },
     formatPendingCountdown(createdAt) {
-      const createdTime = new Date(createdAt).getTime()
-      if (!Number.isFinite(createdTime)) return '--:--'
-      const remainingMs = Math.max(0, createdTime + getPendingPaymentTimeoutMinutes(this.businessSettings) * 60 * 1000 - this.countdownNowTs)
-      const totalSeconds = Math.floor(remainingMs / 1000)
-      const minutes = Math.floor(totalSeconds / 60)
-      const seconds = totalSeconds % 60
-      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      return formatPendingCountdown(
+        createdAt,
+        getPendingPaymentTimeoutMinutes(this.businessSettings),
+        this.countdownNowTs
+      )
     },
-    formatOrderDate(value) {
-      if (!value) return '--'
-      const date = new Date(value)
-      if (Number.isNaN(date.getTime())) return String(value)
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      const hour = String(date.getHours()).padStart(2, '0')
-      const minute = String(date.getMinutes()).padStart(2, '0')
-      return `${year}-${month}-${day} ${hour}:${minute}`
-    },
-    formatConversationTime(value) {
-      if (!value) return '--'
-      const date = new Date(value)
-      if (Number.isNaN(date.getTime())) return String(value)
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      const hour = String(date.getHours()).padStart(2, '0')
-      const minute = String(date.getMinutes()).padStart(2, '0')
-      return `${month}-${day} ${hour}:${minute}`
-    },
-    formatBadgeCount(value) {
-      const count = Number(value || 0)
-      if (count > 99) return '99+'
-      return String(count)
-    },
+    formatOrderDate: formatOrderDateTime,
     hasSectionUnreadDot(sectionKey) {
       return sectionKey === 'messages' && this.hasUnreadMessages
     },
@@ -2010,20 +1695,6 @@ export default {
         return
       }
       await this.openNotification(messageItem)
-    },
-    getMessageItemMeta(messageItem) {
-      if (messageItem?.item_type === 'conversation') {
-        const counterpart = messageItem.counterpart_name || '订单成员'
-        const orderNo = messageItem.order_no ? `订单号：${messageItem.order_no}` : '订单聊天室'
-        return `${orderNo} · ${counterpart}`
-      }
-      return '平台通知'
-    },
-    getMessageItemPreview(messageItem) {
-      if (messageItem?.item_type === 'conversation') {
-        return messageItem.last_message_preview || '点击进入订单聊天室。'
-      }
-      return messageItem.preview || messageItem.content || '点击查看通知详情。'
     },
     async openConversation(conversation) {
       const orderId = Number(conversation?.order_id || conversation?.ref_id || 0)
@@ -2366,232 +2037,6 @@ export default {
   color: #6b7280;
 }
 
-.verify-status-card,
-.wallet-summary-card {
-  padding: 20px;
-  margin-bottom: 18px;
-  border: 1px solid #dbeafe;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
-}
-
-.verify-status-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.verify-status-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.verify-status-label,
-.wallet-summary-label {
-  display: block;
-  color: #6b7280;
-  font-size: 13px;
-}
-
-.verify-status-main strong {
-  color: #111827;
-  font-size: 28px;
-}
-
-.verify-status-main p {
-  margin: 0;
-  color: #475569;
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.verify-status-badge {
-  flex-shrink: 0;
-}
-
-.verify-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.verify-info-grid,
-.wallet-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.verify-info-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.verify-info-item,
-.wallet-summary-grid > div {
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-}
-
-.verify-info-item span,
-.wallet-summary-caption {
-  display: block;
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.verify-info-item strong {
-  display: block;
-  margin-top: 8px;
-  color: #111827;
-  font-size: 18px;
-}
-
-.wallet-summary-balance {
-  display: block;
-  margin-top: 8px;
-  color: #111827;
-  font-size: 30px;
-}
-
-.wallet-summary-minor {
-  display: block;
-  margin-top: 8px;
-  color: #111827;
-  font-size: 24px;
-}
-
-.wallet-summary-minor--highlight {
-  color: #047857;
-}
-
-.wallet-summary-tip {
-  margin: 8px 0 0;
-  color: #475569;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.verify-tips-card,
-.wallet-action-card,
-.wallet-subpanel,
-.verify-form-card {
-  padding: 18px;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #fff;
-}
-
-.verify-tips-card h4,
-.wallet-action-header h4,
-.wallet-subpanel-header h4 {
-  margin: 0;
-  color: #111827;
-  font-size: 18px;
-}
-
-.verify-tips-card p,
-.wallet-action-header p {
-  margin: 8px 0 0;
-  color: #6b7280;
-  line-height: 1.7;
-}
-
-.verify-action-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.verify-tips-card--error {
-  border-color: #fecaca;
-  background: #fff7f7;
-}
-
-.wallet-action-header,
-.wallet-subpanel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.wallet-panels {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.wallet-subpanel {
-  min-width: 0;
-}
-
-.wallet-subpanel-header {
-  margin-bottom: 14px;
-}
-
-.wallet-subpanel-header span {
-  color: #6b7280;
-  font-size: 13px;
-}
-
-.wallet-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 16px;
-}
-
-.wallet-form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.wallet-form-field--full {
-  grid-column: 1 / -1;
-}
-
-.wallet-form-field span {
-  color: #374151;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.wallet-form-field input,
-.wallet-form-field select {
-  min-height: 44px;
-  border: 1px solid #d1d5db;
-  border-radius: 12px;
-  padding: 0 14px;
-  background: #fff;
-  color: #111827;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.wallet-form-field input:focus,
-.wallet-form-field select:focus {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
-}
-
-.wallet-form-field input:disabled,
-.wallet-form-field select:disabled {
-  background: #f8fafc;
-  color: #9ca3af;
-  cursor: not-allowed;
-}
-
-.wallet-form-actions {
-  margin-top: 2px;
-}
-
 .invite-panel {
   display: flex;
   flex-direction: column;
@@ -2754,66 +2199,6 @@ export default {
 .invite-order-amounts span {
   color: #6b7280;
   font-size: 12px;
-}
-
-.wallet-submit-btn {
-  min-width: 168px;
-}
-
-.wallet-ledger-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.wallet-ledger-item {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  background: #fff;
-}
-
-.wallet-ledger-item h4 {
-  margin: 0 0 6px;
-  color: #111827;
-  font-size: 16px;
-}
-
-.wallet-ledger-item p {
-  margin: 4px 0 0;
-  color: #6b7280;
-  font-size: 13px;
-}
-
-.wallet-ledger-amount {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-.wallet-ledger-amount strong {
-  color: #111827;
-  font-size: 18px;
-}
-
-.wallet-ledger-amount--credit {
-  color: #047857 !important;
-}
-
-.wallet-ledger-amount span {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.wallet-withdraw-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 .profile-error {
@@ -3058,129 +2443,6 @@ export default {
 .order-page-summary {
   color: #6b7280;
   font-size: 14px;
-}
-
-.profile-message-toolbar {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.profile-message-summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #374151;
-  font-size: 14px;
-}
-
-.profile-message-summary strong {
-  color: #111827;
-  font-size: 16px;
-}
-
-.profile-message-refresh-btn {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
-  border-radius: 10px;
-  padding: 8px 14px;
-  cursor: pointer;
-}
-
-.profile-message-refresh-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.profile-message-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.profile-message-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid #e8eaed;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.04);
-  cursor: pointer;
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.profile-message-item--unread {
-  border-color: #bfdbfe;
-  background: #f8fbff;
-}
-
-.profile-message-item:hover {
-  border-color: #bfdbfe;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
-}
-
-.profile-message-item-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.profile-message-item-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.profile-message-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.profile-message-title-wrap h4 {
-  margin: 0;
-  font-size: 17px;
-  color: #111827;
-}
-
-.profile-message-unread-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: #dc2626;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.profile-message-time {
-  flex-shrink: 0;
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.profile-message-counterpart,
-.profile-message-preview {
-  margin: 8px 0 0;
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.profile-message-preview {
-  color: #374151;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .profile-placeholder-card {
@@ -3457,27 +2719,6 @@ export default {
   .profile-panel--orders .order-action-btn--detail,
   .profile-panel--published .listing-actions-col .order-action-btn--detail {
     display: none;
-  }
-
-  .profile-message-refresh-btn {
-    width: auto;
-    padding: 6px 16px;
-    font-size: 13px;
-    border-radius: 8px;
-  }
-
-  .profile-message-item,
-  .profile-message-item-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .profile-message-title-wrap {
-    justify-content: space-between;
-  }
-
-  .profile-message-preview {
-    white-space: normal;
   }
 
   .invite-bind-row,

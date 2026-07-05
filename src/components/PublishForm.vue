@@ -488,125 +488,36 @@ import {
   getRecommendedDailyCost,
   getRecommendedRentDays
 } from '../utils/businessSettings.js'
+import {
+  buildSaleItems,
+  createDefaultItems,
+  createDefaultFieldErrors,
+  createDefaultPublishForm,
+  DEFAULT_COMPENSATION_PLAN,
+  DIVE_LEVEL_OPTIONS,
+  getCurrentTimeText,
+  INSURANCE_LEVEL_OPTIONS,
+  ITEM_MODE_OPTIONS,
+  KNIFE_SKIN_OPTIONS,
+  LEVEL_OPTIONS,
+  LOGIN_METHOD_OPTIONS,
+  mapCompensationPlanOptions,
+  MAX_BAN_IMAGE_COUNT,
+  MAX_BAN_IMAGE_SIZE,
+  MAX_BAN_VIDEO_SIZE,
+  MAX_DEPOSIT_YUAN,
+  MAX_LISTING_IMAGE_COUNT,
+  MAX_LISTING_IMAGE_SIZE,
+  MIN_DEPOSIT_YUAN,
+  normalizeInsuranceLevel,
+  OPERATOR_APPEARANCE_OPTIONS,
+  RANK_OPTIONS,
+  splitLoginTimeRange,
+  splitMultiText,
+  WEAPON_SKIN_OPTIONS
+} from '../utils/publishForm.js'
 import { showErrorToast, showSuccessToast, showWarningToast } from '../utils/toast.js'
 import { showConfirm } from '../utils/confirm.js'
-
-const MAX_BAN_IMAGE_SIZE = 5 * 1024 * 1024
-const MAX_BAN_VIDEO_SIZE = 100 * 1024 * 1024
-const MAX_LISTING_IMAGE_SIZE = 5 * 1024 * 1024
-const DEFAULT_COMPENSATION_PLAN = 'basic'
-const MIN_DEPOSIT_YUAN = 100
-const MAX_DEPOSIT_YUAN = 2000
-const MAX_LISTING_IMAGE_COUNT = 10
-const MAX_BAN_IMAGE_COUNT = 5
-const ITEM_MODE_OPTIONS = Object.freeze([
-  { value: 'sale', label: '出售' },
-  { value: 'gift', label: '赠送' }
-])
-
-function createDefaultItems() {
-  return {
-    topCard: { quantity: '', mode: 'sale' },
-    awmBullet: { quantity: '', mode: 'sale' },
-    bulletLv6: { quantity: '', mode: 'sale' },
-    barrettBullet: { quantity: '', mode: 'sale' },
-    helmetLv6: { quantity: '', mode: 'sale' },
-    armorLv6: { quantity: '', mode: 'sale' },
-    coffeeBean: { quantity: '', mode: 'sale' },
-    bulletPart: { quantity: '', mode: 'sale' }
-  }
-}
-
-function createDefaultPublishForm() {
-  return {
-    insuranceLevel: '6格',
-    compensationPlan: DEFAULT_COMPENSATION_PLAN,
-    weightLevel: '7级',
-    deposit: '',
-    baseRatio: '',
-    loginMethod: 'QQ账密',
-    energyLevel: '7级',
-    hafuCoin: '',
-    rentDays: '',
-    loginStartTime: '',
-    loginEndTime: '',
-    secretKd: '',
-    characterLevel: '',
-    rank: '无',
-    region: '',
-    regionProvince: '',
-    regionCity: '',
-    faceVerified: '',
-    diveLevel: '0',
-    seyedUnlocked: '',
-    publishedAt: '',
-    remark: '',
-    banRecord: '',
-    banImages: [],
-    banVideo: null,
-    images: [],
-    items: createDefaultItems()
-  }
-}
-
-function splitMultiText(value) {
-  return String(value || '')
-    .split('、')
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
-function normalizeInsuranceLevel(value) {
-  const normalized = String(value || '').trim()
-  const map = {
-    '基础（1*2）': '2格',
-    '进阶（2*2）': '4格',
-    '高级（2*3）': '6格',
-    '顶级（3*3）': '9格',
-    '2': '2格',
-    '4': '4格',
-    '6': '6格',
-    '9': '9格',
-    '2格': '2格',
-    '4格': '4格',
-    '6格': '6格',
-    '9格': '9格'
-  }
-  return map[normalized] || '6格'
-}
-
-function splitLoginTimeRange(value) {
-  const [start = '', end = ''] = String(value || '').split('-')
-  return {
-    start: start.trim(),
-    end: end.trim()
-  }
-}
-
-function createDefaultFieldErrors() {
-  return {
-    loginMethod: '',
-    loginTimeRange: '',
-    insuranceLevel: '',
-    compensationPlan: '',
-    energyLevel: '',
-    weightLevel: '',
-    diveLevel: '',
-    banRecord: '',
-    banMedia: '',
-    faceVerified: '',
-    seyedUnlocked: '',
-    characterLevel: '',
-    rank: '',
-    secretKd: '',
-    region: '',
-    hafuCoin: '',
-    deposit: '',
-    baseRatio: '',
-    rentDays: '',
-    images: ''
-  }
-}
 
 export default {
   name: 'PublishForm',
@@ -629,49 +540,20 @@ export default {
       loadingEdit: false,
       submitting: false,
       publishErrors: [],
-      loginMethodOptions: ['QQ账密', '微信扫码', 'steam国服', 'steam国际服'],
-      insuranceLevelOptions: ['2格', '4格', '6格', '9格'],
-      compensationPlanOptions: getCachedBusinessSettings().compensationPlans.map((plan) => ({
-        ...plan,
-        feeRateLabel: formatPercentLabel(plan.feeRatePercent)
-      })),
-      levelOptions: ['4级', '5级', '6级', '7级'],
-      diveLevelOptions: ['0', '1', '2', '3'],
-      rankOptions: ['无', '青铜', '白银', '黄金', '铂金', '钻石', '黑鹰', '巅峰'],
-      operatorAppearanceOptions: [
-        '红狼-蚀金玫瑰',
-        '威龙-凌霄戍卫',
-        '骇爪-水墨云图',
-        '骇爪-维什戴尔',
-        '露娜-黑·天际线',
-        '佐娅-能天使',
-        '威龙-吴彦祖联动',
-        '威龙-蛟龙特战队'
-      ],
-      knifeSkinOptions: ['赤枭', '怜悯', '影锋', '黑海', '北极星', '信条', '龙牙', '暗星', '坠星者'],
-      weaponSkinOptions: [
-        'M4A1-棱镜攻势',
-        '维克托-美杜莎',
-        'SCAR-H-电玩高手',
-        'K416-王牌命运',
-        'QBZ95-王牌命运',
-        '腾龙-气象感应',
-        'AUG-气象感应',
-        'M7-棱镜攻势S2',
-        'AS Val-悬赏令',
-        'MP7-电玩高手S2',
-        'M250-电玩高手S2',
-        'KC17-造物纪元'
-      ],
+      loginMethodOptions: LOGIN_METHOD_OPTIONS,
+      insuranceLevelOptions: INSURANCE_LEVEL_OPTIONS,
+      compensationPlanOptions: mapCompensationPlanOptions(getCachedBusinessSettings().compensationPlans),
+      levelOptions: LEVEL_OPTIONS,
+      diveLevelOptions: DIVE_LEVEL_OPTIONS,
+      rankOptions: RANK_OPTIONS,
+      operatorAppearanceOptions: OPERATOR_APPEARANCE_OPTIONS,
+      knifeSkinOptions: KNIFE_SKIN_OPTIONS,
+      weaponSkinOptions: WEAPON_SKIN_OPTIONS,
       selectedOperatorAppearances: [],
       selectedKnifeSkins: [],
       selectedWeaponSkins: [],
       itemModeOptions: ITEM_MODE_OPTIONS,
-      saleItems: getEnabledSaleItems().map((item) => ({
-        key: item.key,
-        name: item.itemName,
-        priceInYuan: Number(item.unitPriceInCent || 0) / 100
-      })),
+      saleItems: buildSaleItems(getEnabledSaleItems()),
       viewportWidth: typeof window === 'undefined' ? 1440 : window.innerWidth,
       isMobileView: typeof window === 'undefined' ? false : window.innerWidth <= 1200,
       previewMediaType: 'image',
@@ -843,15 +725,8 @@ export default {
       this.businessSettings = settings
       this.MIN_DEPOSIT_YUAN = Number(settings.listingRecommendations?.depositMinYuan || MIN_DEPOSIT_YUAN)
       this.MAX_DEPOSIT_YUAN = Number(settings.listingRecommendations?.depositMaxYuan || MAX_DEPOSIT_YUAN)
-      this.compensationPlanOptions = settings.compensationPlans.map((plan) => ({
-        ...plan,
-        feeRateLabel: formatPercentLabel(plan.feeRatePercent)
-      }))
-      this.saleItems = getEnabledSaleItems(settings).map((item) => ({
-        key: item.key,
-        name: item.itemName,
-        priceInYuan: Number(item.unitPriceInCent || 0) / 100
-      }))
+      this.compensationPlanOptions = mapCompensationPlanOptions(settings.compensationPlans)
+      this.saleItems = buildSaleItems(getEnabledSaleItems(settings))
       if (!this.compensationPlanOptions.some((plan) => plan.value === this.publishForm.compensationPlan)) {
         this.publishForm.compensationPlan = DEFAULT_COMPENSATION_PLAN
       }
@@ -1412,7 +1287,7 @@ export default {
 
       return {
         ownerName: this.ownerName || '匿名用户',
-        publishedAt: this.publishForm.publishedAt || this.getCurrentTimeText(),
+          publishedAt: this.publishForm.publishedAt || getCurrentTimeText(),
         insuranceLevel: this.publishForm.insuranceLevel,
         compensationPlan: this.publishForm.compensationPlan,
         weightLevel: this.publishForm.weightLevel,
@@ -1440,11 +1315,6 @@ export default {
         items: itemsPayload,
         images: uploadedListingImages
       }
-    },
-    getCurrentTimeText() {
-      const now = new Date()
-      const pad = (num) => String(num).padStart(2, '0')
-      return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
     },
     async submitPublish() {
       this.publishErrors = this.validatePublishForm()

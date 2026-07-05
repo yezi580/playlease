@@ -187,6 +187,7 @@ export default {
       messages: [],
       currentUserId: 0,
       joinedConversation: false,
+      conversationRequestId: 0,
       pageVisible: true,
       windowFocused: true
     }
@@ -271,6 +272,11 @@ export default {
         this.windowFocused = true
       }
     },
+    isLatestConversationRequest(requestId, orderId) {
+      return this.visible
+        && this.conversationRequestId === requestId
+        && String(this.orderId || '') === String(orderId || '')
+    },
     handlePageVisibilityChange() {
       this.pageVisible = typeof document === 'undefined' || document.visibilityState === 'visible'
     },
@@ -286,7 +292,9 @@ export default {
       }
     },
     async initializeConversation() {
+      const targetOrderId = String(this.orderId || '')
       this.teardownConversation()
+      const requestId = ++this.conversationRequestId
       this.loading = true
       this.error = ''
       this.draft = ''
@@ -297,12 +305,14 @@ export default {
       this.joinedConversation = false
 
       try {
-        const conversation = await apiFetch(`/api/conversations/order/${this.orderId}`, {
+        const conversation = await apiFetch(`/api/conversations/order/${targetOrderId}`, {
           method: 'POST'
         })
+        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
         this.conversation = conversation
 
         const history = await apiFetch(`/api/conversations/${conversation.id}/messages?page=1&pageSize=100`)
+        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
         this.currentUserId = Number(
           history.current_user_id
           || history.conversation?.current_user_id
@@ -312,13 +322,18 @@ export default {
         this.messages = this.normalizeMessages(history.list)
 
         await this.tryMarkConversationRead()
+        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
         await nextTick()
+        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
         this.scrollToBottom()
         this.setupSocket()
       } catch (error) {
+        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
         this.error = error.message || '加载会话失败，请稍后重试'
       } finally {
-        this.loading = false
+        if (this.isLatestConversationRequest(requestId, targetOrderId)) {
+          this.loading = false
+        }
       }
     },
     setupSocket() {
@@ -364,6 +379,7 @@ export default {
       this.socket = socket
     },
     teardownConversation() {
+      this.conversationRequestId += 1
       const conversationId = Number(this.conversation?.id || 0)
       if (this.socket) {
         if (conversationId) {

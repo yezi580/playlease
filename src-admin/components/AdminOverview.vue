@@ -285,8 +285,6 @@
 import * as echarts from 'echarts'
 import { apiFetch } from '../utils/api.js'
 
-function debugReportOverview() {}
-
 const EMPTY_OVERVIEW = Object.freeze({
   totalUsers: 0,
   totalListings: 0,
@@ -447,13 +445,6 @@ export default {
     }
   },
   async mounted() {
-    // #region debug-point C:mounted
-    debugReportOverview('C', 'AdminOverview.vue:mounted', '[DEBUG] mounted lifecycle entered', {
-      loading: this.loading,
-      trendLoading: this.trendLoading,
-      revenueLoading: this.revenueLoading
-    })
-    // #endregion
     window.addEventListener('resize', this.handleResize)
     this.attachGlobalWheelListener()
     await Promise.all([
@@ -463,13 +454,6 @@ export default {
   },
   activated() {
     this.$nextTick(() => {
-      // #region debug-point C:activated
-      debugReportOverview('C', 'AdminOverview.vue:activated', '[DEBUG] activated lifecycle entered', {
-        hasSalesRef: Boolean(this.$refs.salesChartRef),
-        hasUsersRef: Boolean(this.$refs.usersChartRef),
-        hasOnlineRef: Boolean(this.$refs.onlineChartRef)
-      })
-      // #endregion
       this.attachGlobalWheelListener()
       this.recreateCharts()
     })
@@ -563,22 +547,8 @@ export default {
       const params = this.buildDashboardQueryParams()
       this.trendLoading = true
       this.trendError = ''
-      // #region debug-point A:trend-request
-      debugReportOverview('A', 'AdminOverview.vue:loadTrendData:start', '[DEBUG] dashboard trends request start', {
-        url: `/api/admin/dashboard/trends?${params.toString()}`,
-        granularity: this.dashboardFilters.granularity
-      })
-      // #endregion
       try {
         const data = await apiFetch(`/api/admin/dashboard/trends?${params.toString()}`)
-        // #region debug-point A:trend-response
-        debugReportOverview('A', 'AdminOverview.vue:loadTrendData:success', '[DEBUG] dashboard trends request success', {
-          salesCount: Array.isArray(data?.sales?.list) ? data.sales.list.length : -1,
-          usersCount: Array.isArray(data?.users?.list) ? data.users.list.length : -1,
-          onlineCount: Array.isArray(data?.online?.list) ? data.online.list.length : -1,
-          range: data?.range || null
-        })
-        // #endregion
         this.trendRange = data?.range || null
         this.trendStats = {
           totalPaidOrders: Number(data?.sales?.totals?.totalPaidOrders || 0),
@@ -596,11 +566,6 @@ export default {
         this.initCharts()
         this.renderCharts()
       } catch (error) {
-        // #region debug-point A:trend-error
-        debugReportOverview('A', 'AdminOverview.vue:loadTrendData:error', '[DEBUG] dashboard trends request failed', {
-          message: error?.message || 'unknown'
-        })
-        // #endregion
         this.trendRange = null
         this.trendStats = { ...EMPTY_TREND_STATS }
         this.salesTrendList = []
@@ -645,28 +610,7 @@ export default {
       const salesChart = this.ensureChart('salesChart', 'salesChartRef')
       const usersChart = this.ensureChart('usersChart', 'usersChartRef')
       const onlineChart = this.ensureChart('onlineChart', 'onlineChartRef')
-      // #region debug-point B:init-charts
-      debugReportOverview('B', 'AdminOverview.vue:initCharts', '[DEBUG] initCharts executed', {
-        hasSalesRef: Boolean(this.$refs.salesChartRef),
-        hasUsersRef: Boolean(this.$refs.usersChartRef),
-        hasOnlineRef: Boolean(this.$refs.onlineChartRef),
-        salesDomSize: this.$refs.salesChartRef ? {
-          width: this.$refs.salesChartRef.clientWidth,
-          height: this.$refs.salesChartRef.clientHeight
-        } : null,
-        usersDomSize: this.$refs.usersChartRef ? {
-          width: this.$refs.usersChartRef.clientWidth,
-          height: this.$refs.usersChartRef.clientHeight
-        } : null,
-        onlineDomSize: this.$refs.onlineChartRef ? {
-          width: this.$refs.onlineChartRef.clientWidth,
-          height: this.$refs.onlineChartRef.clientHeight
-        } : null,
-        hasSalesChart: Boolean(salesChart),
-        hasUsersChart: Boolean(usersChart),
-        hasOnlineChart: Boolean(onlineChart)
-      })
-      // #endregion
+      if (!salesChart && !usersChart && !onlineChart) return
       this.renderCharts()
     },
     recreateCharts() {
@@ -717,16 +661,6 @@ export default {
       }
     },
     renderCharts() {
-      // #region debug-point D:render-charts
-      debugReportOverview('D', 'AdminOverview.vue:renderCharts', '[DEBUG] renderCharts executed', {
-        salesCount: this.salesTrendList.length,
-        usersCount: this.usersTrendList.length,
-        onlineCount: this.onlineTrendList.length,
-        hasSalesChart: Boolean(this.salesChart),
-        hasUsersChart: Boolean(this.usersChart),
-        hasOnlineChart: Boolean(this.onlineChart)
-      })
-      // #endregion
       this.renderSalesChart()
       this.renderUsersChart()
       this.renderOnlineChart()
@@ -735,14 +669,6 @@ export default {
       if (!this.salesChart) return
       const categories = this.salesTrendList.map((item) => item.bucket)
       const seriesData = this.salesTrendList.map((item) => Number(item.salesAmount || 0) / 100)
-      // #region debug-point E:sales-before-set-option
-      debugReportOverview('E', 'AdminOverview.vue:renderSalesChart:before', '[DEBUG] sales chart render before setOption', {
-        categories,
-        seriesData,
-        chartWidth: this.salesChart.getWidth(),
-        chartHeight: this.salesChart.getHeight()
-      })
-      // #endregion
       this.salesChart.setOption({
         animationDuration: 300,
         tooltip: {
@@ -800,25 +726,11 @@ export default {
           }
         ]
       })
-      // #region debug-point E:sales-after-set-option
-      debugReportOverview('E', 'AdminOverview.vue:renderSalesChart:after', '[DEBUG] sales chart render after setOption', {
-        seriesLength: this.salesChart.getOption()?.series?.length || 0,
-        dataUrlLength: this.salesChart.getDataURL({ pixelRatio: 1, backgroundColor: '#fff' }).length
-      })
-      // #endregion
     },
     renderUsersChart() {
       if (!this.usersChart) return
       const categories = this.usersTrendList.map((item) => item.bucket)
       const seriesData = this.usersTrendList.map((item) => Number(item.registerCount || 0))
-      // #region debug-point E:users-before-set-option
-      debugReportOverview('E', 'AdminOverview.vue:renderUsersChart:before', '[DEBUG] users chart render before setOption', {
-        categories,
-        seriesData,
-        chartWidth: this.usersChart.getWidth(),
-        chartHeight: this.usersChart.getHeight()
-      })
-      // #endregion
       this.usersChart.setOption({
         animationDuration: 300,
         tooltip: {
@@ -866,25 +778,11 @@ export default {
           }
         ]
       })
-      // #region debug-point E:users-after-set-option
-      debugReportOverview('E', 'AdminOverview.vue:renderUsersChart:after', '[DEBUG] users chart render after setOption', {
-        seriesLength: this.usersChart.getOption()?.series?.length || 0,
-        dataUrlLength: this.usersChart.getDataURL({ pixelRatio: 1, backgroundColor: '#fff' }).length
-      })
-      // #endregion
     },
     renderOnlineChart() {
       if (!this.onlineChart) return
       const categories = this.onlineTrendList.map((item) => item.bucket)
       const seriesData = this.onlineTrendList.map((item) => Number(item.maxOnlineUsers || 0))
-      // #region debug-point E:online-before-set-option
-      debugReportOverview('E', 'AdminOverview.vue:renderOnlineChart:before', '[DEBUG] online chart render before setOption', {
-        categories,
-        seriesData,
-        chartWidth: this.onlineChart.getWidth(),
-        chartHeight: this.onlineChart.getHeight()
-      })
-      // #endregion
       this.onlineChart.setOption({
         animationDuration: 300,
         tooltip: {
@@ -940,12 +838,6 @@ export default {
           }
         ]
       })
-      // #region debug-point E:online-after-set-option
-      debugReportOverview('E', 'AdminOverview.vue:renderOnlineChart:after', '[DEBUG] online chart render after setOption', {
-        seriesLength: this.onlineChart.getOption()?.series?.length || 0,
-        dataUrlLength: this.onlineChart.getDataURL({ pixelRatio: 1, backgroundColor: '#fff' }).length
-      })
-      // #endregion
     },
     formatOrderStatus(status) {
       return ORDER_STATUS_LABELS[String(status || '').trim()] || String(status || '--')
