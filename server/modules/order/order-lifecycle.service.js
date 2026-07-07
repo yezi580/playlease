@@ -1224,12 +1224,6 @@ export function createOrderLifecycleService({
             note: note || '客服已取消订单，并按规则全额退款处理。',
             conversationOrder: orderConversation
           })
-          await emitOrderSystemMessage({
-            order: orderConversation,
-            actorUserId: supportUserId,
-            actorRole: 'support',
-            content: '客服已取消本订单，并按规则执行全额退款处理。'
-          })
           return updated
         } catch (error) {
           await conn.rollback()
