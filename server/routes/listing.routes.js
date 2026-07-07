@@ -95,7 +95,6 @@ export function registerListingRoutes(deps) {
   app.post('/api/listings', authRequired, publishLimiter, async (req, res) => {
     const payload = req.body || {}
     const missingField = validateRequiredPayload(payload)
-    const invalidFieldMessage = validateListingPayload(payload)
 
     //必填项校验
     if (missingField) {
@@ -104,14 +103,16 @@ export function registerListingRoutes(deps) {
       })
     }
 
+    const businessSettings = await loadBusinessSettings(pool)
+    const saleItemConfig = getSaleItemConfig(businessSettings)
+    const invalidFieldMessage = validateListingPayload(payload, { businessSettings, saleItemConfig })
+
     if (invalidFieldMessage) {
       return res.status(400).json({ message: invalidFieldMessage })
     }
 
     //读取平台配置  
-    const businessSettings = await loadBusinessSettings(pool)
     const listingRecommendations = businessSettings.listingRecommendations || {}
-    const saleItemConfig = getSaleItemConfig(businessSettings)
     const minDepositYuan = Number(listingRecommendations.depositMinYuan || MIN_LISTING_DEPOSIT_YUAN)
     const maxDepositYuan = Number(listingRecommendations.depositMaxYuan || MAX_LISTING_DEPOSIT_YUAN)
     const maxRentDays = Number(listingRecommendations.maxRentDays || 60)

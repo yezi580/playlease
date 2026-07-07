@@ -86,6 +86,78 @@
 
           <article class="panel">
             <div class="panel-head">
+              <strong>刀皮与枪皮选项</strong>
+              <span>控制发布页可选的刀皮和枪皮名单，支持后台直接增删</span>
+            </div>
+            <div class="skin-config-grid">
+              <section class="skin-config-card">
+                <div class="skin-config-head">
+                  <strong>刀皮列表</strong>
+                  <button type="button" class="toolbar-btn toolbar-btn--ghost toolbar-btn--small" @click="addSkinOption('knifeSkins')">
+                    新增刀皮
+                  </button>
+                </div>
+                <div class="skin-option-list">
+                  <div
+                    v-for="(item, index) in form.listingAppearanceOptions.knifeSkins"
+                    :key="`knife-${index}`"
+                    class="skin-option-row"
+                  >
+                    <input
+                      :value="item"
+                      type="text"
+                      maxlength="40"
+                      placeholder="请输入刀皮名称"
+                      @input="updateSkinOption('knifeSkins', index, $event.target.value)"
+                    >
+                    <button
+                      type="button"
+                      class="toolbar-btn toolbar-btn--danger toolbar-btn--small"
+                      :disabled="form.listingAppearanceOptions.knifeSkins.length <= 1"
+                      @click="removeSkinOption('knifeSkins', index)"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="skin-config-card">
+                <div class="skin-config-head">
+                  <strong>枪皮列表</strong>
+                  <button type="button" class="toolbar-btn toolbar-btn--ghost toolbar-btn--small" @click="addSkinOption('weaponSkins')">
+                    新增枪皮
+                  </button>
+                </div>
+                <div class="skin-option-list">
+                  <div
+                    v-for="(item, index) in form.listingAppearanceOptions.weaponSkins"
+                    :key="`weapon-${index}`"
+                    class="skin-option-row"
+                  >
+                    <input
+                      :value="item"
+                      type="text"
+                      maxlength="40"
+                      placeholder="请输入枪皮名称"
+                      @input="updateSkinOption('weaponSkins', index, $event.target.value)"
+                    >
+                    <button
+                      type="button"
+                      class="toolbar-btn toolbar-btn--danger toolbar-btn--small"
+                      :disabled="form.listingAppearanceOptions.weaponSkins.length <= 1"
+                      @click="removeSkinOption('weaponSkins', index)"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
               <strong>押金与出租天数</strong>
               <span>管理押金上下限、推荐比例和出租天数推荐逻辑</span>
             </div>
@@ -397,6 +469,19 @@ export default {
     updateSpecialKnives(value) {
       this.form.ratioRecommendation.specialKnives = parseStringList(value)
     },
+    addSkinOption(type) {
+      if (!this.form?.listingAppearanceOptions?.[type]) return
+      this.form.listingAppearanceOptions[type].push('')
+    },
+    updateSkinOption(type, index, value) {
+      if (!this.form?.listingAppearanceOptions?.[type]?.[index] && this.form?.listingAppearanceOptions?.[type]?.[index] !== '') return
+      this.form.listingAppearanceOptions[type].splice(index, 1, String(value || '').trimStart())
+    },
+    removeSkinOption(type, index) {
+      if (!this.form?.listingAppearanceOptions?.[type]) return
+      if (this.form.listingAppearanceOptions[type].length <= 1) return
+      this.form.listingAppearanceOptions[type].splice(index, 1)
+    },
     updateSaleItemPrice(item, value) {
       item.unitPriceInCent = yuanToCent(value)
     },
@@ -552,10 +637,23 @@ export default {
   font-weight: 600;
 }
 
+.toolbar-btn--small {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
 .toolbar-btn--ghost {
   border-color: #d1d5db;
   background: #fff;
   color: #374151;
+}
+
+.toolbar-btn--danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
 }
 
 .settings-grid {
@@ -644,6 +742,51 @@ export default {
   background: #f9fafb;
   display: grid;
   gap: 12px;
+}
+
+.skin-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.skin-config-card {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  display: grid;
+  gap: 12px;
+}
+
+.skin-config-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.skin-option-list {
+  display: grid;
+  gap: 10px;
+}
+
+.skin-option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.skin-option-row input {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  box-sizing: border-box;
 }
 
 .array-card-head {

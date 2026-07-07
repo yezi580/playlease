@@ -29,7 +29,7 @@ export const OPERATOR_APPEARANCE_OPTIONS = Object.freeze([
   '威龙-吴彦祖联动',
   '威龙-蛟龙特战队'
 ])
-export const KNIFE_SKIN_OPTIONS = Object.freeze(['赤枭', '怜悯', '影锋', '黑海', '北极星', '信条', '龙牙', '暗星', '坠星者'])
+export const KNIFE_SKIN_OPTIONS = Object.freeze(['赤枭', '怜悯', '影锋', '黑海', '北极星', '信条', '龙牙', '暗星', '坠星者', '挽歌'])
 export const WEAPON_SKIN_OPTIONS = Object.freeze([
   'M4A1-棱镜攻势',
   '维克托-美杜莎',
@@ -42,7 +42,8 @@ export const WEAPON_SKIN_OPTIONS = Object.freeze([
   'AS Val-悬赏令',
   'MP7-电玩高手S2',
   'M250-电玩高手S2',
-  'KC17-造物纪元'
+  'KC17-造物纪元',
+  'AKM-群星'
 ])
 
 export function createDefaultItems() {

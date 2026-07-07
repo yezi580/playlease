@@ -57,8 +57,8 @@ const ALLOWED_OPERATOR_APPEARANCES = new Set([
   '威龙-吴彦祖联动',
   '威龙-蛟龙特战队'
 ])
-const ALLOWED_KNIFE_SKINS = new Set(['赤枭', '怜悯', '影锋', '黑海', '北极星', '信条', '龙牙', '暗星', '坠星者'])
-const ALLOWED_WEAPON_SKINS = new Set([
+const DEFAULT_KNIFE_SKINS = ['赤枭', '怜悯', '影锋', '黑海', '北极星', '信条', '龙牙', '暗星', '坠星者', '挽歌']
+const DEFAULT_WEAPON_SKINS = [
   'M4A1-棱镜攻势',
   '维克托-美杜莎',
   'SCAR-H-电玩高手',
@@ -70,8 +70,33 @@ const ALLOWED_WEAPON_SKINS = new Set([
   'AS Val-悬赏令',
   'MP7-电玩高手S2',
   'M250-电玩高手S2',
-  'KC17-造物纪元'
-])
+  'KC17-造物纪元',
+  'AKM-群星'
+]
+
+function normalizeAllowedOptionList(value, fallback = []) {
+  if (!Array.isArray(value)) return [...fallback]
+  const list = value
+    .map((item) => String(item || '').trim().slice(0, 40))
+    .filter(Boolean)
+  return list.length ? Array.from(new Set(list)) : [...fallback]
+}
+
+function getAllowedKnifeSkinSet(businessSettings) {
+  const list = normalizeAllowedOptionList(
+    businessSettings?.listingAppearanceOptions?.knifeSkins,
+    DEFAULT_KNIFE_SKINS
+  )
+  return new Set(list)
+}
+
+function getAllowedWeaponSkinSet(businessSettings) {
+  const list = normalizeAllowedOptionList(
+    businessSettings?.listingAppearanceOptions?.weaponSkins,
+    DEFAULT_WEAPON_SKINS
+  )
+  return new Set(list)
+}
 
 export function validateRequiredPayload(payload) {
   for (const field of requiredFields) {
@@ -247,8 +272,12 @@ export function toBanRecordFlag(value) {
   return normalizeBanRecord(value) === '有' ? 1 : 0
 }
 
-export function validateListingPayload(payload, options) {
-  const { saleItemConfig, listingItemModes } = options
+export function validateListingPayload(payload, options = {}) {
+  const {
+    saleItemConfig = {},
+    listingItemModes = new Set(['sale', 'gift']),
+    businessSettings
+  } = options
 
   const insuranceLevel = normalizeInsuranceLevel(payload.insuranceLevel)
   if (!ALLOWED_INSURANCE_LEVELS.has(insuranceLevel)) {
@@ -337,12 +366,12 @@ export function validateListingPayload(payload, options) {
     return operatorAppearanceMessage
   }
 
-  const knifeSkinMessage = validateMultiSelectWhitelist(payload.knifeSkin, ALLOWED_KNIFE_SKINS, '刀皮')
+  const knifeSkinMessage = validateMultiSelectWhitelist(payload.knifeSkin, getAllowedKnifeSkinSet(businessSettings), '刀皮')
   if (knifeSkinMessage) {
     return knifeSkinMessage
   }
 
-  const weaponSkinMessage = validateMultiSelectWhitelist(payload.weaponSkin, ALLOWED_WEAPON_SKINS, '武器皮肤')
+  const weaponSkinMessage = validateMultiSelectWhitelist(payload.weaponSkin, getAllowedWeaponSkinSet(businessSettings), '武器皮肤')
   if (weaponSkinMessage) {
     return weaponSkinMessage
   }

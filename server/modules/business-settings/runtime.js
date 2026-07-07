@@ -16,6 +16,24 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
       noKnife: 44
     }
   },
+  listingAppearanceOptions: {
+    knifeSkins: ['赤枭', '怜悯', '影锋', '黑海', '北极星', '信条', '龙牙', '暗星', '坠星者', '挽歌'],
+    weaponSkins: [
+      'M4A1-棱镜攻势',
+      '维克托-美杜莎',
+      'SCAR-H-电玩高手',
+      'K416-王牌命运',
+      'QBZ95-王牌命运',
+      '腾龙-气象感应',
+      'AUG-气象感应',
+      'M7-棱镜攻势S2',
+      'AS Val-悬赏令',
+      'MP7-电玩高手S2',
+      'M250-电玩高手S2',
+      'KC17-造物纪元',
+      'AKM-群星'
+    ]
+  },
   listingRecommendations: {
     depositMinYuan: 100,
     depositMaxYuan: 2000,
@@ -118,6 +136,9 @@ export function normalizeBusinessSettings(rawValue = {}) {
   const ratioSource = source.ratioRecommendation && typeof source.ratioRecommendation === 'object'
     ? source.ratioRecommendation
     : {}
+  const appearanceSource = source.listingAppearanceOptions && typeof source.listingAppearanceOptions === 'object'
+    ? source.listingAppearanceOptions
+    : {}
   const listingSource = source.listingRecommendations && typeof source.listingRecommendations === 'object'
     ? source.listingRecommendations
     : {}
@@ -151,6 +172,10 @@ export function normalizeBusinessSettings(rawValue = {}) {
         otherKnife: normalizeNumber(ratioSource.grid6?.otherKnife, defaults.ratioRecommendation.grid6.otherKnife, { min: 1, max: 1000, integer: true }),
         noKnife: normalizeNumber(ratioSource.grid6?.noKnife, defaults.ratioRecommendation.grid6.noKnife, { min: 1, max: 1000, integer: true })
       }
+    },
+    listingAppearanceOptions: {
+      knifeSkins: normalizeStringList(appearanceSource.knifeSkins, defaults.listingAppearanceOptions.knifeSkins),
+      weaponSkins: normalizeStringList(appearanceSource.weaponSkins, defaults.listingAppearanceOptions.weaponSkins)
     },
     listingRecommendations: {
       depositMinYuan: normalizeNumber(listingSource.depositMinYuan, defaults.listingRecommendations.depositMinYuan, { min: 0, max: 999999, integer: true }),

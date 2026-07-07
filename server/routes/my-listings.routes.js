@@ -213,7 +213,6 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
   const listingId = Number(req.params.id)
   const payload = req.body || {}
   const missingField = validateRequiredPayload(payload)
-  const invalidFieldMessage = validateListingPayload(payload)
 
   if (!Number.isFinite(listingId) || listingId <= 0) {
     return res.status(400).json({ message: '商品ID无效' })
@@ -223,13 +222,15 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
     return res.status(400).json({ message: `缺少必填字段：${missingField}` })
   }
 
+  const businessSettings = await loadBusinessSettings(pool)
+  const saleItemConfig = getSaleItemConfig(businessSettings)
+  const invalidFieldMessage = validateListingPayload(payload, { businessSettings, saleItemConfig })
+
   if (invalidFieldMessage) {
     return res.status(400).json({ message: invalidFieldMessage })
   }
 
-  const businessSettings = await loadBusinessSettings(pool)
   const listingRecommendations = businessSettings.listingRecommendations || {}
-  const saleItemConfig = getSaleItemConfig(businessSettings)
   const minDepositYuan = Number(listingRecommendations.depositMinYuan || MIN_LISTING_DEPOSIT_YUAN)
   const maxDepositYuan = Number(listingRecommendations.depositMaxYuan || MAX_LISTING_DEPOSIT_YUAN)
   const maxRentDays = Number(listingRecommendations.maxRentDays || 60)

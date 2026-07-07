@@ -485,8 +485,10 @@ import {
   getCachedBusinessSettings,
   getCompensationPlanOption,
   getEnabledSaleItems,
+  getKnifeSkinOptions,
   getRecommendedDailyCost,
-  getRecommendedRentDays
+  getRecommendedRentDays,
+  getWeaponSkinOptions
 } from '../utils/businessSettings.js'
 import {
   buildSaleItems,
@@ -498,7 +500,6 @@ import {
   getCurrentTimeText,
   INSURANCE_LEVEL_OPTIONS,
   ITEM_MODE_OPTIONS,
-  KNIFE_SKIN_OPTIONS,
   LEVEL_OPTIONS,
   LOGIN_METHOD_OPTIONS,
   mapCompensationPlanOptions,
@@ -513,8 +514,7 @@ import {
   OPERATOR_APPEARANCE_OPTIONS,
   RANK_OPTIONS,
   splitLoginTimeRange,
-  splitMultiText,
-  WEAPON_SKIN_OPTIONS
+  splitMultiText
 } from '../utils/publishForm.js'
 import { showErrorToast, showSuccessToast, showWarningToast } from '../utils/toast.js'
 import { showConfirm } from '../utils/confirm.js'
@@ -547,8 +547,8 @@ export default {
       diveLevelOptions: DIVE_LEVEL_OPTIONS,
       rankOptions: RANK_OPTIONS,
       operatorAppearanceOptions: OPERATOR_APPEARANCE_OPTIONS,
-      knifeSkinOptions: KNIFE_SKIN_OPTIONS,
-      weaponSkinOptions: WEAPON_SKIN_OPTIONS,
+      knifeSkinOptions: getKnifeSkinOptions(getCachedBusinessSettings()),
+      weaponSkinOptions: getWeaponSkinOptions(getCachedBusinessSettings()),
       selectedOperatorAppearances: [],
       selectedKnifeSkins: [],
       selectedWeaponSkins: [],
@@ -726,6 +726,8 @@ export default {
       this.MIN_DEPOSIT_YUAN = Number(settings.listingRecommendations?.depositMinYuan || MIN_DEPOSIT_YUAN)
       this.MAX_DEPOSIT_YUAN = Number(settings.listingRecommendations?.depositMaxYuan || MAX_DEPOSIT_YUAN)
       this.compensationPlanOptions = mapCompensationPlanOptions(settings.compensationPlans)
+      this.knifeSkinOptions = getKnifeSkinOptions(settings)
+      this.weaponSkinOptions = getWeaponSkinOptions(settings)
       this.saleItems = buildSaleItems(getEnabledSaleItems(settings))
       if (!this.compensationPlanOptions.some((plan) => plan.value === this.publishForm.compensationPlan)) {
         this.publishForm.compensationPlan = DEFAULT_COMPENSATION_PLAN
