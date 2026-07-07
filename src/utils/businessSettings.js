@@ -1,5 +1,10 @@
 import { apiFetch } from './api.js'
 
+const RENT_DAYS_THRESHOLD_M = 600
+const RENT_DAYS_BELOW_THRESHOLD_DAILY_COST = 10
+const RENT_DAYS_ABOVE_THRESHOLD_DAILY_COST = 20
+const RENT_DAYS_BELOW_THRESHOLD_MAX = 30
+
 const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   ratioRecommendation: {
     specialKnives: ['赤枭', '怜悯'],
@@ -36,11 +41,7 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
     depositMinYuan: 100,
     depositMaxYuan: 2000,
     recommendDepositRatioPercent: 100,
-    itemsDepositCoveragePercent: 100,
-    hafuCoinThreshold: 300,
-    belowThresholdDailyCost: 10,
-    aboveThresholdDailyCost: 20,
-    maxRentDays: 60
+    itemsDepositCoveragePercent: 100
   },
   platformCommission: {
     buyerServiceFeeRatePercent: 10,
@@ -142,8 +143,6 @@ export function normalizeBusinessSettings(rawValue = {}) {
   const discoverySource = source.discoveryThresholds && typeof source.discoveryThresholds === 'object' ? source.discoveryThresholds : {}
   const operationalSource = source.operationalThresholds && typeof source.operationalThresholds === 'object' ? source.operationalThresholds : {}
   const securitySource = source.securityThresholds && typeof source.securityThresholds === 'object' ? source.securityThresholds : {}
-  const legacyDefaultDailyCost = normalizeNumber(listingSource.defaultDailyCost, defaults.listingRecommendations.belowThresholdDailyCost, { min: 1, max: 999999, integer: true })
-
   return {
     ratioRecommendation: {
       specialKnives: normalizeStringList(ratioSource.specialKnives, defaults.ratioRecommendation.specialKnives),
@@ -166,19 +165,7 @@ export function normalizeBusinessSettings(rawValue = {}) {
       depositMinYuan: normalizeNumber(listingSource.depositMinYuan, defaults.listingRecommendations.depositMinYuan, { min: 0, max: 999999, integer: true }),
       depositMaxYuan: normalizeNumber(listingSource.depositMaxYuan, defaults.listingRecommendations.depositMaxYuan, { min: 0, max: 999999, integer: true }),
       recommendDepositRatioPercent: normalizeNumber(listingSource.recommendDepositRatioPercent, defaults.listingRecommendations.recommendDepositRatioPercent, { min: 0, max: 1000 }),
-      itemsDepositCoveragePercent: normalizeNumber(listingSource.itemsDepositCoveragePercent, defaults.listingRecommendations.itemsDepositCoveragePercent, { min: 0, max: 1000 }),
-      hafuCoinThreshold: normalizeNumber(listingSource.hafuCoinThreshold, defaults.listingRecommendations.hafuCoinThreshold, { min: 0, max: 999999, integer: true }),
-      belowThresholdDailyCost: normalizeNumber(
-        listingSource.belowThresholdDailyCost,
-        legacyDefaultDailyCost,
-        { min: 1, max: 999999, integer: true }
-      ),
-      aboveThresholdDailyCost: normalizeNumber(
-        listingSource.aboveThresholdDailyCost,
-        legacyDefaultDailyCost * 2,
-        { min: 1, max: 999999, integer: true }
-      ),
-      maxRentDays: normalizeNumber(listingSource.maxRentDays, defaults.listingRecommendations.maxRentDays, { min: 1, max: 365, integer: true })
+      itemsDepositCoveragePercent: normalizeNumber(listingSource.itemsDepositCoveragePercent, defaults.listingRecommendations.itemsDepositCoveragePercent, { min: 0, max: 1000 })
     },
     platformCommission: {
       buyerServiceFeeRatePercent: normalizeNumber(commissionSource.buyerServiceFeeRatePercent, defaults.platformCommission.buyerServiceFeeRatePercent, { min: 0, max: 100 }),
@@ -314,24 +301,34 @@ export function calculateBaseRatio(gridSize, knifeSkinText, settings = null) {
   return ratioConfig.noKnife
 }
 
-export function getRecommendedDailyCost(hafuCoin, settings = null) {
-  const normalizedSettings = normalizeBusinessSettings(settings || getCachedBusinessSettings())
-  const listingSettings = normalizedSettings.listingRecommendations
+function getRentDaysRecommendationStrategy(hafuCoin) {
   const numericHafuCoin = Math.max(0, Number(hafuCoin || 0))
-  const hafuCoinThreshold = Number(listingSettings.hafuCoinThreshold || 0)
-  const belowThresholdDailyCost = Math.max(1, Number(listingSettings.belowThresholdDailyCost || 1))
-  const aboveThresholdDailyCost = Math.max(1, Number(listingSettings.aboveThresholdDailyCost || belowThresholdDailyCost))
-  return numericHafuCoin >= hafuCoinThreshold ? aboveThresholdDailyCost : belowThresholdDailyCost
+  const isAboveThreshold = numericHafuCoin >= RENT_DAYS_THRESHOLD_M
+  const recommendedDailyCost = isAboveThreshold
+    ? RENT_DAYS_ABOVE_THRESHOLD_DAILY_COST
+    : RENT_DAYS_BELOW_THRESHOLD_DAILY_COST
+  const maxRentDays = isAboveThreshold ? 0 : RENT_DAYS_BELOW_THRESHOLD_MAX
+
+  return {
+    numericHafuCoin,
+    recommendedDailyCost,
+    maxRentDays
+  }
+}
+
+export function getRecommendedDailyCost(hafuCoin, settings = null) {
+  return getRentDaysRecommendationStrategy(hafuCoin).recommendedDailyCost
+}
+
+export function getRentDaysLimit(hafuCoin, settings = null) {
+  return getRentDaysRecommendationStrategy(hafuCoin).maxRentDays
 }
 
 export function getRecommendedRentDays(hafuCoin, settings = null) {
-  const normalizedSettings = normalizeBusinessSettings(settings || getCachedBusinessSettings())
-  const listingSettings = normalizedSettings.listingRecommendations
-  const numericHafuCoin = Math.max(0, Number(hafuCoin || 0))
-  const recommendedDailyCost = getRecommendedDailyCost(numericHafuCoin, normalizedSettings)
+  const { numericHafuCoin, recommendedDailyCost, maxRentDays } = getRentDaysRecommendationStrategy(hafuCoin)
   const rawRecommended = recommendedDailyCost > 0 ? Math.floor(numericHafuCoin / recommendedDailyCost) : 0
-  const maxRentDays = Number(listingSettings.maxRentDays || 60)
-  return Math.min(maxRentDays, Math.max(1, rawRecommended || 1))
+  const normalizedRecommended = Math.max(1, rawRecommended || 1)
+  return maxRentDays > 0 ? Math.min(maxRentDays, normalizedRecommended) : normalizedRecommended
 }
 
 export function getPendingPaymentTimeoutMinutes(settings = null) {

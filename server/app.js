@@ -2119,7 +2119,7 @@ function toNullableInteger(value) {
   return Math.round(parsed)
 }
 
-const { computeListingDerivedValues } = createListingService({
+const { computeListingDerivedValues, resolveRentDaysRecommendation } = createListingService({
   baseRatioConfig: BASE_RATIO_CONFIG,
   specialKnives: SPECIAL_KNIVES,
   toUnsignedInteger
@@ -2395,6 +2395,7 @@ registerListingRoutes({
   normalizeListingItemMode,
   centToRoundedYuan,
   computeListingDerivedValues,
+  resolveRentDaysRecommendation,
   toUnsignedInteger,
   toDecimalValue,
   toBanRecordFlag,
@@ -2436,6 +2437,7 @@ registerMyListingsRoutes({
   getObsoleteListingImageUrls,
   getObsoleteBanMediaUrls,
   computeListingDerivedValues,
+  resolveRentDaysRecommendation,
   toUnsignedInteger,
   toDecimalValue,
   toBanRecordFlag,

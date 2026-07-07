@@ -158,10 +158,10 @@
 
           <article class="panel">
             <div class="panel-head">
-              <strong>押金与出租天数</strong>
-              <span>管理押金上下限、推荐比例和出租天数推荐逻辑</span>
+              <strong>押金配置</strong>
+              <span>管理押金上下限和推荐比例</span>
             </div>
-            <div class="field-grid field-grid--triple">
+            <div class="field-grid field-grid--double">
               <label class="field">
                 <span>押金最低值（元）</span>
                 <input v-model.number="form.listingRecommendations.depositMinYuan" type="number" min="0">
@@ -177,22 +177,6 @@
               <label class="field">
                 <span>额外物品覆盖比例（%）</span>
                 <input v-model.number="form.listingRecommendations.itemsDepositCoveragePercent" type="number" min="0" step="0.01">
-              </label>
-              <label class="field">
-                <span>哈夫币分界线（M）</span>
-                <input v-model.number="form.listingRecommendations.hafuCoinThreshold" type="number" min="0">
-              </label>
-              <label class="field">
-                <span>分界线以下日消耗（M/天）</span>
-                <input v-model.number="form.listingRecommendations.belowThresholdDailyCost" type="number" min="1">
-              </label>
-              <label class="field">
-                <span>分界线以上日消耗（M/天）</span>
-                <input v-model.number="form.listingRecommendations.aboveThresholdDailyCost" type="number" min="1">
-              </label>
-              <label class="field">
-                <span>最大出租天数</span>
-                <input v-model.number="form.listingRecommendations.maxRentDays" type="number" min="1">
               </label>
             </div>
           </article>

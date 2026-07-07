@@ -32,6 +32,7 @@ export function registerMyListingsRoutes(deps) {
     getObsoleteListingImageUrls,
     getObsoleteBanMediaUrls,
     computeListingDerivedValues,
+    resolveRentDaysRecommendation,
     toUnsignedInteger,
     toDecimalValue,
     toBanRecordFlag,
@@ -233,7 +234,6 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
   const listingRecommendations = businessSettings.listingRecommendations || {}
   const minDepositYuan = Number(listingRecommendations.depositMinYuan || MIN_LISTING_DEPOSIT_YUAN)
   const maxDepositYuan = Number(listingRecommendations.depositMaxYuan || MAX_LISTING_DEPOSIT_YUAN)
-  const maxRentDays = Number(listingRecommendations.maxRentDays || 60)
   const itemCoverageRate = Math.max(0, Number(listingRecommendations.itemsDepositCoveragePercent || 100))
   const editDepositCent = yuanToCent(payload.deposit) ?? 0
   if (editDepositCent < (yuanToCent(minDepositYuan) ?? 0)) {
@@ -304,7 +304,9 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
     const userBaseRatio = toUnsignedInteger(payload.baseRatio)
     const finalBaseRatio = (userBaseRatio >= 38 && userBaseRatio <= 55) ? userBaseRatio : derivedValues.baseRatio
     const userRentDays = toUnsignedInteger(payload.rentDays)
-    const finalRentDays = (userRentDays >= 1 && userRentDays <= maxRentDays) ? userRentDays : derivedValues.rentDays
+    const { maxRentDays: rentDaysLimit } = resolveRentDaysRecommendation(payload.hafuCoin, businessSettings)
+    const canUseUserRentDays = userRentDays >= 1 && (rentDaysLimit <= 0 || userRentDays <= rentDaysLimit)
+    const finalRentDays = canUseUserRentDays ? userRentDays : derivedValues.rentDays
     const finalDailyCost = finalRentDays > 0 && hafuCoin > 0 ? Math.round(hafuCoin / finalRentDays) : derivedValues.dailyCost
     const preciseRentPrice = (hafuCoin * 10000) / finalBaseRatio
     const finalRentPrice = finalBaseRatio > 0 ? Math.round(preciseRentPrice) : 0

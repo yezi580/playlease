@@ -221,11 +221,7 @@ const DEFAULT_ADMIN_BUSINESS_SETTINGS = Object.freeze({
     depositMinYuan: 100,
     depositMaxYuan: 2000,
     recommendDepositRatioPercent: 100,
-    itemsDepositCoveragePercent: 100,
-    hafuCoinThreshold: 300,
-    belowThresholdDailyCost: 10,
-    aboveThresholdDailyCost: 20,
-    maxRentDays: 60
+    itemsDepositCoveragePercent: 100
   },
   platformCommission: {
     buyerServiceFeeRatePercent: 10,
@@ -350,12 +346,6 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
   const securitySource = source.securityThresholds && typeof source.securityThresholds === 'object'
     ? source.securityThresholds
     : {}
-  const legacyDefaultDailyCost = normalizeAdminInteger(
-    listingSource.defaultDailyCost,
-    defaults.listingRecommendations.belowThresholdDailyCost,
-    { min: 1, max: 999999 }
-  )
-
   return {
     ratioRecommendation: {
       specialKnives: normalizeAdminStringList(
@@ -387,19 +377,7 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
       depositMinYuan: normalizeAdminInteger(listingSource.depositMinYuan, defaults.listingRecommendations.depositMinYuan, { min: 0, max: 999999 }),
       depositMaxYuan: normalizeAdminInteger(listingSource.depositMaxYuan, defaults.listingRecommendations.depositMaxYuan, { min: 0, max: 999999 }),
       recommendDepositRatioPercent: normalizeAdminNumber(listingSource.recommendDepositRatioPercent, defaults.listingRecommendations.recommendDepositRatioPercent, { min: 0, max: 1000, precision: 2 }),
-      itemsDepositCoveragePercent: normalizeAdminNumber(listingSource.itemsDepositCoveragePercent, defaults.listingRecommendations.itemsDepositCoveragePercent, { min: 0, max: 1000, precision: 2 }),
-      hafuCoinThreshold: normalizeAdminInteger(listingSource.hafuCoinThreshold, defaults.listingRecommendations.hafuCoinThreshold, { min: 0, max: 999999 }),
-      belowThresholdDailyCost: normalizeAdminInteger(
-        listingSource.belowThresholdDailyCost,
-        legacyDefaultDailyCost,
-        { min: 1, max: 999999 }
-      ),
-      aboveThresholdDailyCost: normalizeAdminInteger(
-        listingSource.aboveThresholdDailyCost,
-        legacyDefaultDailyCost * 2,
-        { min: 1, max: 999999 }
-      ),
-      maxRentDays: normalizeAdminInteger(listingSource.maxRentDays, defaults.listingRecommendations.maxRentDays, { min: 1, max: 365 })
+      itemsDepositCoveragePercent: normalizeAdminNumber(listingSource.itemsDepositCoveragePercent, defaults.listingRecommendations.itemsDepositCoveragePercent, { min: 0, max: 1000, precision: 2 })
     },
     platformCommission: {
       buyerServiceFeeRatePercent: normalizeAdminNumber(commissionSource.buyerServiceFeeRatePercent, defaults.platformCommission.buyerServiceFeeRatePercent, { min: 0, max: 100, precision: 2 }),

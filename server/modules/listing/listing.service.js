@@ -4,6 +4,11 @@
 
 import { normalizeInsuranceLevel } from './listing-validator.js'
 
+const RENT_DAYS_THRESHOLD_M = 600
+const RENT_DAYS_BELOW_THRESHOLD_DAILY_COST = 10
+const RENT_DAYS_ABOVE_THRESHOLD_DAILY_COST = 20
+const RENT_DAYS_BELOW_THRESHOLD_MAX = 30
+
 function calculateBuyerDisplayRatio(baseRatio) {
   const numericBaseRatio = Number(baseRatio || 0)
   if (!Number.isFinite(numericBaseRatio) || numericBaseRatio <= 0) return 0
@@ -85,13 +90,24 @@ export function createListingService({ baseRatioConfig, specialKnives, toUnsigne
     return config.noKnife
   }
 
+  function resolveRentDaysRecommendation(hafuCoinValue, runtimeSettings = null) {
+    const numericHafuCoin = Math.max(0, Number(hafuCoinValue || 0))
+    const isAboveThreshold = numericHafuCoin >= RENT_DAYS_THRESHOLD_M
+    const recommendedDailyCost = isAboveThreshold
+      ? RENT_DAYS_ABOVE_THRESHOLD_DAILY_COST
+      : RENT_DAYS_BELOW_THRESHOLD_DAILY_COST
+    const maxRentDays = isAboveThreshold ? 0 : RENT_DAYS_BELOW_THRESHOLD_MAX
+
+    return {
+      recommendedDailyCost,
+      maxRentDays
+    }
+  }
+
   function computeListingDerivedValues(payload) {
     const runtimeSettings = arguments[1] && typeof arguments[1] === 'object' ? arguments[1] : null
     const ratioSettings = runtimeSettings?.ratioRecommendation && typeof runtimeSettings.ratioRecommendation === 'object'
       ? runtimeSettings.ratioRecommendation
-      : null
-    const listingSettings = runtimeSettings?.listingRecommendations && typeof runtimeSettings.listingRecommendations === 'object'
-      ? runtimeSettings.listingRecommendations
       : null
     const insuranceLevel = normalizeInsuranceLevel(payload.insuranceLevel)
     const energyLevel = parseInt(String(payload.energyLevel || ''), 10) || 7
@@ -150,13 +166,10 @@ export function createListingService({ baseRatioConfig, specialKnives, toUnsigne
       }
     }
 
-    const hafuCoinThreshold = Math.max(0, Number(listingSettings?.hafuCoinThreshold || 0))
-    const belowThresholdDailyCost = Math.max(1, Number(listingSettings?.belowThresholdDailyCost || 1))
-    const aboveThresholdDailyCost = Math.max(1, Number(listingSettings?.aboveThresholdDailyCost || belowThresholdDailyCost))
-    const recommendedDailyCost = hafuCoin >= hafuCoinThreshold ? aboveThresholdDailyCost : belowThresholdDailyCost
+    const { recommendedDailyCost, maxRentDays } = resolveRentDaysRecommendation(hafuCoin, runtimeSettings)
     const rawRecommendedRentDays = recommendedDailyCost > 0 ? Math.floor(hafuCoin / recommendedDailyCost) : 0
-    const maxRentDays = Number(listingSettings?.maxRentDays || 60)
-    const rentDays = Math.min(maxRentDays, Math.max(1, rawRecommendedRentDays || 1))
+    const normalizedRentDays = Math.max(1, rawRecommendedRentDays || 1)
+    const rentDays = maxRentDays > 0 ? Math.min(maxRentDays, normalizedRentDays) : normalizedRentDays
     const dailyCost = rentDays > 0 && hafuCoin > 0 ? Math.round(hafuCoin / rentDays) : 0
     const rentPrice = baseRatio > 0 ? Math.round((hafuCoin * 10000) / baseRatio) : 0
 
@@ -170,6 +183,7 @@ export function createListingService({ baseRatioConfig, specialKnives, toUnsigne
   }
 
   return {
-    computeListingDerivedValues
+    computeListingDerivedValues,
+    resolveRentDaysRecommendation
   }
 }

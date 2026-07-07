@@ -287,7 +287,7 @@
 
           <label>
             <span>出租天数</span>
-            <input v-model.trim="publishForm.rentDays" type="number" min="1" :max="maxRentDays" step="1" :placeholder="rentDaysPlaceholder" @input="handleNonNegativeIntegerInput('rentDays')" @blur="handleFieldBlur('rentDays')" />
+            <input v-model.trim="publishForm.rentDays" type="number" min="1" :max="rentDaysInputMax" step="1" :placeholder="rentDaysPlaceholder" @input="handleNonNegativeIntegerInput('rentDays')" @blur="handleFieldBlur('rentDays')" />
             <small v-if="fieldErrors.rentDays" class="field-hint error-field-hint">{{ fieldErrors.rentDays }}</small>
           </label>
 
@@ -488,6 +488,7 @@ import {
   getKnifeSkinOptions,
   getRecommendedDailyCost,
   getRecommendedRentDays,
+  getRentDaysLimit,
   getWeaponSkinOptions
 } from '../utils/businessSettings.js'
 import {
@@ -619,8 +620,11 @@ export default {
     recommendedDailyCost() {
       return getRecommendedDailyCost(this.publishForm.hafuCoin, this.businessSettings)
     },
-    maxRentDays() {
-      return Number(this.businessSettings.listingRecommendations?.maxRentDays || 60)
+    rentDaysLimit() {
+      return getRentDaysLimit(this.publishForm.hafuCoin, this.businessSettings)
+    },
+    rentDaysInputMax() {
+      return this.rentDaysLimit > 0 ? this.rentDaysLimit : null
     },
     rentDaysPlaceholder() {
       return String(this.publishForm.hafuCoin ?? '').trim() === ''
@@ -629,7 +633,7 @@ export default {
     },
     effectiveRentDays() {
       const userValue = Number(this.publishForm.rentDays)
-      if (Number.isInteger(userValue) && userValue >= 1 && userValue <= this.maxRentDays) {
+      if (this.isValidRentDaysValue(userValue)) {
         return userValue
       }
       return this.recommendedRentDays
@@ -1004,7 +1008,10 @@ export default {
         case 'rentDays': {
           if (value === '' || value === null || value === undefined) return ''
           const rentDays = Number(value)
-          return Number.isInteger(rentDays) && rentDays >= 1 && rentDays <= this.maxRentDays ? '' : `出租天数需为 1 - ${this.maxRentDays} 的整数`
+          if (this.isValidRentDaysValue(rentDays)) return ''
+          return this.rentDaysLimit > 0
+            ? `出租天数需为 1 - ${this.rentDaysLimit} 的整数`
+            : '出租天数需为大于等于 1 的整数'
         }
         case 'images':
           return this.publishForm.images.length > 0 ? '' : '请上传商品图片'
@@ -1018,6 +1025,9 @@ export default {
         ? ''
         : buildRegionText(this.publishForm.regionProvince, '')
       this.fieldErrors.region = this.validateField('region')
+    },
+    isValidRentDaysValue(value) {
+      return Number.isInteger(value) && value >= 1 && (this.rentDaysLimit <= 0 || value <= this.rentDaysLimit)
     },
     handleRegionCityChange() {
       this.publishForm.region = buildRegionText(this.publishForm.regionProvince, this.publishForm.regionCity)
