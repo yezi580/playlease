@@ -102,7 +102,6 @@
                   <span>流程：{{ order.status_text || order.status }}</span>
                   <span>客服状态：{{ getSupportStatusLabel(order.support_status) }}</span>
                 </div>
-                <p class="reason">{{ order.issue_reason || '订单跟进中' }}</p>
               </button>
             </template>
           </div>
@@ -139,7 +138,6 @@
                 <div><span>买家</span><strong>{{ activeOrder.buyer_name }}</strong></div>
                 <div><span>卖家</span><strong>{{ activeOrder.seller_name }}</strong></div>
                 <div><span>当前流程</span><strong>{{ activeOrder.status_text || activeOrder.status }}</strong></div>
-                <div><span>处理场景</span><strong>{{ getSupportSceneLabel(activeOrder.support_scene) }}</strong></div>
                 <div><span>当前客服</span><strong>{{ activeOrder.support_assignee_name || '未分配' }}</strong></div>
                 <div v-if="activeOrder.support_scene === 'fund_frozen'">
                   <span>冻结前流程</span>
@@ -147,33 +145,15 @@
                 </div>
               </div>
 
-              <div class="info-blocks">
-                <article class="info-block">
-                  <h4>跟进原因</h4>
-                  <p>{{ activeOrder.issue_reason || '订单跟进中' }}</p>
-                </article>
-                <article class="info-block">
-                  <h4>补充说明</h4>
-                  <p>{{ activeOrder.issue_note || '暂无补充说明。' }}</p>
-                </article>
-              </div>
-
               <article
-                v-if="canFreezeFunds || canReleaseFunds || activeOrder.support_freeze_reason"
+                v-if="canReleaseFunds || activeOrder.support_freeze_reason"
                 class="info-block"
               >
                 <div class="note-head">
                   <h4>冻结原因</h4>
-                  <span>{{ freezeReasonDraft.length }}/500</span>
+                  <span>{{ String(activeOrder.support_freeze_reason || '').length }}/500</span>
                 </div>
-                <textarea
-                  v-model.trim="freezeReasonDraft"
-                  class="note-textarea"
-                  rows="3"
-                  maxlength="500"
-                  :readonly="canReleaseFunds"
-                  :placeholder="canReleaseFunds ? '当前冻结原因已记录。' : '请输入冻结资金原因，例如发现疑似私下交易、规避平台规则等。'"
-                ></textarea>
+                <p class="info-block-text">{{ activeOrder.support_freeze_reason || '暂无冻结原因。' }}</p>
               </article>
 
               <article
@@ -226,7 +206,7 @@
                   type="button"
                   class="danger-btn"
                   :disabled="statusSubmitting"
-                  @click="freezeFunds"
+                  @click="openFreezeDialog"
                 >
                   {{ statusSubmitting ? '提交中...' : '冻结资金' }}
                 </button>
@@ -323,6 +303,39 @@
       user-role="support"
       @close="messagePanelVisible = false"
     />
+    <Transition name="freeze-dialog-fade">
+      <div
+        v-if="freezeDialogVisible"
+        class="freeze-dialog-overlay"
+        @click.self="closeFreezeDialog"
+      >
+        <section class="freeze-dialog" role="dialog" aria-modal="true" aria-label="冻结原因输入框">
+          <div class="freeze-dialog__body">
+            <div class="note-head">
+              <h4>冻结原因</h4>
+              <span>{{ freezeReasonDraft.length }}/500</span>
+            </div>
+            <textarea
+              ref="freezeReasonInput"
+              v-model.trim="freezeReasonDraft"
+              class="note-textarea freeze-dialog__textarea"
+              rows="4"
+              maxlength="500"
+              placeholder="请输入冻结资金原因，例如发现疑似私下交易、规避平台规则等。"
+            ></textarea>
+          </div>
+
+          <div class="freeze-dialog__footer">
+            <button type="button" class="ghost-btn" :disabled="statusSubmitting" @click="closeFreezeDialog">
+              取消
+            </button>
+            <button type="button" class="danger-btn" :disabled="statusSubmitting" @click="freezeFunds">
+              {{ statusSubmitting ? '提交中...' : '确定冻结' }}
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
     </template>
 
     <template v-else-if="canAccessWithdrawDesk">
@@ -586,6 +599,7 @@ export default {
       timelineError: '',
       noteDraft: '',
       freezeReasonDraft: '',
+      freezeDialogVisible: false,
       noteSaving: false,
       statusSubmitting: false,
       cancelSubmitting: false,
@@ -726,6 +740,7 @@ export default {
       handler(order) {
         this.noteDraft = order?.support_note || ''
         this.freezeReasonDraft = order?.support_freeze_reason || ''
+        this.freezeDialogVisible = false
         this.$nextTick(() => {
           this.updateScrollbar('detail')
         })
@@ -1004,6 +1019,19 @@ export default {
       ))
       this.messagePanelVisible = true
     },
+    openFreezeDialog() {
+      if (!this.canFreezeFunds || this.statusSubmitting) return
+      this.freezeReasonDraft = String(this.activeOrder?.support_freeze_reason || '').trim()
+      this.freezeDialogVisible = true
+      this.$nextTick(() => {
+        this.$refs.freezeReasonInput?.focus()
+      })
+    },
+    closeFreezeDialog() {
+      if (this.statusSubmitting) return
+      this.freezeDialogVisible = false
+      this.freezeReasonDraft = this.activeOrder?.support_freeze_reason || ''
+    },
     async saveNote() {
       if (!this.activeOrder || !this.canSaveNote) return
       this.noteSaving = true
@@ -1129,19 +1157,11 @@ export default {
       }
     },
     async freezeFunds() {
-      if (!this.activeOrder || this.statusSubmitting) return
+      if (!this.activeOrder || this.statusSubmitting || !this.freezeDialogVisible) return
       if (!String(this.freezeReasonDraft || '').trim()) {
         showErrorToast('请先填写冻结原因')
         return
       }
-      const confirmed = await showConfirm({
-        title: '冻结资金',
-        message: '确认冻结该订单资金吗？冻结后订单会进入客服处理状态，暂停继续结算或履约，直到客服手动解除。',
-        confirmText: '确认冻结',
-        cancelText: '返回',
-        tone: 'danger'
-      })
-      if (!confirmed) return
 
       this.statusSubmitting = true
       try {
@@ -1151,6 +1171,7 @@ export default {
             freezeReason: this.freezeReasonDraft
           })
         })
+        this.freezeDialogVisible = false
         showSuccessToast('订单资金已冻结')
         await this.fetchOrders(this.activeStatus)
       } catch (error) {
@@ -1188,15 +1209,6 @@ export default {
     },
     getSupportStatusLabel(status) {
       return status === 'resolved' ? '已完成' : '处理中'
-    },
-    getSupportSceneLabel(scene) {
-      const textMap = {
-        none: '常规监督',
-        cancel_request: '取消订单申请',
-        settlement_dispute: '结算争议',
-        fund_frozen: '资金冻结'
-      }
-      return textMap[String(scene || '').trim()] || '常规监督'
     },
     getWithdrawStatusLabel(status) {
       const textMap = {
@@ -1454,8 +1466,7 @@ export default {
 }
 
 .summary-grid,
-.shell,
-.info-blocks {
+.shell {
   display: grid;
   gap: 16px;
 }
@@ -1634,6 +1645,11 @@ export default {
   line-height: 1.7;
 }
 
+.info-block-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .order-card-top strong,
 .detail-grid strong {
   color: #111827;
@@ -1646,10 +1662,6 @@ export default {
 .note-head span {
   color: #6b7280;
   font-size: 13px;
-}
-
-.reason {
-  color: #475569;
 }
 
 .detail-grid {
@@ -1676,10 +1688,6 @@ export default {
   line-height: 1.6;
 }
 
-.info-blocks {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .note-head {
   display: flex;
   justify-content: space-between;
@@ -1691,6 +1699,96 @@ export default {
   min-height: 110px;
   padding-top: 12px;
   resize: vertical;
+}
+
+.freeze-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.freeze-dialog {
+  width: min(560px, 100%);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
+  overflow: hidden;
+}
+
+.freeze-dialog__header,
+.freeze-dialog__body,
+.freeze-dialog__footer {
+  padding: 18px 20px;
+}
+
+.freeze-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.freeze-dialog__header h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  color: #0f172a;
+}
+
+.freeze-dialog__header p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.freeze-dialog__close {
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.freeze-dialog__close:hover {
+  color: #0f172a;
+}
+
+.freeze-dialog__textarea {
+  min-height: 128px;
+}
+
+.freeze-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.freeze-dialog-fade-enter-active,
+.freeze-dialog-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.freeze-dialog-fade-enter-active .freeze-dialog,
+.freeze-dialog-fade-leave-active .freeze-dialog {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.freeze-dialog-fade-enter-from,
+.freeze-dialog-fade-leave-to {
+  opacity: 0;
+}
+
+.freeze-dialog-fade-enter-from .freeze-dialog,
+.freeze-dialog-fade-leave-to .freeze-dialog {
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
 }
 
 .badge {
@@ -1759,7 +1857,6 @@ export default {
   .toolbar,
   .summary-grid,
   .shell,
-  .info-blocks,
   .detail-grid {
     grid-template-columns: 1fr;
   }
@@ -1767,6 +1864,22 @@ export default {
   .toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .freeze-dialog-overlay {
+    padding: 14px;
+  }
+
+  .freeze-dialog__header,
+  .freeze-dialog__body,
+  .freeze-dialog__footer {
+    padding: 16px;
+  }
+
+  .freeze-dialog__header,
+  .freeze-dialog__footer {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .toolbar-search {
