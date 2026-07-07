@@ -94,13 +94,25 @@
                   <span>{{ formatDateTime(order.support_requested_at || order.created_at) }}</span>
                 </div>
                 <p>{{ order.listing_title }}</p>
-                <div class="order-card-meta">
-                  <span>买家：{{ order.buyer_name }}</span>
-                  <span>卖家：{{ order.seller_name }}</span>
+                <div class="order-card-meta order-card-meta--grid">
+                  <span class="meta-cell">
+                    <em>买家</em>
+                    <strong>{{ formatUserPhone(order.buyer_phone, order.buyer_name) }}</strong>
+                  </span>
+                  <span class="meta-cell">
+                    <em>流程</em>
+                    <strong>{{ order.status_text || order.status }}</strong>
+                  </span>
                 </div>
-                <div class="order-card-meta">
-                  <span>流程：{{ order.status_text || order.status }}</span>
-                  <span>客服状态：{{ getSupportStatusLabel(order.support_status) }}</span>
+                <div class="order-card-meta order-card-meta--grid">
+                  <span class="meta-cell">
+                    <em>卖家</em>
+                    <strong>{{ formatUserPhone(order.seller_phone, order.seller_name) }}</strong>
+                  </span>
+                  <span class="meta-cell">
+                    <em>客服状态</em>
+                    <strong>{{ getSupportStatusLabel(order.support_status) }}</strong>
+                  </span>
                 </div>
               </button>
             </template>
@@ -135,10 +147,10 @@
               <div class="detail-grid">
                 <div><span>订单号</span><strong>{{ activeOrder.order_no }}</strong></div>
                 <div><span>商品标题</span><strong>{{ activeOrder.listing_title }}</strong></div>
-                <div><span>买家</span><strong>{{ activeOrder.buyer_name }}</strong></div>
-                <div><span>卖家</span><strong>{{ activeOrder.seller_name }}</strong></div>
+                <div><span>买家</span><strong>{{ formatUserPhone(activeOrder.buyer_phone, activeOrder.buyer_name) }}</strong></div>
+                <div><span>卖家</span><strong>{{ formatUserPhone(activeOrder.seller_phone, activeOrder.seller_name) }}</strong></div>
                 <div><span>当前流程</span><strong>{{ activeOrder.status_text || activeOrder.status }}</strong></div>
-                <div><span>当前客服</span><strong>{{ activeOrder.support_assignee_name || '未分配' }}</strong></div>
+                <div><span>当前客服</span><strong>{{ formatUserPhone(activeOrder.support_assignee_phone, activeOrder.support_assignee_name || '未分配') }}</strong></div>
                 <div v-if="activeOrder.support_scene === 'fund_frozen'">
                   <span>冻结前流程</span>
                   <strong>{{ activeOrder.support_origin_status_text || activeOrder.support_origin_status || '--' }}</strong>
@@ -1242,6 +1254,11 @@ export default {
       const count = Number(value || 0)
       if (count > 99) return '99+'
       return String(count)
+    },
+    formatUserPhone(phone, fallbackValue = '-') {
+      const safePhone = String(phone || '').trim()
+      const safeFallback = String(fallbackValue || '').trim()
+      return safePhone || safeFallback || '-'
     }
   }
 }
@@ -1662,6 +1679,31 @@ export default {
 .note-head span {
   color: #6b7280;
   font-size: 13px;
+}
+
+.order-card-meta--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.meta-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.meta-cell em {
+  color: #6b7280;
+  font-style: normal;
+  font-size: 12px;
+}
+
+.meta-cell strong {
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .detail-grid {

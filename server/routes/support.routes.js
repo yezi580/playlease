@@ -45,12 +45,26 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
           o.order_no LIKE ?
           OR o.listing_title LIKE ?
           OR buyer.username LIKE ?
+          OR buyer.phone LIKE ?
           OR seller.username LIKE ?
+          OR seller.phone LIKE ?
+          OR assignee.username LIKE ?
+          OR assignee.phone LIKE ?
           OR o.seller_name LIKE ?
         )`
       : ''
     const keywordParams = keyword
-      ? [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`]
+      ? [
+          `%${keyword}%`,
+          `%${keyword}%`,
+          `%${keyword}%`,
+          `%${keyword}%`,
+          `%${keyword}%`,
+          `%${keyword}%`,
+          `%${keyword}%`,
+          `%${keyword}%`,
+          `%${keyword}%`
+        ]
       : []
 
     const [countRows] = await pool.execute(
@@ -160,9 +174,12 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
             ELSE 0
           END AS elapsed_minutes,
           o.created_at,
-          buyer.username AS buyer_name,
-          seller.username AS seller_user_name,
-          assignee.username AS support_assignee_name,
+          buyer.username AS buyer_username,
+          buyer.phone AS buyer_phone,
+          seller.username AS seller_username,
+          seller.phone AS seller_phone,
+          assignee.username AS support_assignee_username,
+          assignee.phone AS support_assignee_phone,
           COALESCE(chat_cp.unread_message_count, 0) AS conversation_unread_count
        FROM orders o
        JOIN users buyer
@@ -211,6 +228,9 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
       assigneeScope,
       list: rows.map((row) => {
         const supportStatus = normalizeSupportStatus(row.support_status)
+        const buyerDisplayName = row.buyer_username || `用户 #${Number(row.buyer_id || 0)}`
+        const sellerDisplayName = row.seller_username || row.seller_name || '卖家'
+        const supportAssigneeDisplayName = row.support_assignee_username || ''
         const issueReason = row.support_scene === 'cancel_request'
           ? '取消订单申请'
           : (row.support_scene === 'settlement_dispute'
@@ -233,8 +253,12 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
           status_text: normalizeOrderMoneyFields({ amount: 0, deposit_amount: 0, status: row.status || 'paid' }).status_text,
           buyer_id: Number(row.buyer_id || 0),
           seller_id: Number(row.seller_id || 0),
-          buyer_name: row.buyer_name || '买家',
-          seller_name: row.seller_user_name || row.seller_name || '卖家',
+          buyer_name: row.buyer_phone || buyerDisplayName,
+          buyer_username: buyerDisplayName,
+          buyer_phone: row.buyer_phone || '',
+          seller_name: row.seller_phone || sellerDisplayName,
+          seller_username: sellerDisplayName,
+          seller_phone: row.seller_phone || '',
           issue_reason: issueReason,
           issue_note: issueNote,
           issue_at: supportRequestedAt,
@@ -243,10 +267,12 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
           support_requested_at: supportRequestedAt,
           support_requested_by: 0,
           support_requested_by_name: row.support_scene === 'fund_frozen'
-            ? (row.support_assignee_name || '客服')
-            : (row.buyer_name || ''),
+            ? (row.support_assignee_phone || supportAssigneeDisplayName || '客服')
+            : (row.buyer_phone || buyerDisplayName || ''),
           support_assignee_id: Number(row.support_assignee_id || 0),
-          support_assignee_name: row.support_assignee_name || '',
+          support_assignee_name: row.support_assignee_phone || supportAssigneeDisplayName,
+          support_assignee_username: supportAssigneeDisplayName,
+          support_assignee_phone: row.support_assignee_phone || '',
           conversation_unread_count: Number(row.conversation_unread_count || 0),
           support_handling_at: row.support_handling_at,
           support_note: row.support_note || '',
