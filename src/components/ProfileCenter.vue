@@ -376,16 +376,7 @@
                 <div class="invite-order-section-header invite-summary-card-header">
                   <div class="invite-summary-title">
                     <h4>累计返现</h4>
-                    <span
-                      class="invite-summary-help"
-                      tabindex="0"
-                      aria-label="返现规则说明"
-                    >
-                      ?
-                      <span class="invite-summary-tooltip">
-                        被邀请人发布的商品成交后，邀请人可获得该订单中平台向买家收取服务费的30%返现
-                      </span>
-                    </span>
+                    <span class="invite-summary-desc">（被邀请人发布的商品成交后，邀请人可获得该订单中平台向买家收取服务费的30%返现）</span>
                   </div>
                 </div>
                 <strong>￥{{ formatMoney(invitedRewardTotal) }}</strong>
@@ -2107,8 +2098,9 @@ export default {
 
 .invite-summary-title {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .invite-summary-title h4 {
@@ -2117,61 +2109,17 @@ export default {
   font-size: 18px;
 }
 
+.invite-summary-desc {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: normal;
+}
+
 .invite-summary-label {
   display: block;
   color: #6b7280;
   font-size: 13px;
-}
-
-.invite-summary-help {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: #e5e7eb;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: help;
-}
-
-.invite-summary-help:focus-visible {
-  outline: 2px solid #93c5fd;
-  outline-offset: 2px;
-}
-
-.invite-summary-tooltip {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 10px);
-  z-index: 5;
-  width: 280px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.96);
-  color: #f8fafc;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.6;
-  text-align: left;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateX(-50%) translateY(4px);
-  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
-  pointer-events: none;
-}
-
-.invite-summary-help:hover .invite-summary-tooltip,
-.invite-summary-help:focus-visible .invite-summary-tooltip,
-.invite-summary-help:focus .invite-summary-tooltip {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(0);
+  margin-bottom: 14px;
 }
 
 .invite-summary-card strong {
@@ -2181,6 +2129,8 @@ export default {
 }
 
 .invite-summary-code {
+  display: block;
+  margin-top: 14px;
   letter-spacing: 0.08em;
 }
 
