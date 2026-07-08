@@ -79,6 +79,8 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
          ON buyer.id = o.buyer_id
        LEFT JOIN users seller
          ON seller.id = o.seller_id
+       LEFT JOIN users assignee
+         ON assignee.id = o.support_assignee_id
        WHERE o.support_assignee_id = ?
          AND (
            (o.support_status = 'handling' AND o.status IN (${activeStatuses.map(() => '?').join(', ')}))
@@ -106,6 +108,8 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
          ON buyer.id = o.buyer_id
        LEFT JOIN users seller
          ON seller.id = o.seller_id
+       LEFT JOIN users assignee
+         ON assignee.id = o.support_assignee_id
        WHERE o.support_assignee_id = ?
          AND ${statusWhereSql}
          ${keywordWhereSql}`,

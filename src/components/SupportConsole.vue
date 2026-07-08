@@ -216,7 +216,7 @@
                 <button
                   v-if="canFreezeFunds"
                   type="button"
-                  class="danger-btn"
+                  class="danger-btn detail-actions__freeze"
                   :disabled="statusSubmitting"
                   @click="openFreezeDialog"
                 >
@@ -1365,6 +1365,10 @@ export default {
 
 .detail-actions {
   flex-wrap: wrap;
+}
+
+.detail-actions__freeze {
+  margin-left: auto;
 }
 
 .tab-btn,
