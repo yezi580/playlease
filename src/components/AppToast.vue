@@ -182,12 +182,22 @@ export default {
   background: rgba(255, 255, 255, 0.2);
 }
 
+.app-toast-move,
 .app-toast-enter-active,
 .app-toast-leave-active {
-  transition: all 0.24s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-.app-toast-enter-from,
+.app-toast-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
+.app-toast-enter-from {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.96);
+}
+
 .app-toast-leave-to {
   opacity: 0;
   transform: translateY(-10px) scale(0.96);

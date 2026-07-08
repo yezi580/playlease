@@ -44,7 +44,7 @@
       <section v-if="activeSection === 'orders'" :key="'orders'" class="profile-panel profile-panel--orders">
         <div class="profile-panel-card">
           <div class="profile-order-toolbar">
-            <div class="order-filter-tabs" aria-label="订单状态筛选">
+            <div class="order-filter-tabs" aria-label="我买到的状态筛选">
               <button
                 v-for="tab in visibleOrderStatusTabs"
                 :key="tab.key"
@@ -91,7 +91,7 @@
                   <p><span>订单编号</span>{{ order.order_no }}</p>
                   <p><span>租用天数</span>{{ order.rent_days || 0 }} 天</p>
                   <p><span>下单时间</span>{{ formatOrderDate(order.created_at) }}</p>
-                  <p><span>{{ buyerRentLabel }}</span>￥{{ formatMoney(order.amount) }}</p>
+                  <p><span>租金</span>￥{{ formatMoney(order.amount) }}</p>
                   <p><span>押金</span>￥{{ formatMoney(order.deposit_amount) }}</p>
                 </div>
               </div>
@@ -230,7 +230,6 @@
                   <div class="order-header">
                     <div>
                       <h4>{{ item.listing_title }}</h4>
-                      <p class="order-subtitle">上号方式：{{ item.login_method || '未设置' }}</p>
                     </div>
                     <span class="listing-status" :class="`status-${item.listing_status}`">
                       {{ item.listing_status_text }}
@@ -241,7 +240,7 @@
                     <p class="copy-inline"><span>商品编号</span><span>#{{ item.listing_no || item.id }}</span><CopyTextButton :text="item.listing_no || item.id || ''" label="商品编号" /></p>
                     <p><span>租用天数</span>{{ item.rent_days || 0 }} 天</p>
                     <p><span>发布时间</span>{{ formatOrderDate(item.published_at || item.created_at) }}</p>
-                    <p><span>地区 / 段位</span>{{ item.region || '未设置地区' }} / {{ item.rank_name || '未设置段位' }}</p>
+                    <p><span>段位</span>{{ item.rank_name || '未设置段位' }}</p>
                     <p><span>租金</span><strong>￥{{ formatMoney(item.rent_price) }}</strong></p>
                     <p><span>押金</span><strong>￥{{ formatMoney(item.deposit) }}</strong></p>
                   </div>
@@ -533,7 +532,6 @@ import { calculateSellerIncomeRent, formatMoneyFixed } from '../utils/money'
 import {
   calculateCompensationFeeAmount,
   fetchBusinessSettings,
-  getBuyerRentLabel,
   getCachedBusinessSettings,
   getInviteRewardRuleText,
   getPendingPaymentTimeoutMinutes
@@ -713,9 +711,6 @@ export default {
     },
     orderCounterpartyLabel() {
       return '卖家'
-    },
-    buyerRentLabel() {
-      return getBuyerRentLabel(this.businessSettings)
     },
     inviteRewardRuleText() {
       return getInviteRewardRuleText(this.businessSettings)
@@ -1626,7 +1621,7 @@ export default {
       if (item.listing_status === 'inactive') {
         return [
           { key: 'edit', label: '编辑商品', tone: 'ghost' },
-          { key: 'relist', label: '重新上架', tone: 'primary' }
+          { key: 'relist', label: '重新上架', tone: 'ghost' }
         ]
       }
       return []
@@ -2322,9 +2317,11 @@ export default {
 
 .order-cover,
 .listing-cover {
-  width: 150px;
-  min-width: 150px;
-  height: 110px;
+  width: 240px;
+  min-width: 240px;
+  flex-shrink: 0;
+  height: auto;
+  aspect-ratio: 16 / 9;
   border-radius: 12px;
   overflow: hidden;
   background: #eef2f7;
@@ -2334,7 +2331,8 @@ export default {
 .listing-cover img {
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: cover;
+  object-position: center;
 }
 
 .order-cover-placeholder {
@@ -2351,6 +2349,9 @@ export default {
 .listing-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .order-header {
@@ -2457,7 +2458,6 @@ export default {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 20px;
-  margin-bottom: 10px;
   padding: 12px 14px;
   background: #f8fafc;
   border-radius: 10px;
@@ -2505,6 +2505,17 @@ export default {
   cursor: pointer;
   font-size: 14px;
   white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.order-action-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.order-action-btn:active {
+  transform: scale(0.96);
+  background: #e5e7eb;
 }
 
 .order-action-btn.primary {
@@ -2513,14 +2524,42 @@ export default {
   color: #fff;
 }
 
+.order-action-btn.primary:hover {
+  background: #374151;
+  border-color: #374151;
+}
+
+.order-action-btn.primary:active {
+  background: #1f2937;
+}
+
 .order-action-btn.danger {
   border-color: #fecaca;
   background: #fff1f2;
   color: #b91c1c;
 }
 
+.order-action-btn.danger:hover {
+  background: #ffe4e6;
+  border-color: #fca5a5;
+}
+
+.order-action-btn.danger:active {
+  background: #fecdd3;
+}
+
 .order-action-btn.ghost {
   background: #f8fafc;
+  border-color: #e5e7eb;
+}
+
+.order-action-btn.ghost:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.order-action-btn.ghost:active {
+  background: #e2e8f0;
 }
 
 .order-pagination {
@@ -2753,7 +2792,8 @@ export default {
   .listing-cover {
     width: 100%;
     min-width: 0;
-    height: 180px;
+    height: auto;
+    aspect-ratio: 16 / 9;
   }
 
   .order-header {
