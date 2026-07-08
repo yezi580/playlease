@@ -30,7 +30,7 @@
         <div class="profile-message-item-main">
           <div class="profile-message-item-header">
             <div class="profile-message-title-wrap">
-              <h4>{{ messageItem.title }}</h4>
+              <h4>{{ formatMessageItemTitle(messageItem.title) }}</h4>
               <span v-if="messageItem.unread_count > 0" class="profile-message-unread-badge">
                 {{ formatBadgeCount(messageItem.unread_count) }}
               </span>
@@ -80,6 +80,10 @@ export default {
     }
   },
   methods: {
+    formatMessageItemTitle(title = '') {
+      const text = String(title || '').trim()
+      return text.replace(/^订单沟通\s*[-－–—]?\s*/, '') || '订单会话'
+    },
     formatBadgeCount,
     formatConversationTime,
     getMessageItemMeta,

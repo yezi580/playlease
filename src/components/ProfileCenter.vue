@@ -2,8 +2,10 @@
   <section class="profile-center">
     <aside class="profile-sidebar">
       <div class="profile-user-card">
-        <p class="profile-user-label">个人中心</p>
-        <h2 v-if="isLoggedIn">{{ `${currentUser}，欢迎回来` }}</h2>
+        <h2 v-if="isLoggedIn" class="profile-user-title">
+          <span class="profile-user-title-line">欢迎回来，</span>
+          <span class="profile-user-title-line">{{ currentUser }}</span>
+        </h2>
         <h2 v-else class="profile-login-title">
           <span>请先</span>
           <button type="button" class="profile-login-link" @click="triggerLogin">登录</button>
@@ -1855,6 +1857,16 @@ export default {
   color: #111827;
 }
 
+.profile-user-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-user-title-line {
+  display: block;
+}
+
 .profile-user-card h2 {
   font-size: 22px;
   line-height: 1.3;
@@ -2603,19 +2615,6 @@ export default {
   padding: 12px 14px;
   resize: vertical;
   line-height: 1.7;
-}
-
-@media (max-width: 1200px) {
-  .profile-center {
-    flex-direction: column;
-  }
-
-  .profile-sidebar {
-    width: 100%;
-    min-width: 0;
-    position: static;
-    top: auto;
-  }
 }
 
 @media (max-width: 960px) {
