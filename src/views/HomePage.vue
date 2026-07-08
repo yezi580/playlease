@@ -43,6 +43,8 @@ import { apiFetch } from '../utils/api.js'
 import { canOpenListingDetail, LISTING_DETAIL_LOGIN_TIP } from '../constants/accessPolicy.js'
 import { showErrorToast } from '../utils/toast.js'
 
+const HOME_VIEW_STATE_KEY = 'home_listing_view_state'
+
 function createDefaultResourceFilters() {
   return {
     insuranceLevel: '',
@@ -89,7 +91,10 @@ export default {
       listRequestSeq: 0,
       loadMoreObserver: null,
       resourceFilters: createDefaultResourceFilters(),
-      listingNoSearch: ''
+      listingNoSearch: '',
+      pendingViewStateRestore: null,
+      restoreViewStateTimer: null,
+      restoreViewStateRetryCount: 0
     }
   },
   computed: {
@@ -117,10 +122,113 @@ export default {
     this.fetchListings({ page: 1, append: false })
     this.setupLoadMoreObserver()
   },
+  activated() {
+    this.$nextTick(() => {
+      this.observeLoadMoreSentinel()
+      this.restoreSavedViewState()
+    })
+  },
+  deactivated() {
+    this.disconnectLoadMoreObserver()
+    this.clearRestoreViewStateTimer()
+  },
   beforeUnmount() {
     this.disconnectLoadMoreObserver()
+    this.clearRestoreViewStateTimer()
   },
   methods: {
+    getCurrentScrollTop() {
+      return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
+    },
+    saveViewStateForDetail() {
+      const payload = {
+        scrollTop: this.getCurrentScrollTop(),
+        listingNoSearch: this.listingNoSearch
+      }
+      sessionStorage.setItem(HOME_VIEW_STATE_KEY, JSON.stringify(payload))
+    },
+    restoreSavedViewState() {
+      const rawState = this.pendingViewStateRestore
+        ? JSON.stringify(this.pendingViewStateRestore)
+        : sessionStorage.getItem(HOME_VIEW_STATE_KEY)
+      if (!rawState) return
+
+      let parsedState = null
+      try {
+        parsedState = JSON.parse(rawState)
+      } catch {
+        sessionStorage.removeItem(HOME_VIEW_STATE_KEY)
+        this.pendingViewStateRestore = null
+        return
+      }
+
+      const scrollTop = Number(parsedState?.scrollTop)
+      if (!Number.isFinite(scrollTop) || scrollTop < 0) {
+        sessionStorage.removeItem(HOME_VIEW_STATE_KEY)
+        this.pendingViewStateRestore = null
+        return
+      }
+
+      this.pendingViewStateRestore = {
+        scrollTop,
+        listingNoSearch: parsedState?.listingNoSearch || ''
+      }
+      this.restoreViewStateRetryCount = 0
+      this.tryRestoreSavedViewState()
+    },
+    clearRestoreViewStateTimer() {
+      if (!this.restoreViewStateTimer) return
+      clearTimeout(this.restoreViewStateTimer)
+      this.restoreViewStateTimer = null
+    },
+    scheduleRestoreViewStateRetry() {
+      this.clearRestoreViewStateTimer()
+      this.restoreViewStateTimer = setTimeout(() => {
+        this.restoreViewStateTimer = null
+        this.tryRestoreSavedViewState()
+      }, 80)
+    },
+    finalizeSavedViewStateRestore() {
+      sessionStorage.removeItem(HOME_VIEW_STATE_KEY)
+      this.pendingViewStateRestore = null
+      this.restoreViewStateRetryCount = 0
+      this.clearRestoreViewStateTimer()
+    },
+    tryRestoreSavedViewState() {
+      if (!this.pendingViewStateRestore) return
+
+      const targetScrollTop = Number(this.pendingViewStateRestore.scrollTop)
+      const documentHeight = document.documentElement.scrollHeight
+      const viewportHeight = window.innerHeight
+      const maxScrollTop = Math.max(0, documentHeight - viewportHeight)
+
+      if ((this.listLoading || !this.listings.length) && maxScrollTop < targetScrollTop) {
+        if (this.restoreViewStateRetryCount < 12) {
+          this.restoreViewStateRetryCount += 1
+          this.scheduleRestoreViewStateRetry()
+        }
+        return
+      }
+
+      const finalScrollTop = Math.min(targetScrollTop, maxScrollTop)
+      window.scrollTo({ top: finalScrollTop, behavior: 'auto' })
+
+      requestAnimationFrame(() => {
+        const currentScrollTop = this.getCurrentScrollTop()
+        if (Math.abs(currentScrollTop - finalScrollTop) <= 2) {
+          this.finalizeSavedViewStateRestore()
+          return
+        }
+
+        if (this.restoreViewStateRetryCount < 12) {
+          this.restoreViewStateRetryCount += 1
+          this.scheduleRestoreViewStateRetry()
+          return
+        }
+
+        this.finalizeSavedViewStateRestore()
+      })
+    },
     mapSortToQuery() {
       if (this.currentSortKey === 'price') return `rent_${this.currentSortOrder}`
       if (this.currentSortKey === 'ratio') return `ratio_${this.currentSortOrder}`
@@ -199,6 +307,7 @@ export default {
 
         this.$nextTick(() => {
           this.observeLoadMoreSentinel()
+          this.tryRestoreSavedViewState()
         })
       }
     },
@@ -237,6 +346,8 @@ export default {
       if (listingNo === undefined || listingNo === null || listingNo === '') {
         return
       }
+
+      this.saveViewStateForDetail()
 
       if (!canOpenListingDetail({ isLoggedIn: this.isLoggedIn, source: 'resource' })) {
         this.$emit('require-login', {

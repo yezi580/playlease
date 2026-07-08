@@ -53,6 +53,9 @@ export default {
     }
   },
   mounted() {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    })
     if (!canOpenListingDetail({ isLoggedIn: this.isLoggedIn, source: this.source })) {
       this.$emit('require-login', {
         tip: LISTING_DETAIL_LOGIN_TIP,
@@ -98,6 +101,11 @@ export default {
           })
           return
         }
+      }
+
+      if (this.source === 'resource' && window.history.state?.back) {
+        this.$router.back()
+        return
       }
 
       const query = {}

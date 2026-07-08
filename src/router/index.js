@@ -64,7 +64,13 @@ const routes = [
 const router = createRouter({
   history: isNativeAppRuntime() ? createWebHashHistory() : createWebHistory(),
   routes,
-  scrollBehavior() {
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    }
+    if (to.name === 'listing-detail') {
+      return false
+    }
     return { top: 0 }
   }
 })

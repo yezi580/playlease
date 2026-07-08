@@ -1206,7 +1206,11 @@ app.get('/api/admin/revenue', authRequired, adminOnly, async (req, res) => {
   try {
     const rangeParams = [rangeInfo.rangeStart, rangeInfo.rangeEnd]
     const revenueTimeSql = 'COALESCE(os.executed_at, os.updated_at, os.created_at)'
-    const buyerServiceFeeSql = 'GREATEST(COALESCE(o.amount, 0) - COALESCE(os.rent_amount, 0), 0)'
+    const buyerServiceFeeSql = `CASE
+      WHEN o.status = 'completed' AND os.status = 'executed'
+        THEN GREATEST(COALESCE(o.amount, 0) - COALESCE(os.rent_amount, 0), 0)
+      ELSE 0
+    END`
     const [[statsRow]] = await pool.execute(
       `SELECT
          COUNT(*) AS total_orders,

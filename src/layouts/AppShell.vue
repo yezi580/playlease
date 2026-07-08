@@ -33,19 +33,38 @@
       />
       <RouterView v-else v-slot="{ Component, route: currentRoute }">
         <Transition name="app-page" mode="out-in">
-          <component
-            :is="Component"
-            :key="currentRoute.fullPath"
-            class="page-stage"
-            :is-logged-in="isLoggedIn"
-            :current-user="currentUser"
-            :current-user-role="currentUserRole"
-            :unread-message-count="regularUnreadMessageCount"
-            @require-login="handleRequireLogin"
-            @auth-expired="handleAuthExpired"
-            @logout="handleLogout"
-            @unread-change="handleUnreadChange"
-          />
+          <template v-if="currentRoute.name === 'home'">
+            <KeepAlive include="HomePage">
+              <component
+                :is="Component"
+                :key="currentRoute.fullPath"
+                class="page-stage"
+                :is-logged-in="isLoggedIn"
+                :current-user="currentUser"
+                :current-user-role="currentUserRole"
+                :unread-message-count="regularUnreadMessageCount"
+                @require-login="handleRequireLogin"
+                @auth-expired="handleAuthExpired"
+                @logout="handleLogout"
+                @unread-change="handleUnreadChange"
+              />
+            </KeepAlive>
+          </template>
+          <template v-else>
+            <component
+              :is="Component"
+              :key="currentRoute.fullPath"
+              class="page-stage"
+              :is-logged-in="isLoggedIn"
+              :current-user="currentUser"
+              :current-user-role="currentUserRole"
+              :unread-message-count="regularUnreadMessageCount"
+              @require-login="handleRequireLogin"
+              @auth-expired="handleAuthExpired"
+              @logout="handleLogout"
+              @unread-change="handleUnreadChange"
+            />
+          </template>
         </Transition>
       </RouterView>
     </main>
@@ -76,7 +95,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { KeepAlive, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import AuthPanel from '../components/AuthPanel.vue'
@@ -350,6 +369,12 @@ function handleTopBarBack() {
           listingStatus: route.query.listingStatus || ''
         }
       })
+      return
+    }
+
+    const hasResourceHistory = route.query.from === 'resource' && window.history.state?.back
+    if (hasResourceHistory) {
+      router.back()
       return
     }
 
