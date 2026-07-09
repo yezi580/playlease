@@ -1,40 +1,49 @@
 <template>
   <section class="profile-center">
     <aside class="profile-sidebar">
-      <div class="profile-user-card">
-        <h2 v-if="isLoggedIn" class="profile-user-title">
-          <span class="profile-user-title-line">欢迎回来，</span>
-          <span class="profile-user-title-line">{{ currentUser }}</span>
-        </h2>
-        <h2 v-else class="profile-login-title">
-          <span>请先</span>
-          <button type="button" class="profile-login-link" @click="triggerLogin">登录</button>
-        </h2>
-      </div>
-
       <nav class="profile-nav" aria-label="个人中心导航">
-        <button
-          v-for="section in visibleSections"
-          :key="section.key"
-          type="button"
-          class="profile-nav-item"
-          :class="{ active: activeSection === section.key }"
-          @click="switchSection(section.key)"
+        <!-- 移动端向左切换按钮 -->
+        <button 
+          v-if="isMobileView && mobileNavPage === 1" 
+          class="profile-nav-arrow profile-nav-arrow--left" 
+          @click="mobileNavPage = 0"
         >
-          <span class="profile-nav-label-wrap">
-            <span class="profile-nav-label">{{ section.label }}</span>
-            <span v-if="hasSectionUnreadDot(section.key)" class="profile-nav-dot" aria-hidden="true"></span>
-          </span>
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
 
-        <div v-if="isLoggedIn" class="profile-nav-divider"></div>
+        <template v-for="(section, index) in visibleSections" :key="section.key">
+          <button
+            v-show="!isMobileView || (mobileNavPage === 0 ? index < 4 : index >= 4)"
+            type="button"
+            class="profile-nav-item"
+            :class="{ active: activeSection === section.key }"
+            @click="switchSection(section.key)"
+          >
+            <span class="profile-nav-label-wrap">
+              <span class="profile-nav-label">{{ section.label }}</span>
+              <span v-if="hasSectionUnreadDot(section.key)" class="profile-nav-dot" aria-hidden="true"></span>
+            </span>
+          </button>
+        </template>
+
+        <div v-if="isLoggedIn && !isMobileView" class="profile-nav-divider"></div>
         <button
           v-if="isLoggedIn"
+          v-show="!isMobileView || mobileNavPage === 1"
           type="button"
           class="profile-nav-item profile-nav-logout"
           @click="handleLogout"
         >
           <span>退出登录</span>
+        </button>
+
+        <!-- 移动端向右切换按钮 -->
+        <button 
+          v-if="isMobileView && mobileNavPage === 0" 
+          class="profile-nav-arrow profile-nav-arrow--right" 
+          @click="mobileNavPage = 1"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       </nav>
     </aside>
@@ -597,6 +606,8 @@ export default {
   },
   data() {
     return {
+      mobileNavPage: 0,
+      isMobileView: false,
       sections: createProfileSections(),
       feedbackCategories: createFeedbackCategories(),
       feedbackForm: createFeedbackForm(),
@@ -795,6 +806,8 @@ export default {
     }
   },
   mounted() {
+    this.checkMobileView()
+    window.addEventListener('resize', this.checkMobileView)
     this.startCountdownTicker()
     void this.loadBusinessSettings()
     if (!this.isLoggedIn) return
@@ -813,9 +826,13 @@ export default {
     }
   },
   beforeUnmount() {
+    window.removeEventListener('resize', this.checkMobileView)
     this.stopCountdownTicker()
   },
   methods: {
+    checkMobileView() {
+      this.isMobileView = window.innerWidth <= 960
+    },
     async loadBusinessSettings() {
       this.businessSettings = await fetchBusinessSettings()
     },
@@ -2677,40 +2694,120 @@ export default {
 
 @media (max-width: 960px) {
   .profile-center {
-    padding: 12px 12px 88px 116px;
+    padding: 12px 12px 88px 12px;
     gap: 16px;
     min-height: calc(100vh - 60px);
     display: flex;
+    flex-direction: column;
     width: 100%;
   }
 
   .profile-sidebar {
-    position: fixed;
-    left: 8px;
-    top: 92px;
+    position: relative;
+    left: auto;
+    top: auto;
     z-index: 20;
-    width: 98px;
-    min-width: 98px;
+    width: 100%;
+    min-width: auto;
     transform: none;
-    gap: 0;
+    flex-direction: column;
+    gap: 12px;
   }
 
   .profile-user-card {
+    display: block;
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  /* 移动端现代化 Tab 标签栏布局 */
+  .profile-nav {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0;
+    width: 100%;
+    overflow-x: hidden;
+    padding: 0 16px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    min-height: 56px;
+  }
+  
+  .profile-nav::-webkit-scrollbar {
     display: none;
   }
 
-  .profile-nav {
-    gap: 16px;
+  .profile-nav-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    padding: 0 8px;
+    height: 56px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.2s;
+  }
+
+  .profile-nav-arrow:hover,
+  .profile-nav-arrow:active {
+    color: #111827;
   }
 
   .profile-nav-item {
+    position: relative;
+    display: flex;
     justify-content: center;
-    min-height: 44px;
-    padding: 8px;
-    border-radius: 12px;
+    align-items: center;
+    flex: 1;
+    width: auto;
+    height: 56px;
+    min-height: auto;
+    padding: 0;
+    border: none !important;
+    border-radius: 0;
+    background: transparent !important;
     text-align: center;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    box-shadow: none !important;
     white-space: nowrap;
+    flex-shrink: 0;
+    color: #6b7280 !important;
+    font-size: 15px;
+    font-weight: 500;
+    transition: color 0.2s ease;
+  }
+
+  .profile-nav-item.active {
+    color: #111827 !important;
+    font-weight: 600;
+  }
+
+  /* 优雅的底部指示线 */
+  .profile-nav-item::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 3px;
+    background: #111827;
+    border-radius: 3px 3px 0 0;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .profile-nav-item.active::after {
+    width: 16px;
+  }
+
+  .profile-nav-divider {
+    display: none;
   }
 
   .profile-nav-label-wrap {
@@ -2718,24 +2815,30 @@ export default {
     justify-content: center;
     align-items: center;
     width: auto;
-    font-size: 14px;
     line-height: 1.4;
-    white-space: nowrap;
   }
 
   .profile-nav-dot {
     position: absolute;
-    left: calc(100% + 4px);
-    top: 50%;
-    transform: translateY(-50%);
+    right: -10px;
+    top: 0;
+    left: auto;
+    transform: none;
     width: 6px;
     height: 6px;
     box-shadow: none;
   }
 
+  .profile-nav-logout {
+    color: #ef4444 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .profile-content {
-    padding: 14px 14px 14px 0;
-    min-height: calc(100vh - 160px);
+    padding: 0;
+    min-height: auto;
     width: 100%;
     background: transparent;
     border: none;
@@ -2768,6 +2871,13 @@ export default {
 
   .profile-user-card {
     padding: 16px 14px;
+  }
+
+  .profile-user-title {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px;
   }
 
   .profile-user-card h2 {
