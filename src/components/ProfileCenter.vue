@@ -34,7 +34,9 @@
           class="profile-nav-item profile-nav-logout"
           @click="handleLogout"
         >
-          <span>退出登录</span>
+          <span class="profile-nav-label-wrap">
+            <span class="profile-nav-label">退出登录</span>
+          </span>
         </button>
 
         <!-- 移动端向右切换按钮 -->
@@ -2831,9 +2833,6 @@ export default {
 
   .profile-nav-logout {
     color: #ef4444 !important;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
 
   .profile-content {
