@@ -2092,9 +2092,6 @@ export default {
   justify-content: center;
 }
 
-.invite-summary-card--bind {
-}
-
 .invite-summary-card--full {
   grid-column: 1 / -1;
 }
