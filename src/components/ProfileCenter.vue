@@ -373,9 +373,10 @@
 
               <article class="invite-summary-card invite-summary-card--full">
                 <div class="invite-order-section-header invite-summary-card-header">
-                  <div class="invite-summary-title">
+                  <div class="invite-summary-title tooltip-wrap">
                     <h4>累计返现</h4>
-                    <span class="invite-summary-desc">（被邀请人发布的商品成交后，邀请人可获得该订单中平台向买家收取服务费的30%返现）</span>
+                    <i class="help-icon">?</i>
+                    <span class="tooltip-text">被邀请人发布的商品成交后，邀请人可获得<br>该订单中平台向买家收取服务费的30%返现</span>
                   </div>
                 </div>
                 <strong>￥{{ formatMoney(invitedRewardTotal) }}</strong>
@@ -2104,8 +2105,8 @@ export default {
 
 .invite-summary-title {
   display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
@@ -2115,10 +2116,66 @@ export default {
   font-size: 18px;
 }
 
-.invite-summary-desc {
+/* Tooltip Styles */
+.tooltip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e5e7eb;
   color: #6b7280;
-  font-size: 13px;
-  font-weight: normal;
+  font-size: 10px;
+  font-style: normal;
+  cursor: help;
+  position: relative;
+}
+
+.tooltip-text {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #1f2937;
+  color: #fff !important;
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 6px;
+  width: max-content;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+  pointer-events: none;
+  font-weight: normal !important;
+  white-space: nowrap;
+}
+
+.tooltip-text::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1f2937;
+}
+
+.tooltip-wrap:hover .tooltip-text {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-4px);
 }
 
 .invite-summary-label {

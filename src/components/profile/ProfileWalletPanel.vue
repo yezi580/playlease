@@ -5,25 +5,23 @@
     <button type="button" class="profile-login-btn" @click="$emit('login')">立即登录</button>
   </div>
   <div v-else class="profile-panel-card">
-    <div class="wallet-summary-card">
-      <span class="wallet-summary-label">当前钱包概览</span>
-      <div class="wallet-summary-grid">
-        <div>
-          <span class="wallet-summary-caption">钱包余额</span>
-          <strong class="wallet-summary-balance">￥{{ formatMoney(balance) }}</strong>
-        </div>
-        <div>
-          <span class="wallet-summary-caption">冻结金额</span>
-          <strong class="wallet-summary-minor">￥{{ formatMoney(frozenBalance) }}</strong>
-        </div>
-        <div>
-          <span class="wallet-summary-caption">可提现余额</span>
-          <strong class="wallet-summary-minor wallet-summary-minor--highlight">￥{{ formatMoney(withdrawableBalance) }}</strong>
-        </div>
+    <div class="wallet-summary-grid">
+      <div>
+        <span class="wallet-summary-caption">钱包余额</span>
+        <strong class="wallet-summary-minor">￥{{ formatMoney(balance) }}</strong>
       </div>
-      <p class="wallet-summary-tip">
-        提现申请提交后，金额会先进入冻结状态，待平台审核及打款完成后更新结果。
-      </p>
+      <div>
+        <span class="wallet-summary-caption tooltip-wrap">
+          冻结金额
+          <i class="help-icon">?</i>
+          <span class="tooltip-text">提现申请提交后，金额会先进入冻结状态，<br>待平台审核及打款完成后更新结果。</span>
+        </span>
+        <strong class="wallet-summary-minor wallet-summary-minor--frozen">￥{{ formatMoney(frozenBalance) }}</strong>
+      </div>
+      <div>
+        <span class="wallet-summary-caption">可提现余额</span>
+        <strong class="wallet-summary-minor wallet-summary-minor--highlight">￥{{ formatMoney(withdrawableBalance) }}</strong>
+      </div>
     </div>
 
     <div class="wallet-action-card">
@@ -105,158 +103,126 @@
 
     <div v-if="loading" class="profile-empty">正在加载钱包数据...</div>
     <div v-else-if="error" class="profile-empty profile-error">{{ error }}</div>
-    <div v-else class="wallet-panels">
-      <div class="wallet-subpanel">
-        <div class="wallet-subpanel-header">
-          <h4>余额流水</h4>
-          <span>{{ ledger.length }} 条</span>
-        </div>
-        <div v-if="!ledger.length" class="profile-empty">当前还没有钱包流水。</div>
-        <div v-else class="wallet-ledger-list">
-          <article v-for="item in ledger" :key="item.id" class="wallet-ledger-item">
-            <div>
-              <h4>{{ item.remark || '订单结算入账' }}</h4>
-              <p>订单号：{{ item.order_id || '-' }}</p>
-              <p>变动后余额：￥{{ formatMoney(item.balance_after) }}</p>
-            </div>
-            <div class="wallet-ledger-amount">
-              <strong :class="{ 'wallet-ledger-amount--credit': item.direction === 'credit' }">
-                {{ item.direction === 'credit' ? '+' : '-' }}￥{{ formatMoney(item.amount) }}
-              </strong>
-              <span>{{ formatOrderDate(item.created_at) }}</span>
-            </div>
-          </article>
-        </div>
+    <div v-else class="wallet-tab-section">
+      <div class="wallet-tabs">
+        <button
+          type="button"
+          class="wallet-tab-btn"
+          :class="{ active: activeTab === 'ledger' }"
+          @click="activeTab = 'ledger'"
+        >
+          余额流水 ({{ ledger.length }})
+        </button>
+        <button
+          type="button"
+          class="wallet-tab-btn"
+          :class="{ active: activeTab === 'withdraw' }"
+          @click="activeTab = 'withdraw'"
+        >
+          提现记录 ({{ withdrawList.length }})
+        </button>
       </div>
 
-      <div class="wallet-subpanel">
-        <div class="wallet-subpanel-header">
-          <h4>提现记录</h4>
-          <span>{{ withdrawList.length }} 条</span>
-        </div>
-        <div v-if="!withdrawList.length" class="profile-empty">当前还没有提现记录。</div>
-        <div v-else class="wallet-ledger-list">
-          <article v-for="item in withdrawList" :key="item.id" class="wallet-ledger-item wallet-withdraw-item">
-            <div>
-              <div class="wallet-withdraw-title-row">
-                <h4>提现申请 {{ item.request_no }}</h4>
-                <span class="order-status" :class="`status-${item.status}`">{{ getWithdrawStatusText(item.status) }}</span>
+      <div class="wallet-tab-content">
+        <!-- 余额流水 Tab -->
+        <div v-show="activeTab === 'ledger'" class="wallet-tab-panel">
+          <div v-if="!ledger.length" class="profile-empty">当前还没有钱包流水。</div>
+          <div v-else class="wallet-ledger-list">
+            <article v-for="item in ledger" :key="item.id" class="wallet-ledger-item">
+              <div>
+                <h4>{{ item.remark || '订单结算入账' }}</h4>
+                <p>订单号：{{ item.order_id || '-' }}</p>
+                <p>变动后余额：￥{{ formatMoney(item.balance_after) }}</p>
               </div>
-              <p>提现方式：{{ getWithdrawChannelText(item.channel) }}</p>
-              <p>到账账户：{{ item.account_name || '-' }} / {{ item.account_no_masked || '-' }}</p>
-              <p v-if="item.failure_reason">失败原因：{{ item.failure_reason }}</p>
-            </div>
-            <div class="wallet-ledger-amount">
-              <strong>￥{{ formatMoney(item.amount) }}</strong>
-              <span>到账金额：￥{{ formatMoney(item.net_amount) }}</span>
-              <span>{{ formatOrderDate(item.created_at) }}</span>
-            </div>
-          </article>
+              <div class="wallet-ledger-amount">
+                <strong :class="{ 'wallet-ledger-amount--credit': item.direction === 'credit' }">
+                  {{ item.direction === 'credit' ? '+' : '-' }}￥{{ formatMoney(item.amount) }}
+                </strong>
+                <span>{{ formatOrderDate(item.created_at) }}</span>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <!-- 提现记录 Tab -->
+        <div v-show="activeTab === 'withdraw'" class="wallet-tab-panel">
+          <div v-if="!withdrawList.length" class="profile-empty">当前还没有提现记录。</div>
+          <div v-else class="wallet-ledger-list">
+            <article v-for="item in withdrawList" :key="item.id" class="wallet-ledger-item wallet-withdraw-item">
+              <div>
+                <div class="wallet-withdraw-title-row">
+                  <h4>提现申请 {{ item.request_no }}</h4>
+                  <span class="order-status" :class="`status-${item.status}`">{{ getWithdrawStatusText(item.status) }}</span>
+                </div>
+                <p>提现方式：{{ getWithdrawChannelText(item.channel) }}</p>
+                <p>到账账户：{{ item.account_name || '-' }} / {{ item.account_no_masked || '-' }}</p>
+                <p v-if="item.failure_reason">失败原因：{{ item.failure_reason }}</p>
+              </div>
+              <div class="wallet-ledger-amount">
+                <strong>￥{{ formatMoney(item.amount) }}</strong>
+                <span>到账金额：￥{{ formatMoney(item.net_amount) }}</span>
+                <span>{{ formatOrderDate(item.created_at) }}</span>
+              </div>
+            </article>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref } from 'vue'
 import { getWithdrawChannelText, getWithdrawStatusText } from '../../utils/profileCenter.js'
 
-export default {
-  name: 'ProfileWalletPanel',
-  emits: ['login', 'refresh', 'submit', 'update:withdraw-form'],
-  props: {
-    isLoggedIn: {
-      type: Boolean,
-      default: false
-    },
-    loading: {
-      type: Boolean,
-      default: false
-    },
-    error: {
-      type: String,
-      default: ''
-    },
-    withdrawSubmitting: {
-      type: Boolean,
-      default: false
-    },
-    canApplyWithdraw: {
-      type: Boolean,
-      default: false
-    },
-    balance: {
-      type: Number,
-      default: 0
-    },
-    frozenBalance: {
-      type: Number,
-      default: 0
-    },
-    withdrawableBalance: {
-      type: Number,
-      default: 0
-    },
-    ledger: {
-      type: Array,
-      default: () => []
-    },
-    withdrawList: {
-      type: Array,
-      default: () => []
-    },
-    withdrawForm: {
-      type: Object,
-      default: () => ({
-        amount: '',
-        channel: 'alipay',
-        accountName: '',
-        accountNo: '',
-        remark: ''
-      })
-    },
-    formatMoney: {
-      type: Function,
-      default: (value) => value || '0.00'
-    },
-    formatOrderDate: {
-      type: Function,
-      default: (value) => value || '--'
-    }
+defineOptions({
+  name: 'ProfileWalletPanel'
+})
+
+const props = defineProps({
+  isLoggedIn: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false },
+  error: { type: String, default: '' },
+  withdrawSubmitting: { type: Boolean, default: false },
+  canApplyWithdraw: { type: Boolean, default: false },
+  balance: { type: Number, default: 0 },
+  frozenBalance: { type: Number, default: 0 },
+  withdrawableBalance: { type: Number, default: 0 },
+  ledger: { type: Array, default: () => [] },
+  withdrawList: { type: Array, default: () => [] },
+  withdrawForm: {
+    type: Object,
+    default: () => ({
+      amount: '',
+      channel: 'alipay',
+      accountName: '',
+      accountNo: '',
+      remark: ''
+    })
   },
-  methods: {
-    getWithdrawStatusText,
-    getWithdrawChannelText,
-    updateForm(field, value) {
-      this.$emit('update:withdraw-form', {
-        ...this.withdrawForm,
-        [field]: String(value || '').trim()
-      })
-    }
-  }
+  formatMoney: { type: Function, default: (value) => value || '0.00' },
+  formatOrderDate: { type: Function, default: (value) => value || '--' }
+})
+
+const emit = defineEmits(['login', 'refresh', 'submit', 'update:withdraw-form'])
+
+const activeTab = ref('ledger')
+
+function updateForm(field, value) {
+  emit('update:withdraw-form', {
+    ...props.withdrawForm,
+    [field]: String(value || '').trim()
+  })
 }
 </script>
 
 <style scoped src="./profile-panel-shared.css"></style>
 <style scoped>
-.wallet-summary-card {
-  padding: 20px;
-  margin-bottom: 18px;
-  border: 1px solid #dbeafe;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
-}
-
-.wallet-summary-label {
-  display: block;
-  color: #6b7280;
-  font-size: 13px;
-}
-
 .wallet-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  margin-bottom: 24px;
 }
 
 .wallet-summary-grid > div {
@@ -264,19 +230,77 @@ export default {
   border-radius: 14px;
   border: 1px solid #e5e7eb;
   background: #fff;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.wallet-summary-grid > div:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .wallet-summary-caption {
   display: block;
-  color: #6b7280;
-  font-size: 12px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.wallet-summary-balance {
-  display: block;
-  margin-top: 8px;
-  color: #111827;
-  font-size: 30px;
+.tooltip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #6b7280;
+  font-size: 10px;
+  font-style: normal;
+  cursor: help;
+}
+
+.tooltip-text {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #1f2937;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 6px;
+  width: max-content;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.tooltip-text::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1f2937;
+}
+
+.tooltip-wrap:hover .tooltip-text {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-4px);
 }
 
 .wallet-summary-minor {
@@ -286,35 +310,30 @@ export default {
   font-size: 24px;
 }
 
+.wallet-summary-minor--frozen {
+  color: #60a5fa;
+}
+
 .wallet-summary-minor--highlight {
-  color: #047857;
+  color: #10b981;
 }
 
-.wallet-summary-tip {
-  margin: 8px 0 0;
-  color: #475569;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.wallet-action-card,
-.wallet-subpanel {
+.wallet-action-card {
   padding: 18px;
   border: 1px solid #e5e7eb;
   border-radius: 16px;
   background: #fff;
+  margin-bottom: 24px;
 }
 
-.wallet-action-header,
-.wallet-subpanel-header {
+.wallet-action-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
 
-.wallet-action-header h4,
-.wallet-subpanel-header h4 {
+.wallet-action-header h4 {
   margin: 0;
   color: #111827;
   font-size: 18px;
@@ -324,25 +343,45 @@ export default {
   margin: 8px 0 0;
   color: #6b7280;
   line-height: 1.7;
-}
-
-.wallet-panels {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.wallet-subpanel {
-  min-width: 0;
-}
-
-.wallet-subpanel-header {
-  margin-bottom: 14px;
-}
-
-.wallet-subpanel-header span {
-  color: #6b7280;
   font-size: 13px;
+}
+
+/* Tabs Section */
+.wallet-tab-section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.wallet-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f3f4f6;
+  padding-bottom: 12px;
+}
+
+.wallet-tab-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wallet-tab-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.wallet-tab-btn.active {
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .wallet-form-grid {
@@ -395,11 +434,23 @@ export default {
 }
 
 .wallet-form-actions {
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .wallet-submit-btn {
   min-width: 180px;
+}
+
+.order-action-btn {
+  transition: all 0.2s ease;
+}
+
+.order-action-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.order-action-btn.ghost:hover:not(:disabled) {
+  background: #f1f5f9;
 }
 
 .wallet-ledger-list {
@@ -416,6 +467,12 @@ export default {
   border-radius: 14px;
   border: 1px solid #e5e7eb;
   background: #fff;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.wallet-ledger-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .wallet-ledger-item h4 {
@@ -462,7 +519,6 @@ export default {
 @media (max-width: 960px) {
   .wallet-ledger-item,
   .wallet-action-header,
-  .wallet-subpanel-header,
   .wallet-withdraw-title-row {
     flex-direction: column;
   }
@@ -472,7 +528,6 @@ export default {
   }
 
   .wallet-summary-grid,
-  .wallet-panels,
   .wallet-form-grid {
     grid-template-columns: 1fr;
   }

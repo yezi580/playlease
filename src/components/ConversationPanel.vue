@@ -109,8 +109,13 @@
                     class="conversation-image-btn"
                     :disabled="sending || !joinedConversation"
                     @click="triggerImageSelect"
+                    title="新增图片"
                   >
-                    新增图片
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                      <circle cx="9" cy="9" r="2"/>
+                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                    </svg>
                   </button>
                   <button
                     type="button"
@@ -869,11 +874,14 @@ export default {
 }
 
 .conversation-image-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #d1d5db;
   background: #fff;
   color: #374151;
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 10px;
   cursor: pointer;
 }
 
