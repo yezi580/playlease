@@ -1281,19 +1281,23 @@ export default {
 
 .price-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, auto));
+  grid-template-columns: repeat(4, max-content);
+  justify-content: space-between;
   align-items: center;
   gap: 6px 14px;
   padding-bottom: 8px;
   border-bottom: 1px solid #dbeafe;
+  overflow-x: auto;
 }
 
 .summary-row,
 .summary-total {
   display: flex;
   align-items: baseline;
+  flex-wrap: nowrap;
   gap: 6px;
   font-size: 15px;
+  white-space: nowrap;
 }
 
 .summary-row span {

@@ -4,7 +4,7 @@
     :back-text="backText"
     :read-only="isReadOnly"
     :use-seller-pricing-view="useSellerPricingView"
-    :hide-compensation-plan="hideCompensationPlan"
+    :hide-compensation-plan="!shouldShowCompensationPlan"
     @back="handleBack"
     @goto-profile="handleGotoProfile"
   />
@@ -48,8 +48,11 @@ export default {
     useSellerPricingView() {
       return this.source === 'profile' || (this.source === 'order' && this.$route.query.role === 'seller')
     },
-    hideCompensationPlan() {
-      return this.source !== 'resource'
+    shouldShowCompensationPlan() {
+      if (this.source === 'profile') return true
+      return this.source === 'order'
+        && this.$route.query.role === 'seller'
+        && this.$route.query.section === 'published'
     }
   },
   mounted() {

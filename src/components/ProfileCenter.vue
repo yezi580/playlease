@@ -343,7 +343,7 @@
                 <strong class="invite-summary-code">{{ ownInviteCode || '--' }}</strong>
               </article>
 
-              <article class="invite-summary-card">
+              <article class="invite-summary-card invite-summary-card--bind">
                 <span class="invite-summary-label">我填入的邀请码</span>
                 <template v-if="boundInviteCode">
                   <strong class="invite-summary-code">{{ boundInviteCode }}</strong>
@@ -355,7 +355,7 @@
                       type="text"
                       maxlength="16"
                       class="invite-bind-input"
-                      placeholder="请输入邀请码"
+                      placeholder="仅可绑定一次，绑定后不可修改"
                       :disabled="inviteSubmitting"
                       @input="inviteCodeInput = String(inviteCodeInput || '').toUpperCase().replace(/[^A-Z0-9]/g, '')"
                     />
@@ -368,7 +368,6 @@
                       {{ inviteSubmitting ? '提交中...' : '确认绑定' }}
                     </button>
                   </div>
-                  <p>仅可绑定一次，绑定后不可修改。</p>
                 </template>
               </article>
 
@@ -416,7 +415,7 @@
               </div>
               <div v-if="!boundInviteCode" class="invite-order-list">
                 <article class="invite-order-card invite-order-card--empty">
-                  <div class="profile-empty">当前还未绑定邀请码。</div>
+                  <div class="profile-empty">当前还未绑定邀请码</div>
                 </article>
               </div>
               <div v-else-if="!inviteeOrderList.length" class="invite-order-list">
@@ -2086,6 +2085,13 @@ export default {
 
 .invite-summary-card {
   padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+}
+
+.invite-summary-card--bind {
 }
 
 .invite-summary-card--full {
@@ -2093,7 +2099,7 @@ export default {
 }
 
 .invite-summary-card-header {
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 .invite-summary-title {
@@ -2119,7 +2125,6 @@ export default {
   display: block;
   color: #6b7280;
   font-size: 13px;
-  margin-bottom: 14px;
 }
 
 .invite-summary-card strong {
@@ -2130,7 +2135,6 @@ export default {
 
 .invite-summary-code {
   display: block;
-  margin-top: 14px;
   letter-spacing: 0.08em;
 }
 
@@ -2144,7 +2148,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 .invite-bind-input {
@@ -2153,16 +2157,27 @@ export default {
   border: 1px solid #d1d5db;
   border-radius: 12px;
   padding: 0 14px;
-  background: #fff;
+  background: #f9fafb;
   color: #111827;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.invite-bind-input::placeholder {
+  color: #9ca3af;
+  font-size: 13px;
+}
+
 .invite-bind-input:focus {
   border-color: #60a5fa;
   box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
+}
+
+.invite-summary-card--bind .order-action-btn {
+  min-width: 108px;
+  min-height: 44px;
+  flex-shrink: 0;
 }
 
 .invite-order-section {
