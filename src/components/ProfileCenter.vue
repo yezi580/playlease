@@ -1,52 +1,61 @@
 <template>
   <section class="profile-center">
-    <aside class="profile-sidebar">
-      <nav class="profile-nav" aria-label="个人中心导航">
-        <!-- 移动端向左切换按钮 -->
-        <button 
-          v-if="isMobileView && mobileNavPage === 1" 
-          class="profile-nav-arrow profile-nav-arrow--left" 
-          @click="mobileNavPage = 0"
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-
-        <template v-for="(section, index) in visibleSections" :key="section.key">
-          <button
-            v-show="!isMobileView || (mobileNavPage === 0 ? index < 4 : index >= 4)"
-            type="button"
-            class="profile-nav-item"
-            :class="{ active: activeSection === section.key }"
-            @click="switchSection(section.key)"
+      <aside class="profile-sidebar">
+        <nav class="profile-nav" aria-label="个人中心导航">
+          <!-- 移动端向左切换按钮 -->
+          <button 
+            v-if="isMobileView" 
+            class="profile-nav-arrow profile-nav-arrow--left" 
+            :class="{ 'is-invisible': mobileNavPage === 0 }"
+            @click="switchNavPage(0)"
           >
-            <span class="profile-nav-label-wrap">
-              <span class="profile-nav-label">{{ section.label }}</span>
-              <span v-if="hasSectionUnreadDot(section.key)" class="profile-nav-dot" aria-hidden="true"></span>
-            </span>
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
-        </template>
-
-        <div v-if="isLoggedIn && !isMobileView" class="profile-nav-divider"></div>
-        <button
-          v-if="isLoggedIn"
-          v-show="!isMobileView || mobileNavPage === 1"
-          type="button"
-          class="profile-nav-item profile-nav-logout"
-          @click="handleLogout"
-        >
-          <span class="profile-nav-label-wrap">
-            <span class="profile-nav-label">退出登录</span>
-          </span>
-        </button>
-
-        <!-- 移动端向右切换按钮 -->
-        <button 
-          v-if="isMobileView && mobileNavPage === 0" 
-          class="profile-nav-arrow profile-nav-arrow--right" 
-          @click="mobileNavPage = 1"
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
+  
+          <div class="profile-nav-items-wrapper">
+          <Transition :name="navTransitionName" mode="out-in">
+            <div :key="mobileNavPage" class="profile-nav-items-group">
+              <template v-for="(section, index) in visibleSections" :key="section.key">
+                <button
+                  v-show="!isMobileView || (mobileNavPage === 0 ? index < 4 : index >= 4)"
+                  type="button"
+                  class="profile-nav-item"
+                  :class="{ active: activeSection === section.key }"
+                  @click="switchSection(section.key)"
+                >
+                  <span class="profile-nav-label-wrap">
+                    <span class="profile-nav-label">{{ section.label }}</span>
+                    <span v-if="hasSectionUnreadDot(section.key)" class="profile-nav-dot" aria-hidden="true"></span>
+                  </span>
+                </button>
+              </template>
+      
+              <div v-if="isLoggedIn && !isMobileView" key="divider" class="profile-nav-divider"></div>
+              <button
+                v-if="isLoggedIn"
+                v-show="!isMobileView || mobileNavPage === 1"
+                key="logout"
+                type="button"
+                class="profile-nav-item profile-nav-logout"
+                @click="handleLogout"
+              >
+                <span class="profile-nav-label-wrap">
+                  <span class="profile-nav-label">退出登录</span>
+                </span>
+              </button>
+            </div>
+          </Transition>
+        </div>
+  
+          <!-- 移动端向右切换按钮 -->
+          <button 
+            v-if="isMobileView" 
+            class="profile-nav-arrow profile-nav-arrow--right" 
+            :class="{ 'is-invisible': mobileNavPage === 1 }"
+            @click="switchNavPage(1)"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
       </nav>
     </aside>
 
@@ -70,8 +79,10 @@
             </div>
           </div>
 
-          <div v-if="orderLoading" class="profile-empty">正在加载订单列表...</div>
-          <div v-else-if="orderError" class="profile-empty profile-error">{{ orderError }}</div>
+          <Transition name="profile-section-fade" mode="out-in">
+            <div :key="orderFilterStatus + '-' + orderPage" class="profile-tab-content">
+              <div v-if="orderLoading" class="profile-empty">正在加载订单列表...</div>
+              <div v-else-if="orderError" class="profile-empty profile-error">{{ orderError }}</div>
           <div v-else-if="!orderList.length" class="profile-empty">当前筛选条件下暂无订单。</div>
 
           <div v-else class="order-list">
@@ -142,6 +153,8 @@
             </button>
             <span class="order-page-summary">第 {{ orderPage }} / {{ orderTotalPages }} 页，共 {{ orderTotal }} 条</span>
           </div>
+            </div>
+          </Transition>
         </div>
       </section>
 
@@ -174,8 +187,10 @@
             </div>
           </div>
 
-          <div v-if="myListingsLoading" class="profile-empty">正在加载内容...</div>
-          <div v-else-if="myListingsError" class="profile-empty profile-error">{{ myListingsError }}</div>
+          <Transition name="profile-section-fade" mode="out-in">
+            <div :key="myListingFilterStatus + '-' + myListingsPage" class="profile-tab-content">
+              <div v-if="myListingsLoading" class="profile-empty">正在加载内容...</div>
+              <div v-else-if="myListingsError" class="profile-empty profile-error">{{ myListingsError }}</div>
           <div v-else-if="!myListingsList.length" class="profile-empty">{{ myListingsEmptyText }}</div>
 
           <div v-else class="listing-list">
@@ -293,6 +308,8 @@
             </button>
             <span class="order-page-summary">第 {{ myListingsPage }} / {{ myListingsTotalPages }} 页，共 {{ myListingsTotal }} 条</span>
           </div>
+            </div>
+          </Transition>
         </div>
       </section>
 
@@ -609,6 +626,7 @@ export default {
   data() {
     return {
       mobileNavPage: 0,
+      navTransitionName: 'profile-nav-slide-right',
       isMobileView: false,
       sections: createProfileSections(),
       feedbackCategories: createFeedbackCategories(),
@@ -834,6 +852,12 @@ export default {
   methods: {
     checkMobileView() {
       this.isMobileView = window.innerWidth <= 960
+    },
+    switchNavPage(newPage) {
+      if (this.mobileNavPage === newPage) return
+      // 根据目标页码判断滑动方向：向右翻（页码变大）时新内容从右侧进入，向左翻时从左侧进入
+      this.navTransitionName = newPage > this.mobileNavPage ? 'profile-nav-slide-right' : 'profile-nav-slide-left'
+      this.mobileNavPage = newPage
     },
     async loadBusinessSettings() {
       this.businessSettings = await fetchBusinessSettings()
@@ -1829,6 +1853,7 @@ export default {
   position: sticky;
   top: 92px;
   align-self: flex-start;
+  margin-top: 21px;
 }
 
 .profile-user-card,
@@ -1992,6 +2017,55 @@ export default {
   background: #fee2e2;
 }
 
+.profile-nav-items-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.profile-nav-items-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* 统一过渡配置 */
+.profile-nav-slide-left-enter-active,
+.profile-nav-slide-left-leave-active,
+.profile-nav-slide-right-enter-active,
+.profile-nav-slide-right-leave-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 
+  向右翻页动画（点右侧箭头）：
+  新元素从右侧进入 (translateX(15px))
+  旧元素向左侧退出 (translateX(-15px))
+*/
+.profile-nav-slide-right-enter-from {
+  opacity: 0;
+  transform: translateX(15px);
+}
+.profile-nav-slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(-15px);
+}
+
+/* 
+  向左翻页动画（点左侧箭头）：
+  新元素从左侧进入 (translateX(-15px))
+  旧元素向右侧退出 (translateX(15px))
+*/
+.profile-nav-slide-left-enter-from {
+  opacity: 0;
+  transform: translateX(-15px);
+}
+.profile-nav-slide-left-leave-to {
+  opacity: 0;
+  transform: translateX(15px);
+}
+
 .profile-content {
   flex: 1;
   min-width: 0;
@@ -2026,6 +2100,12 @@ export default {
   flex-direction: column;
 }
 
+.profile-tab-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
 .profile-order-toolbar {
   display: flex;
   flex-direction: column;
@@ -2049,15 +2129,25 @@ export default {
   border-radius: 10px;
   padding: 8px 14px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.order-role-tab:hover,
+.order-filter-tab:hover,
+.order-page-btn:not(:disabled):hover {
+  border-color: #c7d2fe;
+  color: #1d4ed8;
 }
 
 .order-role-tab.active,
 .order-filter-tab.active,
 .order-page-btn.active {
-  background: #111827;
-  border-color: #111827;
-  color: #fff;
+  border-color: #1d4ed8;
+  background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
+  color: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.08);
 }
 
 .order-filter-count {
@@ -2714,6 +2804,7 @@ export default {
     transform: none;
     flex-direction: column;
     gap: 12px;
+    margin-top: 0;
   }
 
   .profile-user-card {
@@ -2730,13 +2821,32 @@ export default {
     gap: 0;
     width: 100%;
     overflow-x: hidden;
-    padding: 0 16px;
+    padding: 0 6px;
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 16px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     min-height: 56px;
+  }
+  
+  .profile-nav-items-wrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .profile-nav-items-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    width: 100%;
+    gap: 0;
   }
   
   .profile-nav::-webkit-scrollbar {
@@ -2750,11 +2860,16 @@ export default {
     background: transparent;
     border: none;
     color: #6b7280;
-    padding: 0 8px;
+    padding: 0 4px;
     height: 56px;
     cursor: pointer;
     flex-shrink: 0;
-    transition: color 0.2s;
+    transition: color 0.2s, opacity 0.2s;
+  }
+
+  .profile-nav-arrow.is-invisible {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .profile-nav-arrow:hover,
@@ -2771,7 +2886,7 @@ export default {
     width: auto;
     height: 56px;
     min-height: auto;
-    padding: 0;
+    padding: 0 4px;
     border: none !important;
     border-radius: 0;
     background: transparent !important;
@@ -2780,7 +2895,7 @@ export default {
     white-space: nowrap;
     flex-shrink: 0;
     color: #6b7280 !important;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     transition: color 0.2s ease;
   }
