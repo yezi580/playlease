@@ -626,6 +626,10 @@ export default {
   data() {
     return {
       mobileNavPage: 0,
+      mobileNavLastSelected: {
+        0: 'published',
+        1: 'invite'
+      },
       navTransitionName: 'profile-nav-slide-right',
       isMobileView: false,
       sections: createProfileSections(),
@@ -824,6 +828,7 @@ export default {
     if (this.defaultListingFilter) {
       this.myListingFilterStatus = this.normalizeListingFilter(this.defaultListingFilter)
     }
+    this.rememberMobileSection(this.activeSection)
   },
   mounted() {
     this.checkMobileView()
@@ -852,12 +857,53 @@ export default {
   methods: {
     checkMobileView() {
       this.isMobileView = window.innerWidth <= 960
+      if (this.isMobileView) {
+        this.syncMobileNavStateWithActiveSection()
+      }
     },
     switchNavPage(newPage) {
       if (this.mobileNavPage === newPage) return
+      const nextSectionKey = this.resolveMobileSectionForPage(newPage)
       // 根据目标页码判断滑动方向：向右翻（页码变大）时新内容从右侧进入，向左翻时从左侧进入
       this.navTransitionName = newPage > this.mobileNavPage ? 'profile-nav-slide-right' : 'profile-nav-slide-left'
+      if (nextSectionKey && nextSectionKey !== this.activeSection) {
+        this.switchSection(nextSectionKey, { syncMobilePage: false })
+      }
       this.mobileNavPage = newPage
+    },
+    getMobileNavSections(page) {
+      return this.visibleSections.filter((_, index) => (page === 0 ? index < 4 : index >= 4))
+    },
+    getMobileNavPageForSection(sectionKey) {
+      const sectionIndex = this.visibleSections.findIndex((item) => item.key === sectionKey)
+      if (sectionIndex === -1) {
+        return 0
+      }
+      return sectionIndex < 4 ? 0 : 1
+    },
+    getDefaultMobileSection(page) {
+      return this.getMobileNavSections(page)[0]?.key || this.visibleSections[0]?.key || 'published'
+    },
+    rememberMobileSection(sectionKey) {
+      const page = this.getMobileNavPageForSection(sectionKey)
+      if (!this.getMobileNavSections(page).some((item) => item.key === sectionKey)) {
+        return
+      }
+      this.mobileNavLastSelected = {
+        ...this.mobileNavLastSelected,
+        [page]: sectionKey
+      }
+    },
+    resolveMobileSectionForPage(page) {
+      const rememberedSectionKey = String(this.mobileNavLastSelected?.[page] || '').trim()
+      if (this.getMobileNavSections(page).some((item) => item.key === rememberedSectionKey)) {
+        return rememberedSectionKey
+      }
+      return this.getDefaultMobileSection(page)
+    },
+    syncMobileNavStateWithActiveSection() {
+      this.rememberMobileSection(this.activeSection)
+      this.mobileNavPage = this.getMobileNavPageForSection(this.activeSection)
     },
     async loadBusinessSettings() {
       this.businessSettings = await fetchBusinessSettings()
@@ -880,20 +926,31 @@ export default {
       if (current >= total - 2) return [1, total - 3, total - 2, total - 1, total]
       return [1, current - 1, current, current + 1, total]
     },
-    switchSection(sectionKey) {
-      this.activeSection = sectionKey
+    switchSection(sectionKey, options = {}) {
+      const normalizedSectionKey = String(sectionKey || '').trim()
+      if (!normalizedSectionKey) return
+
+      this.activeSection = normalizedSectionKey
+      this.rememberMobileSection(normalizedSectionKey)
+      if (this.isMobileView && options.syncMobilePage !== false) {
+        const targetPage = this.getMobileNavPageForSection(normalizedSectionKey)
+        if (targetPage !== this.mobileNavPage) {
+          this.navTransitionName = targetPage > this.mobileNavPage ? 'profile-nav-slide-right' : 'profile-nav-slide-left'
+        }
+        this.mobileNavPage = targetPage
+      }
       if (!this.isLoggedIn) return
-      if (sectionKey === 'orders') {
+      if (normalizedSectionKey === 'orders') {
         this.loadOrderData()
-      } else if (sectionKey === 'messages') {
+      } else if (normalizedSectionKey === 'messages') {
         this.loadMessageData()
-      } else if (sectionKey === 'published') {
+      } else if (normalizedSectionKey === 'published') {
         this.loadMyListingsData()
-      } else if (sectionKey === 'wallet') {
+      } else if (normalizedSectionKey === 'wallet') {
         this.loadWalletData()
-      } else if (sectionKey === 'invite') {
+      } else if (normalizedSectionKey === 'invite') {
         this.loadInviteData()
-      } else if (sectionKey === 'verify') {
+      } else if (normalizedSectionKey === 'verify') {
         this.loadKycData()
       }
     },
