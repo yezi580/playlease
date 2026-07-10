@@ -12,7 +12,13 @@
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
   
-          <div class="profile-nav-items-wrapper">
+          <div
+            class="profile-nav-items-wrapper"
+            @touchstart="handleMobileNavTouchStart"
+            @touchmove="handleMobileNavTouchMove"
+            @touchend="handleMobileNavTouchEnd"
+            @touchcancel="resetMobileNavTouchState"
+          >
           <Transition :name="navTransitionName" mode="out-in">
             <div :key="mobileNavPage" class="profile-nav-items-group">
               <template v-for="(section, index) in visibleSections" :key="section.key">
@@ -94,23 +100,23 @@
 
               <div class="order-main">
                 <div class="order-header">
-                  <div>
+                  <div class="order-title-row">
                     <h4>{{ order.listing_title }}</h4>
-                    <p class="order-subtitle">
-                      {{ orderCounterpartyLabel }}：{{ getOrderCounterpartyName(order) }}
-                    </p>
+                    <div class="order-status-wrap">
+                      <span class="order-status" :class="`status-${order.status}`">{{ order.status_text }}</span>
+                      <span v-if="order.status === 'pending_payment'" class="order-status-countdown">
+                        {{ formatPendingCountdown(order.created_at) }}
+                      </span>
+                    </div>
                   </div>
-                  <div class="order-status-wrap">
-                    <span class="order-status" :class="`status-${order.status}`">{{ order.status_text }}</span>
-                    <span v-if="order.status === 'pending_payment'" class="order-status-countdown">
-                      {{ formatPendingCountdown(order.created_at) }}
-                    </span>
-                  </div>
+                  <p class="order-subtitle">
+                    {{ orderCounterpartyLabel }}：{{ getOrderCounterpartyName(order) }}
+                  </p>
                 </div>
 
                 <div class="order-meta-grid order-meta-grid--orders">
-                  <p class="copy-inline"><span>商品编号</span><span>{{ order.listing_no || '-' }}</span><CopyTextButton :text="order.listing_no || ''" label="商品编号" /></p>
-                  <p><span>订单编号</span>{{ order.order_no }}</p>
+                  <p class="copy-inline mobile-full-row"><span>商品编号</span><span>{{ order.listing_no || '-' }}</span><CopyTextButton :text="order.listing_no || ''" label="商品编号" /></p>
+                  <p class="mobile-full-row"><span>订单编号</span>{{ order.order_no }}</p>
                   <p><span>租用天数</span>{{ order.rent_days || 0 }} 天</p>
                   <p><span>下单时间</span>{{ formatOrderDate(order.created_at) }}</p>
                   <p><span>租金</span>￥{{ formatMoney(order.amount) }}</p>
@@ -207,28 +213,28 @@
 
                 <div class="order-main" @click="handlePublishedRecordClick($event, item)">
                   <div class="order-header">
-                    <div>
+                    <div class="order-title-row">
                       <h4>{{ item.listing_title }}</h4>
-                      <p class="order-subtitle">
-                        买家：{{ item.buyer_name || '未知买家' }}
-                      </p>
+                      <div class="order-status-wrap">
+                        <span class="order-status" :class="`status-${item.status}`">{{ item.status_text }}</span>
+                        <span v-if="false" class="order-status-countdown">
+                          {{ formatPendingCountdown(item.created_at) }}
+                        </span>
+                      </div>
                     </div>
-                    <div class="order-status-wrap">
-                      <span class="order-status" :class="`status-${item.status}`">{{ item.status_text }}</span>
-                      <span v-if="false" class="order-status-countdown">
-                        {{ formatPendingCountdown(item.created_at) }}
-                      </span>
-                    </div>
+                    <p class="order-subtitle">
+                      买家：{{ item.buyer_name || '未知买家' }}
+                    </p>
                   </div>
 
                   <div class="order-meta-grid">
-                    <p class="copy-inline"><span>商品编号</span><span>{{ item.listing_no || '-' }}</span><CopyTextButton :text="item.listing_no || ''" label="商品编号" /></p>
-                    <p><span>订单编号</span>{{ item.order_no }}</p>
+                    <p class="copy-inline mobile-full-row"><span>商品编号</span><span>{{ item.listing_no || '-' }}</span><CopyTextButton :text="item.listing_no || ''" label="商品编号" /></p>
+                    <p class="mobile-full-row"><span>订单编号</span>{{ item.order_no }}</p>
                     <p><span>租用天数</span>{{ item.rent_days || 0 }} 天</p>
                     <p><span>下单时间</span>{{ formatOrderDate(item.created_at) }}</p>
                     <p><span>发布租金</span>￥{{ formatMoney(item.seller_rent_amount) }}</p>
-                    <p><span>预计到帐租金</span>￥{{ formatMoney(getSellerIncomeRent(item)) }}</p>
                     <p><span>押金</span>￥{{ formatMoney(item.deposit_amount) }}</p>
+                    <p class="mobile-full-row"><span>预计到帐租金</span>￥{{ formatMoney(getSellerIncomeRent(item)) }}</p>
                   </div>
                 </div>
 
@@ -254,18 +260,20 @@
 
                 <div class="listing-main" @click="handlePublishedRecordClick($event, item)">
                   <div class="order-header">
-                    <div>
+                    <div class="order-title-row">
                       <h4>{{ item.listing_title }}</h4>
+                      <div class="order-status-wrap">
+                        <span class="listing-status" :class="`status-${item.listing_status}`">
+                          {{ item.listing_status_text }}
+                        </span>
+                      </div>
                     </div>
-                    <span class="listing-status" :class="`status-${item.listing_status}`">
-                      {{ item.listing_status_text }}
-                    </span>
                   </div>
 
                   <div class="listing-meta-grid">
-                    <p class="copy-inline"><span>商品编号</span><span>#{{ item.listing_no || item.id }}</span><CopyTextButton :text="item.listing_no || item.id || ''" label="商品编号" /></p>
+                    <p class="copy-inline mobile-full-row"><span>商品编号</span><span>#{{ item.listing_no || item.id }}</span><CopyTextButton :text="item.listing_no || item.id || ''" label="商品编号" /></p>
+                    <p class="mobile-full-row"><span>发布时间</span>{{ formatOrderDate(item.published_at || item.created_at) }}</p>
                     <p><span>租用天数</span>{{ item.rent_days || 0 }} 天</p>
-                    <p><span>发布时间</span>{{ formatOrderDate(item.published_at || item.created_at) }}</p>
                     <p><span>段位</span>{{ item.rank_name || '未设置段位' }}</p>
                     <p><span>租金</span><strong>￥{{ formatMoney(item.rent_price) }}</strong></p>
                     <p><span>押金</span><strong>￥{{ formatMoney(item.deposit) }}</strong></p>
@@ -630,6 +638,13 @@ export default {
         0: 'published',
         1: 'invite'
       },
+      mobileNavTouch: {
+        startX: 0,
+        startY: 0,
+        deltaX: 0,
+        deltaY: 0,
+        isTracking: false
+      },
       navTransitionName: 'profile-nav-slide-right',
       isMobileView: false,
       sections: createProfileSections(),
@@ -859,6 +874,56 @@ export default {
       this.isMobileView = window.innerWidth <= 960
       if (this.isMobileView) {
         this.syncMobileNavStateWithActiveSection()
+      } else {
+        this.resetMobileNavTouchState()
+      }
+    },
+    handleMobileNavTouchStart(event) {
+      if (!this.isMobileView || !event.touches?.length) return
+      const touch = event.touches[0]
+      this.mobileNavTouch = {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        deltaX: 0,
+        deltaY: 0,
+        isTracking: true
+      }
+    },
+    handleMobileNavTouchMove(event) {
+      if (!this.mobileNavTouch.isTracking || !event.touches?.length) return
+      const touch = event.touches[0]
+      this.mobileNavTouch = {
+        ...this.mobileNavTouch,
+        deltaX: touch.clientX - this.mobileNavTouch.startX,
+        deltaY: touch.clientY - this.mobileNavTouch.startY
+      }
+    },
+    handleMobileNavTouchEnd() {
+      if (!this.mobileNavTouch.isTracking) return
+      const { deltaX, deltaY } = this.mobileNavTouch
+      this.resetMobileNavTouchState()
+
+      const horizontalDistance = Math.abs(deltaX)
+      const verticalDistance = Math.abs(deltaY)
+      const swipeThreshold = 42
+
+      if (horizontalDistance < swipeThreshold || horizontalDistance <= verticalDistance) {
+        return
+      }
+
+      if (deltaX < 0 && this.mobileNavPage < 1) {
+        this.switchNavPage(this.mobileNavPage + 1)
+      } else if (deltaX > 0 && this.mobileNavPage > 0) {
+        this.switchNavPage(this.mobileNavPage - 1)
+      }
+    },
+    resetMobileNavTouchState() {
+      this.mobileNavTouch = {
+        startX: 0,
+        startY: 0,
+        deltaX: 0,
+        deltaY: 0,
+        isTracking: false
       }
     },
     switchNavPage(newPage) {
@@ -2541,16 +2606,23 @@ export default {
 
 .order-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 6px;
   margin-bottom: 12px;
 }
 
-.order-header h4 {
-  margin: 0 0 6px;
+.order-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.order-title-row h4 {
+  margin: 0;
   font-size: 20px;
   color: #111827;
+  word-break: break-all;
 }
 
 .order-subtitle {
@@ -2895,6 +2967,7 @@ export default {
     flex: 1;
     position: relative;
     overflow: hidden;
+    touch-action: pan-y;
   }
 
   .profile-nav-items-group {
@@ -3096,30 +3169,44 @@ export default {
     aspect-ratio: 16 / 9;
   }
 
-  .order-header {
-    flex-direction: column;
+  .order-title-row {
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .order-header h4 {
+  .order-title-row h4 {
     font-size: 18px;
   }
 
   .order-meta-grid,
   .listing-meta-grid {
-    grid-template-columns: 1fr;
+    gap: 8px 12px;
   }
 
-  .order-meta-grid--orders p {
+  .order-meta-grid p,
+  .listing-meta-grid p {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 2px;
   }
 
-  .order-meta-grid--orders span {
-    display: block;
+  .order-meta-grid p.copy-inline,
+  .listing-meta-grid p.copy-inline {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .order-meta-grid span,
+  .listing-meta-grid span {
     min-width: 0;
     line-height: 1.4;
+  }
+
+  .mobile-full-row {
+    grid-column: 1 / -1;
   }
 
   .order-actions,
