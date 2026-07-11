@@ -69,6 +69,8 @@
       </RouterView>
     </main>
 
+    <AppFooter />
+
     <BottomNav
       :currentPage="currentPageKey"
       :auth-visible="showAuth"
@@ -100,6 +102,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import AuthPanel from '../components/AuthPanel.vue'
 import BottomNav from '../components/BottomNav.vue'
+import AppFooter from '../components/AppFooter.vue'
 import AppToast from '../components/AppToast.vue'
 import AppConfirm from '../components/AppConfirm.vue'
 import { showWarningToast } from '../utils/toast.js'
@@ -404,6 +407,8 @@ function handleLogout() {
   min-height: 100vh;
   font-family: Arial;
   padding-top: 68px;
+  display: flex;
+  flex-direction: column;
 }
 
 .main-content {
@@ -468,9 +473,6 @@ function handleLogout() {
 @media (max-width: 960px) {
   .page {
     padding-top: 60px;
-  }
-
-  .main-content {
     padding-bottom: 70px;
   }
 
