@@ -1972,10 +1972,11 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: -webkit-sticky;
   position: sticky;
   top: 92px;
   align-self: flex-start;
-  margin-top: 21px;
+  z-index: 10;
 }
 
 .profile-user-card,
