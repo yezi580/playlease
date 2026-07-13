@@ -182,6 +182,15 @@ watch(
 watch(
   () => showAuth.value,
   (visible, previousVisible) => {
+    if (!previousVisible && visible) {
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: 0, behavior: 'auto' })
+          handleScroll()
+        })
+      })
+    }
+
     if (previousVisible && !visible && !isLoggedIn.value) {
       pendingAuthRedirect.value = null
     }
