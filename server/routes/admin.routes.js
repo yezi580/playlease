@@ -58,6 +58,18 @@ export function registerAdminRoutes(deps) {
     markAdminStepUpChallengeConsumed,
     updateAdminPasskeyUsage
   } = authModule
+  const PASSKEY_SELF_SERVICE_ROLES = new Set(['admin', 'support'])
+
+  function resolvePolicyAllowedRoles(policy = {}) {
+    const roles = Array.isArray(policy.allowedRoles) && policy.allowedRoles.length
+      ? policy.allowedRoles.map((item) => String(item || '').trim()).filter(Boolean)
+      : ['admin']
+    return new Set(roles)
+  }
+
+  function canCurrentRoleUsePolicy(policy, role) {
+    return resolvePolicyAllowedRoles(policy).has(String(role || '').trim())
+  }
 
 function sanitizeAdminKeyword(value) {
   return String(value || '').trim().slice(0, 50)
@@ -601,13 +613,13 @@ app.delete(
   }
 )
 
-app.post('/api/admin/passkeys/register/options', authRequired, adminOnly, async (req, res) => {
+app.post('/api/admin/passkeys/register/options', authRequired, async (req, res) => {
   const deviceName = String(req.body?.deviceName || '').trim()
 
   try {
     const authUser = await fetchAuthUserById(req.auth.userId)
-    if (!authUser || String(authUser.role || '') !== 'admin') {
-      return res.status(404).json({ message: '管理员账号不存在或已失效' })
+    if (!authUser || !PASSKEY_SELF_SERVICE_ROLES.has(String(authUser.role || '').trim())) {
+      return res.status(404).json({ message: '当前账号不支持 Passkey 绑定' })
     }
 
     const passkeys = await listAdminPasskeysByUserId(req.auth.userId)
@@ -650,7 +662,7 @@ app.post('/api/admin/passkeys/register/options', authRequired, adminOnly, async 
   }
 })
 
-app.post('/api/admin/passkeys/register/verify', authRequired, adminOnly, async (req, res) => {
+app.post('/api/admin/passkeys/register/verify', authRequired, async (req, res) => {
   const challengeToken = String(req.body?.challengeToken || '').trim()
   const credential = req.body?.credential
   const fallbackDeviceName = String(req.body?.deviceName || '').trim()
@@ -683,8 +695,8 @@ app.post('/api/admin/passkeys/register/verify', authRequired, adminOnly, async (
 
   try {
     const authUser = await fetchAuthUserById(req.auth.userId)
-    if (!authUser || String(authUser.role || '') !== 'admin') {
-      return res.status(404).json({ message: '管理员账号不存在或已失效' })
+    if (!authUser || !PASSKEY_SELF_SERVICE_ROLES.has(String(authUser.role || '').trim())) {
+      return res.status(404).json({ message: '当前账号不支持 Passkey 绑定' })
     }
 
     const verification = await verifyRegistrationResponse({
@@ -909,18 +921,21 @@ app.post(
   }
 )
 
-app.post('/api/admin/step-up/options', authRequired, adminOnly, async (req, res) => {
+app.post('/api/admin/step-up/options', authRequired, async (req, res) => {
   const action = String(req.body?.action || '').trim()
   const policy = getAdminStepUpPolicyByAction(action)
 
   if (!policy) {
     return res.status(400).json({ message: '无效的二次校验动作' })
   }
+  if (!canCurrentRoleUsePolicy(policy, req.auth?.role)) {
+    return res.status(403).json({ message: '当前角色无权发起该二次校验' })
+  }
 
   try {
     const authUser = await fetchAuthUserById(req.auth.userId)
-    if (!authUser || String(authUser.role || '') !== 'admin') {
-      return res.status(404).json({ message: '管理员账号不存在或已失效' })
+    if (!authUser || !canCurrentRoleUsePolicy(policy, authUser.role)) {
+      return res.status(404).json({ message: '当前账号无权执行该二次校验' })
     }
     const passkeys = await listAdminPasskeysByUserId(req.auth.userId)
     if (!passkeys.length) {
@@ -971,7 +986,7 @@ app.post('/api/admin/step-up/options', authRequired, adminOnly, async (req, res)
   }
 })
 
-app.post('/api/admin/step-up/verify', authRequired, adminOnly, async (req, res) => {
+app.post('/api/admin/step-up/verify', authRequired, async (req, res) => {
   const challengeToken = String(req.body?.challengeToken || '').trim()
   const action = String(req.body?.action || '').trim()
   const credential = req.body?.credential
@@ -995,6 +1010,10 @@ app.post('/api/admin/step-up/verify', authRequired, adminOnly, async (req, res) 
   if (challengeRecord.action !== action) {
     return res.status(400).json({ message: '挑战动作不匹配，请重新发起二次校验' })
   }
+  const policy = getAdminStepUpPolicyByAction(action)
+  if (!policy || !canCurrentRoleUsePolicy(policy, req.auth?.role)) {
+    return res.status(403).json({ message: '当前角色无权完成该二次校验' })
+  }
   if (challengeRecord.consumedAt) {
     return res.status(409).json({
       code: 'STEP_UP_CHALLENGE_CONSUMED',
@@ -1010,8 +1029,8 @@ app.post('/api/admin/step-up/verify', authRequired, adminOnly, async (req, res) 
 
   try {
     const authUser = await fetchAuthUserById(req.auth.userId)
-    if (!authUser || String(authUser.role || '') !== 'admin') {
-      return res.status(404).json({ message: '管理员账号不存在或已失效' })
+    if (!authUser || !canCurrentRoleUsePolicy(policy, authUser.role)) {
+      return res.status(404).json({ message: '当前账号无权执行该二次校验' })
     }
     const credentialId = normalizeCredentialIdFromRequest(credential)
     if (!credentialId) {

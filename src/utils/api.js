@@ -173,3 +173,226 @@ export async function apiFetch(url, options = {}) {
   }
   return data
 }
+
+const STEP_UP_ACTION_LABELS = Object.freeze({
+  support_freeze_funds: '冻结资金',
+  support_release_funds: '解除冻结',
+  support_execute_settlement: '执行分账'
+})
+
+function base64UrlToArrayBuffer(value) {
+  const normalizedValue = String(value || '').trim()
+  if (!normalizedValue) return new ArrayBuffer(0)
+  const base64 = normalizedValue
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(normalizedValue.length / 4) * 4, '=')
+  const binary = atob(base64)
+  const buffer = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    buffer[index] = binary.charCodeAt(index)
+  }
+  return buffer.buffer
+}
+
+function arrayBufferToBase64Url(value) {
+  if (!value) return ''
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value)
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+function normalizeCreationOptions(publicKey = {}) {
+  return {
+    ...publicKey,
+    challenge: base64UrlToArrayBuffer(publicKey.challenge),
+    user: publicKey.user ? {
+      ...publicKey.user,
+      id: base64UrlToArrayBuffer(publicKey.user.id)
+    } : undefined,
+    excludeCredentials: Array.isArray(publicKey.excludeCredentials)
+      ? publicKey.excludeCredentials.map((item) => ({
+        ...item,
+        id: base64UrlToArrayBuffer(item.id)
+      }))
+      : []
+  }
+}
+
+function normalizeRequestOptions(publicKey = {}) {
+  return {
+    ...publicKey,
+    challenge: base64UrlToArrayBuffer(publicKey.challenge),
+    allowCredentials: Array.isArray(publicKey.allowCredentials)
+      ? publicKey.allowCredentials.map((item) => ({
+        ...item,
+        id: base64UrlToArrayBuffer(item.id)
+      }))
+      : []
+  }
+}
+
+function serializeRegistrationCredential(credential) {
+  if (!credential) return null
+  const response = credential.response
+  const transports = typeof response?.getTransports === 'function'
+    ? response.getTransports()
+    : []
+
+  return {
+    id: credential.id,
+    rawId: arrayBufferToBase64Url(credential.rawId),
+    type: credential.type,
+    authenticatorAttachment: credential.authenticatorAttachment || null,
+    clientExtensionResults: typeof credential.getClientExtensionResults === 'function'
+      ? credential.getClientExtensionResults()
+      : {},
+    response: {
+      clientDataJSON: arrayBufferToBase64Url(response?.clientDataJSON),
+      attestationObject: arrayBufferToBase64Url(response?.attestationObject),
+      transports
+    }
+  }
+}
+
+function serializeAuthenticationCredential(credential) {
+  if (!credential) return null
+  const response = credential.response
+
+  return {
+    id: credential.id,
+    rawId: arrayBufferToBase64Url(credential.rawId),
+    type: credential.type,
+    authenticatorAttachment: credential.authenticatorAttachment || null,
+    clientExtensionResults: typeof credential.getClientExtensionResults === 'function'
+      ? credential.getClientExtensionResults()
+      : {},
+    response: {
+      clientDataJSON: arrayBufferToBase64Url(response?.clientDataJSON),
+      authenticatorData: arrayBufferToBase64Url(response?.authenticatorData),
+      signature: arrayBufferToBase64Url(response?.signature),
+      userHandle: response?.userHandle ? arrayBufferToBase64Url(response.userHandle) : null
+    }
+  }
+}
+
+function ensureWebAuthnSupported() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    throw new Error('当前环境不支持 Passkey')
+  }
+  if (!window.PublicKeyCredential || !navigator.credentials) {
+    throw new Error('当前浏览器不支持 Passkey，请更换新版浏览器或系统环境')
+  }
+}
+
+function normalizeWebAuthnError(error, action = 'verify') {
+  const errorName = String(error?.name || '').trim()
+  const rawMessage = String(error?.message || '').trim()
+  const normalizedMessage = rawMessage.toLowerCase()
+  const isRegisterAction = action === 'register'
+
+  if (errorName === 'NotAllowedError') {
+    if (normalizedMessage.includes('timed out')) {
+      return new Error(isRegisterAction ? 'Passkey 绑定已超时，请重新尝试。' : 'Passkey 验证已超时，请重新尝试。')
+    }
+    return new Error(isRegisterAction ? 'Passkey 绑定已取消或被系统拒绝。' : 'Passkey 验证已取消或被系统拒绝。')
+  }
+  if (errorName === 'InvalidStateError') {
+    return new Error(isRegisterAction ? '当前设备上的该 Passkey 可能已经绑定过。' : '当前 Passkey 状态异常，请重新尝试。')
+  }
+  if (errorName === 'SecurityError') {
+    return new Error('当前页面环境不满足 Passkey 安全要求，请使用 HTTPS 或 localhost 访问。')
+  }
+  if (errorName === 'AbortError') {
+    return new Error(isRegisterAction ? 'Passkey 绑定流程已中断，请重新尝试。' : 'Passkey 验证流程已中断，请重新尝试。')
+  }
+  return error instanceof Error ? error : new Error(rawMessage || 'Passkey 操作失败')
+}
+
+export function isStepUpRequiredError(error) {
+  return Number(error?.status) === 428 && String(error?.data?.code || '').trim() === 'STEP_UP_REQUIRED'
+}
+
+export function isPasskeyNotRegisteredError(error) {
+  return Number(error?.status) === 412 && String(error?.data?.code || '').trim() === 'PASSKEY_NOT_REGISTERED'
+}
+
+export function getStepUpRequirementReason(error) {
+  return String(error?.data?.reason || '').trim()
+}
+
+export function getStepUpRequirementMessage(error) {
+  const action = String(error?.data?.action || '').trim()
+  const actionLabel = STEP_UP_ACTION_LABELS[action] || '当前高风险操作'
+  const reason = getStepUpRequirementReason(error)
+  if (reason === 'trusted_device_required') {
+    return `${actionLabel}要求当前设备已被标记为可信设备。`
+  }
+  if (reason === 'passkey_required') {
+    return `${actionLabel}要求当前会话先完成 Passkey 校验。`
+  }
+  if (reason === 'step_up_expired') {
+    return `${actionLabel}的二次校验已过期，请重新完成 Passkey 验证。`
+  }
+  return `${actionLabel}需要完成二次校验。`
+}
+
+export async function registerCurrentUserPasskey(deviceName = '') {
+  ensureWebAuthnSupported()
+  const optionsData = await apiFetch('/api/admin/passkeys/register/options', {
+    method: 'POST',
+    body: JSON.stringify({ deviceName })
+  })
+  let credential = null
+  try {
+    credential = await navigator.credentials.create({
+      publicKey: normalizeCreationOptions(optionsData.publicKey || {})
+    })
+  } catch (error) {
+    throw normalizeWebAuthnError(error, 'register')
+  }
+  if (!credential) {
+    throw new Error('Passkey 绑定已取消')
+  }
+  return apiFetch('/api/admin/passkeys/register/verify', {
+    method: 'POST',
+    body: JSON.stringify({
+      challengeToken: optionsData.challengeToken,
+      deviceName,
+      credential: serializeRegistrationCredential(credential)
+    })
+  })
+}
+
+export async function performPasskeyStepUp(action) {
+  ensureWebAuthnSupported()
+  const optionsData = await apiFetch('/api/admin/step-up/options', {
+    method: 'POST',
+    body: JSON.stringify({ action })
+  })
+  let credential = null
+  try {
+    credential = await navigator.credentials.get({
+      publicKey: normalizeRequestOptions(optionsData.publicKey || {})
+    })
+  } catch (error) {
+    throw normalizeWebAuthnError(error, 'verify')
+  }
+  if (!credential) {
+    throw new Error('Passkey 验证已取消')
+  }
+  return apiFetch('/api/admin/step-up/verify', {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      challengeToken: optionsData.challengeToken,
+      credential: serializeAuthenticationCredential(credential)
+    })
+  })
+}

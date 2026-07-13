@@ -1192,15 +1192,18 @@ function requireStepUpAuth(policy = {}) {
     message: String(policy.message || '当前操作需要完成二次校验').trim() || '当前操作需要完成二次校验',
     maxAgeMinutes: Math.max(1, Number(policy.maxAgeMinutes || 15) || 15),
     requirePasskey: policy.requirePasskey !== false,
-    requireTrustedDevice: Boolean(policy.requireTrustedDevice)
+    requireTrustedDevice: Boolean(policy.requireTrustedDevice),
+    allowedRoles: Array.isArray(policy.allowedRoles) && policy.allowedRoles.length
+      ? policy.allowedRoles.map((item) => String(item || '').trim()).filter(Boolean)
+      : ['admin']
   }
 
   return (req, res, next) => {
     if (!req.auth) {
       return res.status(401).json({ message: '未登录或登录已过期' })
     }
-    if (String(req.auth.role || '') !== 'admin') {
-      return res.status(403).json({ message: '无权访问管理员后台' })
+    if (!mergedPolicy.allowedRoles.includes(String(req.auth.role || '').trim())) {
+      return res.status(403).json({ message: '当前角色无权执行该高危操作' })
     }
 
     const passkeyVerified = mergedPolicy.requirePasskey ? hasPasskeyStepUp(req.auth) : true

@@ -11,6 +11,8 @@ export function registerOrdersRoutes(deps) {
     pool,
     authRequired,
     supportOnly,
+    requireStepUpAuth,
+    ADMIN_STEP_UP_POLICIES,
     authenticatedReadLimiter,
     orderWriteLimiter,
     orderLifecycleService,
@@ -415,7 +417,7 @@ app.get('/api/orders/:id/settlement-preview', authRequired, authenticatedReadLim
   }
 })
 
-app.put('/api/support/orders/:id/execute-settlement', authRequired, supportOnly, orderWriteLimiter, async (req, res) => {
+app.put('/api/support/orders/:id/execute-settlement', authRequired, supportOnly, requireStepUpAuth(ADMIN_STEP_UP_POLICIES.supportExecuteSettlement), orderWriteLimiter, async (req, res) => {
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
