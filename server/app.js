@@ -188,6 +188,10 @@ const SOCKET_MESSAGE_RATE_LIMIT_WINDOW_MS = 10 * 1000
 const SOCKET_MESSAGE_RATE_LIMIT_MAX = Math.max(50, Number(process.env.SOCKET_MESSAGE_RATE_LIMIT_MAX || 50))
 const CHAT_IMAGE_UPLOAD_RATE_LIMIT_WINDOW_MS = 60 * 1000
 const CHAT_IMAGE_UPLOAD_RATE_LIMIT_MAX = 5
+const USER_DAILY_UPLOAD_LIMIT_BYTES = Math.max(
+  0,
+  Number(process.env.USER_DAILY_UPLOAD_LIMIT_BYTES || 100 * 1024 * 1024) || 100 * 1024 * 1024
+)
 const AUTH_COOKIE_NAME = 'auth_token'
 const TRUSTED_DEVICE_COOKIE_NAME = 'admin_trusted_device'
 const { enabled: COS_ENABLED } = getCosRuntimeConfig()
@@ -1023,6 +1027,7 @@ registerUploadRoutes({
   chatImageUploader,
   CHAT_IMAGE_UPLOAD_RATE_LIMIT_WINDOW_MS,
   CHAT_IMAGE_UPLOAD_RATE_LIMIT_MAX,
+  USER_DAILY_UPLOAD_LIMIT_BYTES,
   chatImageUploadRateStore,
   cleanupOrphanUploadedFiles,
   LISTING_IMAGE_UPLOAD_URL_REGEX,
@@ -1871,6 +1876,24 @@ async function ensureSmsSecuritySchema() {
   )
 }
 
+async function ensureUploadQuotaSchema() {
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS user_upload_daily_stats (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '用户上传日统计ID',
+      user_id INT NOT NULL COMMENT '用户ID',
+      upload_date DATE NOT NULL COMMENT '统计日期',
+      total_bytes BIGINT NOT NULL DEFAULT 0 COMMENT '当日累计上传字节数',
+      upload_count INT NOT NULL DEFAULT 0 COMMENT '当日累计上传文件数',
+      last_uploaded_at DATETIME DEFAULT NULL COMMENT '最近上传时间',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY uk_user_upload_daily_stats (user_id, upload_date),
+      INDEX idx_user_upload_daily_stats_date (upload_date, user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+}
+
 
 async function ensureKycSchema() {
   const databaseName = process.env.DB_NAME || 'game_rental'
@@ -2492,8 +2515,7 @@ registerConversationRoutes({
   authRequired,
   conversationApiLimiter,
   chatModule,
-  io,
-  getUsersOnlineStatus
+  io
 })
 
 registerSupportRoutes({
@@ -2557,6 +2579,7 @@ export function createApp() {
     ensureWalletSchema,
     ensureInviteSchema,
     ensureSmsSecuritySchema,
+    ensureUploadQuotaSchema,
     ensureKycSchema,
     ensurePaymentChannelSchema,
     refreshUploadSortOrderFlags,

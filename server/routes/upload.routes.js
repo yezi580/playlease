@@ -1,9 +1,5 @@
 import { Readable } from 'stream'
 
-/**
- * 上传相关 HTTP 路由，处理受保护媒体访问与文件操作。
- */
-
 export function registerUploadRoutes(deps) {
   const {
     app,
@@ -37,6 +33,7 @@ export function registerUploadRoutes(deps) {
     banVideoUploader,
     chatImageUploader,
     CHAT_IMAGE_UPLOAD_RATE_LIMIT_WINDOW_MS,
+    USER_DAILY_UPLOAD_LIMIT_BYTES,
     chatImageUploadRateStore,
     cleanupOrphanUploadedFiles,
     LISTING_IMAGE_UPLOAD_URL_REGEX,
@@ -45,12 +42,45 @@ export function registerUploadRoutes(deps) {
     BAN_VIDEO_UPLOAD_URL_REGEX
   } = deps
 
+  void useCosStorage
+
   function isLocalStorage() {
     return storageDriver === 'local'
   }
 
   function isCosStorage() {
     return storageDriver === 'cos'
+  }
+
+  function getUploadedFiles(req) {
+    if (Array.isArray(req?.files)) {
+      return req.files
+    }
+    if (req?.file) {
+      return [req.file]
+    }
+    return []
+  }
+
+  function getUploadedBytes(files) {
+    return (Array.isArray(files) ? files : []).reduce((total, file) => {
+      return total + Math.max(0, Number(file?.size || 0))
+    }, 0)
+  }
+
+  function formatBytes(bytes) {
+    const normalizedBytes = Math.max(0, Number(bytes || 0))
+    if (normalizedBytes >= 1024 * 1024) {
+      return `${(normalizedBytes / (1024 * 1024)).toFixed(0)}MB`
+    }
+    if (normalizedBytes >= 1024) {
+      return `${(normalizedBytes / 1024).toFixed(0)}KB`
+    }
+    return `${normalizedBytes}B`
+  }
+
+  function buildDailyUploadLimitMessage() {
+    return `今日上传累计已达上限（${formatBytes(USER_DAILY_UPLOAD_LIMIT_BYTES)}），请明天再试`
   }
 
   async function reserveChatImageUploadQuota(userId) {
@@ -78,9 +108,95 @@ export function registerUploadRoutes(deps) {
     await chatImageUploadRateStore.rollback(`user:${safeUserId}`, safeToken)
   }
 
+  async function reserveDailyUploadQuota(userId, files) {
+    const safeUserId = Number(userId || 0)
+    const safeFiles = Array.isArray(files) ? files : []
+    const totalBytes = getUploadedBytes(safeFiles)
+    const fileCount = safeFiles.length
+
+    if (!safeUserId || totalBytes <= 0 || fileCount <= 0 || USER_DAILY_UPLOAD_LIMIT_BYTES <= 0) {
+      return {
+        allowed: true,
+        reservedBytes: 0,
+        reservedCount: 0
+      }
+    }
+
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      await conn.execute(
+        `INSERT INTO user_upload_daily_stats (user_id, upload_date, total_bytes, upload_count, last_uploaded_at)
+         VALUES (?, CURDATE(), 0, 0, NULL)
+         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)`,
+        [safeUserId]
+      )
+
+      const [[statsRow]] = await conn.execute(
+        `SELECT total_bytes
+         FROM user_upload_daily_stats
+         WHERE user_id = ?
+           AND upload_date = CURDATE()
+         LIMIT 1
+         FOR UPDATE`,
+        [safeUserId]
+      )
+
+      const currentBytes = Math.max(0, Number(statsRow?.total_bytes || 0))
+      if (currentBytes + totalBytes > USER_DAILY_UPLOAD_LIMIT_BYTES) {
+        await conn.rollback()
+        return {
+          allowed: false,
+          reservedBytes: 0,
+          reservedCount: 0
+        }
+      }
+
+      await conn.execute(
+        `UPDATE user_upload_daily_stats
+         SET total_bytes = total_bytes + ?,
+             upload_count = upload_count + ?,
+             last_uploaded_at = NOW()
+         WHERE user_id = ?
+           AND upload_date = CURDATE()`,
+        [totalBytes, fileCount, safeUserId]
+      )
+      await conn.commit()
+
+      return {
+        allowed: true,
+        reservedBytes: totalBytes,
+        reservedCount: fileCount
+      }
+    } catch (error) {
+      await conn.rollback()
+      throw error
+    } finally {
+      conn.release()
+    }
+  }
+
+  async function rollbackDailyUploadQuota(userId, reservedBytes, reservedCount) {
+    const safeUserId = Number(userId || 0)
+    const safeReservedBytes = Math.max(0, Number(reservedBytes || 0))
+    const safeReservedCount = Math.max(0, Number(reservedCount || 0))
+    if (!safeUserId || USER_DAILY_UPLOAD_LIMIT_BYTES <= 0 || (safeReservedBytes <= 0 && safeReservedCount <= 0)) {
+      return
+    }
+
+    await pool.execute(
+      `UPDATE user_upload_daily_stats
+       SET total_bytes = GREATEST(total_bytes - ?, 0),
+           upload_count = GREATEST(upload_count - ?, 0)
+       WHERE user_id = ?
+         AND upload_date = CURDATE()`,
+      [safeReservedBytes, safeReservedCount, safeUserId]
+    )
+  }
+
   function ensureStorageReady(res) {
     if (isCosStorage() && !cosEnabled) {
-      res.status(503).json({ message: '文件存储服务未配置完成，请稍后再试' })
+      res.status(503).json({ message: '文件存储服务尚未配置完成，请稍后再试' })
       return false
     }
     return true
@@ -101,12 +217,7 @@ export function registerUploadRoutes(deps) {
     }
 
     const upstreamHeaders = new Headers()
-    const headerNames = [
-      'range',
-      'if-none-match',
-      'if-modified-since',
-      'if-range'
-    ]
+    const headerNames = ['range', 'if-none-match', 'if-modified-since', 'if-range']
     headerNames.forEach((headerName) => {
       const headerValue = req.headers[headerName]
       if (typeof headerValue === 'string' && headerValue.trim()) {
@@ -180,8 +291,13 @@ export function registerUploadRoutes(deps) {
     try {
       await fs.promises.unlink(filePath)
     } catch (_error) {
-      // 文件已不存在时忽略清理错误
+      // Ignore cleanup failures for already-removed temp files.
     }
+  }
+
+  async function cleanupUploadedFiles(files) {
+    if (!isLocalStorage()) return
+    await Promise.allSettled((Array.isArray(files) ? files : []).map((file) => cleanupLocalUploadedFile(file)))
   }
 
   async function uploadManagedFiles(folderName, files, cacheControl) {
@@ -329,15 +445,24 @@ export function registerUploadRoutes(deps) {
         return res.status(400).json({ message: getUploadErrorMessage(error, '处罚截图上传失败') })
       }
 
-      const files = Array.isArray(req.files) ? req.files : []
+      const files = getUploadedFiles(req)
       if (!files.length) {
         return res.status(400).json({ message: '请至少上传1张处罚截图' })
       }
 
+      let dailyQuota = { allowed: true, reservedBytes: 0, reservedCount: 0 }
       try {
+        dailyQuota = await reserveDailyUploadQuota(req.auth?.userId, files)
+        if (!dailyQuota.allowed) {
+          await cleanupUploadedFiles(files)
+          return res.status(429).json({ message: buildDailyUploadLimitMessage() })
+        }
+
         const uploadedFiles = await uploadManagedFiles('ban-images', files, 'private, max-age=31536000, immutable')
         return res.json({ files: uploadedFiles })
       } catch (_error) {
+        await rollbackDailyUploadQuota(req.auth?.userId, dailyQuota.reservedBytes, dailyQuota.reservedCount)
+        await cleanupUploadedFiles(files)
         return res.status(500).json({ message: '处罚截图上传失败' })
       }
     })
@@ -351,15 +476,24 @@ export function registerUploadRoutes(deps) {
         return res.status(400).json({ message: getUploadErrorMessage(error, '商品图片上传失败') })
       }
 
-      const files = Array.isArray(req.files) ? req.files : []
+      const files = getUploadedFiles(req)
       if (!files.length) {
         return res.status(400).json({ message: '请至少上传1张商品图片' })
       }
 
+      let dailyQuota = { allowed: true, reservedBytes: 0, reservedCount: 0 }
       try {
+        dailyQuota = await reserveDailyUploadQuota(req.auth?.userId, files)
+        if (!dailyQuota.allowed) {
+          await cleanupUploadedFiles(files)
+          return res.status(429).json({ message: buildDailyUploadLimitMessage() })
+        }
+
         const uploadedFiles = await uploadManagedFiles('listing-images', files, 'public, max-age=31536000, immutable')
         return res.json({ files: uploadedFiles })
       } catch (_error) {
+        await rollbackDailyUploadQuota(req.auth?.userId, dailyQuota.reservedBytes, dailyQuota.reservedCount)
+        await cleanupUploadedFiles(files)
         return res.status(500).json({ message: '商品图片上传失败' })
       }
     })
@@ -373,14 +507,24 @@ export function registerUploadRoutes(deps) {
         return res.status(400).json({ message: getUploadErrorMessage(error, '封禁记录视频上传失败') })
       }
 
-      if (!req.file) {
+      const files = getUploadedFiles(req)
+      if (!files.length) {
         return res.status(400).json({ message: '请上传封禁记录视频' })
       }
 
+      let dailyQuota = { allowed: true, reservedBytes: 0, reservedCount: 0 }
       try {
-        const [uploadedFile] = await uploadManagedFiles('ban-videos', [req.file], 'private, max-age=31536000, immutable')
+        dailyQuota = await reserveDailyUploadQuota(req.auth?.userId, files)
+        if (!dailyQuota.allowed) {
+          await cleanupUploadedFiles(files)
+          return res.status(429).json({ message: buildDailyUploadLimitMessage() })
+        }
+
+        const [uploadedFile] = await uploadManagedFiles('ban-videos', files, 'private, max-age=31536000, immutable')
         return res.json({ file: uploadedFile })
       } catch (_error) {
+        await rollbackDailyUploadQuota(req.auth?.userId, dailyQuota.reservedBytes, dailyQuota.reservedCount)
+        await cleanupUploadedFiles(files)
         return res.status(500).json({ message: '封禁记录视频上传失败' })
       }
     })
@@ -403,48 +547,52 @@ export function registerUploadRoutes(deps) {
         return res.status(400).json({ message: getUploadErrorMessage(error, '聊天图片上传失败') })
       }
 
+      const files = getUploadedFiles(req)
       const conversationId = Number(req.body?.conversationId || 0)
-      if (!req.file) {
+      if (!files.length) {
         await rollbackChatImageUploadQuota(authUserId, quota.token)
         return res.status(400).json({ message: '请上传聊天图片' })
       }
 
       if (!conversationId || !Number.isFinite(conversationId) || conversationId < 1) {
         await rollbackChatImageUploadQuota(authUserId, quota.token)
-        if (isLocalStorage()) {
-          await cleanupLocalUploadedFile(req.file)
-        }
+        await cleanupUploadedFiles(files)
         return res.status(400).json({ message: '会话ID无效' })
       }
 
+      let dailyQuota = { allowed: true, reservedBytes: 0, reservedCount: 0 }
       try {
         const conversation = await getConversationForUser(conversationId, authUserId)
         if (!conversation) {
           await rollbackChatImageUploadQuota(authUserId, quota.token)
-          if (isLocalStorage()) {
-            await cleanupLocalUploadedFile(req.file)
-          }
+          await cleanupUploadedFiles(files)
           return res.status(403).json({ message: '无权向该会话上传图片' })
         }
 
-        const [uploadedFile] = await uploadManagedFiles('chat-images', [req.file], 'private, max-age=31536000, immutable')
+        dailyQuota = await reserveDailyUploadQuota(authUserId, files)
+        if (!dailyQuota.allowed) {
+          await rollbackChatImageUploadQuota(authUserId, quota.token)
+          await cleanupUploadedFiles(files)
+          return res.status(429).json({ message: buildDailyUploadLimitMessage() })
+        }
+
+        const [uploadedFile] = await uploadManagedFiles('chat-images', files, 'private, max-age=31536000, immutable')
         await recordConversationMessageUpload({
           conversationId,
           uploaderUserId: authUserId,
           mediaUrl: uploadedFile.url,
-          mediaName: req.file.originalname,
-          mediaSize: Number(req.file.size || 0)
+          mediaName: files[0].originalname,
+          mediaSize: Number(files[0].size || 0)
         })
 
-        return res.json({
-          file: uploadedFile
-        })
+        return res.json({ file: uploadedFile })
       } catch (_error) {
         await rollbackChatImageUploadQuota(authUserId, quota.token)
-        if (isCosStorage() && req.file?.filename) {
-          await deleteManagedFileByUrl(toUploadFileUrl('chat-images', req.file.filename))
-        } else if (isLocalStorage()) {
-          await cleanupLocalUploadedFile(req.file)
+        await rollbackDailyUploadQuota(authUserId, dailyQuota.reservedBytes, dailyQuota.reservedCount)
+        if (isCosStorage() && files[0]?.filename) {
+          await deleteManagedFileByUrl(toUploadFileUrl('chat-images', files[0].filename))
+        } else {
+          await cleanupUploadedFiles(files)
         }
         return res.status(500).json({ message: '聊天图片上传失败' })
       }
@@ -465,7 +613,6 @@ export function registerUploadRoutes(deps) {
     if (!ensureStorageReady(res)) return
 
     const mediaUrls = normalizeBanRecycleMediaUrls(req.body?.mediaUrls)
-
     if (mediaUrls === null) {
       return res.status(400).json({ message: '临时文件地址格式不合法' })
     }

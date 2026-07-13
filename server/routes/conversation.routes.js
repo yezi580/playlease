@@ -8,8 +8,7 @@ export function registerConversationRoutes(deps) {
     authRequired,
     conversationApiLimiter,
     chatModule,
-    io,
-    getUsersOnlineStatus
+    io
   } = deps
   const {
     getOrderConversationAccess,
@@ -91,37 +90,6 @@ app.get('/api/conversations/unread-summary', authRequired, conversationApiLimite
       message: error.message || 'unknown'
     })
     res.status(500).json({ message: '加载未读汇总失败' })
-  }
-})
-
-app.get('/api/chat/presence', authRequired, conversationApiLimiter, async (req, res) => {
-  const rawUserIds = String(req.query?.userIds || '').trim()
-  const userIds = rawUserIds
-    ? rawUserIds
-      .split(',')
-      .map((item) => Number(item.trim()))
-      .filter((item) => Number.isFinite(item) && item > 0)
-    : []
-
-  try {
-    const presenceMap = await getUsersOnlineStatus(userIds)
-    res.json({
-      list: userIds.map((userId) => ({
-        user_id: userId,
-        ...(presenceMap.get(userId) || {
-          online: false,
-          connectedSockets: 0,
-          lastSeenAt: null
-        })
-      }))
-    })
-  } catch (error) {
-    logChatEvent('error', 'api:get-chat-presence', {
-      userId: req.auth?.userId,
-      targetUserIds: userIds,
-      message: error.message || 'unknown'
-    })
-    res.status(500).json({ message: '加载在线状态失败' })
   }
 })
 

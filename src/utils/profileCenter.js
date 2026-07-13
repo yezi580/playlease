@@ -146,9 +146,9 @@ export function getKycStatusText(status = '') {
 export function getKycStatusDescription(status = '') {
   const normalized = normalizeKycStatus(status)
   if (normalized === 'verified') return '你的实名信息已通过审核，可正常发布商品并申请钱包提现。'
-  if (normalized === 'pending') return '实名功能当前已停用。'
+  if (normalized === 'pending') return '当前无需实名认证。'
   if (normalized === 'failed') return '本次实名申请未通过，请根据审核反馈修正信息后重新提交。'
-  return '实名功能当前已停用，不影响钱包提现申请。'
+  return '当前无需实名认证。'
 }
 
 export function getWithdrawStatusText(status = '') {
