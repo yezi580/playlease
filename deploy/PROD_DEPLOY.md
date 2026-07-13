@@ -57,6 +57,8 @@
 
 ## 推荐部署步骤
 
+正式部署不要再直接 `scp -r` 整个项目目录。推荐流程是：本地构建前端后，只打包 `deploy`、`dist`、`server` 这几个生产必需目录，再上传压缩包到服务器。
+
 1. 本地构建前端:
 
 ```powershell
@@ -64,26 +66,60 @@ npm install
 npm run build
 ```
 
-2. 将项目上传到服务器，例如:
+2. 本地生成精简部署包:
 
 ```powershell
-scp -i "D:\pic\only_key.pem" -r D:\zuhao\my-app root@49.235.59.19:/opt/
+if (Test-Path deploy\artifacts\my-app-prod-deploy.tar.gz) { Remove-Item deploy\artifacts\my-app-prod-deploy.tar.gz -Force }
+tar -czf deploy\artifacts\my-app-prod-deploy.tar.gz `
+  --exclude=server/node_modules `
+  --exclude=server/uploads `
+  --exclude=server/.env `
+  --exclude=deploy/artifacts `
+  --exclude=deploy/nginx/certs `
+  deploy dist server
 ```
 
-3. 连接服务器:
+当前这套打包方式会避开本地大依赖和不该被覆盖的线上数据，重点不上传这些内容:
+
+- `server/node_modules`
+- `server/uploads`
+- `server/.env`
+- `deploy/nginx/certs`
+
+3. 将精简部署包上传到服务器:
+
+```powershell
+scp -i "D:\pic\only_key.pem" deploy\artifacts\my-app-prod-deploy.tar.gz root@49.235.59.19:/opt/my-app-prod-deploy.tar.gz
+```
+
+4. 连接服务器:
 
 ```powershell
 ssh -i "D:\pic\only_key.pem" root@49.235.59.19
 ```
 
-4. 在服务器启动生产环境:
+5. 在服务器解压部署包，保留原有环境变量、证书和上传目录:
+
+```bash
+cp /opt/my-app/deploy/env/prod.env /tmp/my-app-prod.env.bak
+cp -a /opt/my-app/deploy/nginx/certs /tmp/my-app-certs.bak
+cp -a /opt/my-app/server/uploads /tmp/my-app-uploads.bak
+
+tar -xzf /opt/my-app-prod-deploy.tar.gz -C /opt/my-app
+
+cp /tmp/my-app-prod.env.bak /opt/my-app/deploy/env/prod.env
+rm -rf /opt/my-app/deploy/nginx/certs && cp -a /tmp/my-app-certs.bak /opt/my-app/deploy/nginx/certs
+rm -rf /opt/my-app/server/uploads && cp -a /tmp/my-app-uploads.bak /opt/my-app/server/uploads
+```
+
+6. 在服务器启动生产环境:
 
 ```bash
 cd /opt/my-app
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml up -d --build
 ```
 
-5. 查看运行状态:
+7. 查看运行状态:
 
 ```bash
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml ps
