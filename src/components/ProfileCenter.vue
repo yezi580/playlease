@@ -412,7 +412,7 @@
                   <div class="invite-summary-title tooltip-wrap">
                     <h4>累计返现</h4>
                     <i class="help-icon">?</i>
-                    <span class="tooltip-text">被邀请人发布的商品成交后，邀请人可获得<br>该订单中平台向买家收取服务费的30%返现</span>
+                    <span class="tooltip-text">永久返现：被邀请人每完成一笔订单，邀请人<br>将获得平台向买家收取服务费的30%作为返现</span>
                   </div>
                 </div>
                 <strong>￥{{ formatMoney(invitedRewardTotal) }}</strong>

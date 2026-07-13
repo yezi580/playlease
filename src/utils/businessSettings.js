@@ -287,7 +287,7 @@ export function getBuyerRentLabel(settings = null) {
 export function getInviteRewardRuleText(settings = null) {
   const normalizedSettings = normalizeBusinessSettings(settings || getCachedBusinessSettings())
   const rewardRate = Number(normalizedSettings.inviteReward?.buyerServiceFeeRewardRatePercent || 0)
-  return `返现规则：被邀请人发布的商品成交后，邀请人可获得该订单中平台向买家收取服务费的${rewardRate}%返现。`
+  return `永久返现规则：被邀请人每完成一笔订单，邀请人即可获得平台向买家收取服务费的${rewardRate}%作为返现。`
 }
 
 export function calculateBaseRatio(gridSize, knifeSkinText, settings = null) {
