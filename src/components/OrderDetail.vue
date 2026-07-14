@@ -229,7 +229,7 @@ import {
   getPendingPaymentTimeoutMinutes
 } from '../utils/businessSettings.js'
 import { showErrorToast, showSuccessToast } from '../utils/toast.js'
-import { showConfirm } from '../utils/confirm.js'
+import { showConfirm, showPrompt } from '../utils/confirm.js'
 import PaymentModal from './PaymentModal.vue'
 import ConversationPanel from './ConversationPanel.vue'
 
@@ -584,20 +584,21 @@ export default {
       }
     },
     async requestCancel() {
-      const reason = window.prompt('请输入取消原因（可选）', this.order?.cancel_reason || '') || ''
-      const confirmed = await showConfirm({
+      const reason = await showPrompt({
         title: '取消订单',
-        message: '是否取消订单？提交申请后将转接客服处理。',
+        message: '是否取消订单？提交申请后将转接客服处理。\n如果需要，请填写取消原因：',
+        inputPlaceholder: '请输入取消原因（可选）',
+        defaultValue: this.order?.cancel_reason || '',
         confirmText: '确认申请',
         cancelText: '取消',
         tone: 'danger'
       })
-      if (!confirmed) return
+      if (reason === null) return
       this.submitting = true
       try {
         await apiFetch(`/api/orders/${this.order.id}/request-cancel`, {
           method: 'PUT',
-          body: JSON.stringify({ reason })
+          body: JSON.stringify({ reason: reason.trim() })
         })
         await this.fetchOrderDetail()
         showSuccessToast('取消申请已提交')
@@ -628,20 +629,20 @@ export default {
       }
     },
     async rejectUsage() {
-      const note = window.prompt('请输入不同意当前表单的原因（可选）', '') || ''
-      const confirmed = await showConfirm({
+      const note = await showPrompt({
         title: '不同意当前表单',
-        message: '确认不同意买家当前提交的额外物品表单吗？订单将转接客服处理。',
+        message: '确认不同意买家当前提交的额外物品表单吗？订单将转接客服处理。\n如果需要，请填写不同意的原因：',
+        inputPlaceholder: '请输入不同意的原因（可选）',
         confirmText: '确认不同意',
         cancelText: '返回',
         tone: 'danger'
       })
-      if (!confirmed) return
+      if (note === null) return
       this.submitting = true
       try {
         await apiFetch(`/api/orders/${this.order.id}/item-usage/reject`, {
           method: 'PUT',
-          body: JSON.stringify({ note })
+          body: JSON.stringify({ note: note.trim() })
         })
         await this.fetchOrderDetail()
         showSuccessToast('已转接客服处理结算争议')

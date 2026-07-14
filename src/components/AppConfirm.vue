@@ -5,6 +5,14 @@
         <section class="app-confirm-card">
           <h3>{{ activeConfirm.title }}</h3>
           <p v-if="activeConfirm.message">{{ activeConfirm.message }}</p>
+          <div v-if="activeConfirm.isPrompt" class="app-confirm-input-wrap">
+            <textarea
+              v-model="activeConfirm.inputValue"
+              :placeholder="activeConfirm.inputPlaceholder"
+              class="app-confirm-input"
+              rows="3"
+            ></textarea>
+          </div>
           <div class="app-confirm-actions">
             <button type="button" class="app-confirm-btn app-confirm-btn--ghost" @click="handleCancel">
               {{ activeConfirm.cancelText }}
@@ -57,8 +65,11 @@ export default {
 
       this.queue.push({
         id: Number(detail.id),
+        isPrompt: Boolean(detail.isPrompt),
         title: String(detail.title || '请确认'),
         message: String(detail.message || ''),
+        inputValue: String(detail.inputValue || ''),
+        inputPlaceholder: String(detail.inputPlaceholder || ''),
         confirmText: String(detail.confirmText || '确认'),
         cancelText: String(detail.cancelText || '取消'),
         tone: String(detail.tone || 'primary')
@@ -85,10 +96,14 @@ export default {
       this.showNextConfirm()
     },
     handleConfirm() {
-      this.finishConfirm(true)
+      if (!this.activeConfirm) return
+      const result = this.activeConfirm.isPrompt ? this.activeConfirm.inputValue : true
+      this.finishConfirm(result)
     },
     handleCancel() {
-      this.finishConfirm(false)
+      if (!this.activeConfirm) return
+      const result = this.activeConfirm.isPrompt ? null : false
+      this.finishConfirm(result)
     }
   }
 }
@@ -126,6 +141,30 @@ export default {
   line-height: 1.7;
   color: #475569;
   white-space: pre-wrap;
+}
+
+.app-confirm-input-wrap {
+  margin-top: 16px;
+}
+
+.app-confirm-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #f8fafc;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.app-confirm-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #ffffff;
 }
 
 .app-confirm-actions {
