@@ -373,6 +373,10 @@
           <div v-if="inviteLoading" class="profile-empty">正在加载邀新数据...</div>
           <div v-else-if="inviteError" class="profile-empty profile-error">{{ inviteError }}</div>
           <div v-else class="invite-panel">
+            <article class="invite-rule-card">
+              <p>{{ inviteRewardRuleText }}</p>
+            </article>
+
             <div class="invite-summary-grid">
               <article class="invite-summary-card">
                 <span class="invite-summary-label">我的邀请码</span>
@@ -409,10 +413,8 @@
 
               <article class="invite-summary-card invite-summary-card--full">
                 <div class="invite-order-section-header invite-summary-card-header">
-                  <div class="invite-summary-title tooltip-wrap">
+                  <div class="invite-summary-title">
                     <h4>累计返现</h4>
-                    <i class="help-icon">?</i>
-                    <span class="tooltip-text">永久返现：被邀请人每完成一笔订单，邀请人<br>将获得平台向买家收取服务费的30%作为返现</span>
                   </div>
                 </div>
                 <strong>￥{{ formatMoney(invitedRewardTotal) }}</strong>
@@ -2289,6 +2291,25 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.invite-rule-card {
+  padding: 0 4px;
+}
+
+.invite-rule-card p {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+@media (min-width: 961px) {
+  .invite-rule-card {
+    padding: 14px 20px;
+    background: #f9fafb;
+    border-radius: 12px;
+  }
 }
 
 .invite-panel-title {
