@@ -14,6 +14,7 @@
 
 - 生产环境变量: `deploy/env/prod.env`
 - 生产编排文件: `deploy/compose/docker-compose.prod.yml`
+- 生产 MySQL 配置: `deploy/mysql/my.cnf`
 - 生产 Nginx 配置: `deploy/nginx/nginx.prod.conf`
 - 根目录 `docker-compose.yml` 与 `nginx/nginx.prod.conf` 已同步为 `xysh88.com`
 - 服务器项目目录: `/opt/my-app`
@@ -28,6 +29,12 @@
 - API 通过容器内网连接:
   - `DB_HOST=mysql`
   - `REDIS_URL=redis://redis:6379`
+- MySQL 生产配置已通过 `deploy/mysql/my.cnf` 挂载到容器，默认启用:
+  - 慢查询日志 `slow_query_log=ON`
+  - 慢 SQL 阈值 `long_query_time=0.5`
+  - 最小扫描行数 `min_examined_row_limit=100`
+  - 最大连接数 `max_connections=200`
+  - `performance_schema=ON`
 
 ## 上线前必须修改
 
@@ -54,6 +61,10 @@
 - 文件上传默认走本地存储，`FILE_STORAGE_DRIVER=local`
 - 如需改回腾讯 COS，再补齐 `COS_*` 并将 `FILE_STORAGE_DRIVER` 改为 `cos`
 - 生产编排中的挂载路径全部为相对路径，项目放在 `/opt/my-app` 无需额外改代码
+- 当前生产应用连接池建议值:
+  - `DB_CONNECTION_LIMIT=40`
+  - `DB_MAX_IDLE=20`
+  - `DB_QUEUE_LIMIT=100`
 
 ## 推荐部署步骤
 
@@ -85,6 +96,10 @@ tar -czf deploy\artifacts\my-app-prod-deploy.tar.gz `
 - `server/uploads`
 - `server/.env`
 - `deploy/nginx/certs`
+
+同时会上传生产必需的新配置文件:
+
+- `deploy/mysql/my.cnf`
 
 3. 将精简部署包上传到服务器:
 
@@ -124,6 +139,13 @@ docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.p
 ```bash
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml ps
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml logs -f api
+```
+
+8. 查看 MySQL 慢查询与连接数:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\scripts\check-prod-mysql.ps1
+powershell -ExecutionPolicy Bypass -File deploy\scripts\tail-prod-mysql-slowlog.ps1
 ```
 
 ## 域名与证书

@@ -36,7 +36,7 @@ function readPositiveIntEnv(name, fallback) {
 const dbConnectionLimit = Math.max(1, readPositiveIntEnv('DB_CONNECTION_LIMIT', 30))
 const dbMaxIdle = Math.max(1, readPositiveIntEnv('DB_MAX_IDLE', dbConnectionLimit))
 const dbIdleTimeoutMs = Math.max(1000, readPositiveIntEnv('DB_IDLE_TIMEOUT_MS', 60_000))
-const dbQueueLimit = readPositiveIntEnv('DB_QUEUE_LIMIT', 0)
+const dbQueueLimit = readPositiveIntEnv('DB_QUEUE_LIMIT', 100)
 const dbConnectTimeoutMs = Math.max(1000, readPositiveIntEnv('DB_CONNECT_TIMEOUT_MS', 10_000))
 const dbEnableKeepAlive = String(process.env.DB_ENABLE_KEEP_ALIVE || '1').trim() !== '0'
 const dbKeepAliveInitialDelay = Math.max(0, readPositiveIntEnv('DB_KEEP_ALIVE_INITIAL_DELAY_MS', 0))
