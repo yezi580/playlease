@@ -2946,16 +2946,29 @@ export default {
   }
 
   .profile-sidebar {
-    position: relative;
+    position: -webkit-sticky;
+    position: sticky;
+    top: 60px;
     left: auto;
-    top: auto;
     z-index: 20;
     width: 100%;
     min-width: auto;
     transform: none;
     flex-direction: column;
     gap: 12px;
-    margin-top: 0;
+    margin-top: -12px;
+    margin-bottom: -16px;
+    padding-top: 12px;
+    padding-bottom: 16px;
+    background: #f3f4f6;
+  }
+
+  @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+    .profile-sidebar {
+      background: rgba(243, 244, 246, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
   }
 
   .profile-user-card {
