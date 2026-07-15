@@ -440,7 +440,7 @@
                     <p>订单完成：{{ formatOrderDate(order.finished_at) }}</p>
                   </div>
                   <div class="invite-order-amounts">
-                    <strong>返现 ￥{{ formatMoney(order.reward_amount) }}</strong>
+                    <strong>￥{{ formatMoney(order.reward_amount) }}</strong>
                     <span>到账时间 {{ formatOrderDate(order.awarded_at) }}</span>
                   </div>
                 </article>
@@ -471,7 +471,7 @@
                     <p>订单完成：{{ formatOrderDate(order.finished_at) }}</p>
                   </div>
                   <div class="invite-order-amounts">
-                    <strong>邀请人返现 ￥{{ formatMoney(order.reward_amount) }}</strong>
+                    <strong>￥{{ formatMoney(order.reward_amount) }}</strong>
                     <span>到账时间 {{ formatOrderDate(order.awarded_at) }}</span>
                   </div>
                 </article>
@@ -1006,6 +1006,9 @@ export default {
         }
         this.mobileNavPage = targetPage
       }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+
       if (!this.isLoggedIn) return
       if (normalizedSectionKey === 'orders') {
         this.loadOrderData()
@@ -1060,12 +1063,14 @@ export default {
       this.orderFilterStatus = this.normalizeOrderFilter(statusKey)
       this.orderPage = 1
       this.fetchOrderList()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     },
     changeMyListingStatus(statusKey) {
       if (statusKey === this.myListingFilterStatus) return
       this.myListingFilterStatus = this.normalizeListingFilter(statusKey)
       this.myListingsPage = 1
       this.fetchMyListingsList()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     },
     normalizeOrderFilter(statusKey) {
       const normalized = String(statusKey || '').trim()
@@ -2440,8 +2445,13 @@ export default {
   font-size: 24px;
 }
 
-.invite-summary-code {
+.invite-summary-card--full strong {
+  color: #10b981;
+}
+
+.invite-summary-card .invite-summary-code {
   display: block;
+  color: #60a5fa;
   letter-spacing: 0.08em;
 }
 
@@ -2555,7 +2565,7 @@ export default {
 }
 
 .invite-order-amounts strong {
-  color: #047857;
+  color: #10b981;
   font-size: 18px;
 }
 

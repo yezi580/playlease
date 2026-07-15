@@ -497,12 +497,12 @@ function updateForm(field, value) {
 }
 
 .wallet-ledger-amount strong {
-  color: #111827;
+  color: #10b981;
   font-size: 18px;
 }
 
 .wallet-ledger-amount--credit {
-  color: #047857 !important;
+  color: #10b981 !important;
 }
 
 .wallet-ledger-amount span {
