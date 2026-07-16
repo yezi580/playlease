@@ -474,7 +474,7 @@ export function createOrderLifecycleService({
     return fetchOrderById(executor, orderId)
   }
 
-  async function createOrder({ listingId, userId }) {
+  async function createOrder({ listingId, userId, buyerContactWechat, buyerContactPhone }) {
     return runWithDistributedLock(
       typeof buildListingOrderLockKey === 'function' ? buildListingOrderLockKey(listingId) : '',
       '当前商品正在处理下单，请稍后再试',
@@ -487,6 +487,8 @@ export function createOrderLifecycleService({
               id,
               owner_user_id,
               owner_name,
+              seller_contact_wechat,
+              seller_contact_phone,
               rent_price,
               deposit,
               rent_days,
@@ -504,6 +506,8 @@ export function createOrderLifecycleService({
           }
 
           const listing = listings[0]
+          const safeBuyerContactWechat = String(buyerContactWechat || '').trim()
+          const safeBuyerContactPhone = String(buyerContactPhone || '').trim()
 
           if (listing.listing_status !== 'active') {
             fail(400, { message: '该商品当前不可租用' })
@@ -529,15 +533,20 @@ export function createOrderLifecycleService({
           const [result] = await conn.execute(
             `INSERT INTO orders (
               order_no, buyer_id, seller_id, listing_id,
-              seller_name, listing_title, listing_cover_image, rent_days, seller_rent_amount, amount, deposit_amount,
+              seller_name, buyer_contact_wechat, buyer_contact_phone, seller_contact_wechat, seller_contact_phone,
+              listing_title, listing_cover_image, rent_days, seller_rent_amount, amount, deposit_amount,
               status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_payment')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_payment')`,
             [
               orderNo,
               userId,
               listing.owner_user_id,
               listingId,
               listing.owner_name,
+              safeBuyerContactWechat,
+              safeBuyerContactPhone,
+              String(listing.seller_contact_wechat || '').trim(),
+              String(listing.seller_contact_phone || '').trim(),
               listingTitleSnapshot,
               listing.cover_image || null,
               listing.rent_days,

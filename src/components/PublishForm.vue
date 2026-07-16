@@ -10,6 +10,34 @@
     <section class="publish-section">
       <div class="form-grid">
         <label>
+          <span>联系微信 <i class="required-star">*</i></span>
+          <input
+            v-model.trim="publishForm.sellerContactWechat"
+            type="text"
+            maxlength="20"
+            placeholder="请输入卖家微信号"
+            @blur="handleFieldBlur('sellerContactWechat')"
+          />
+          <small v-if="fieldErrors.sellerContactWechat" class="field-hint error-field-hint">{{ fieldErrors.sellerContactWechat }}</small>
+        </label>
+
+        <label>
+          <span>联系手机号 <i class="required-star">*</i></span>
+          <input
+            v-model.trim="publishForm.sellerContactPhone"
+            type="tel"
+            maxlength="11"
+            placeholder="请输入卖家手机号"
+            @blur="handleFieldBlur('sellerContactPhone')"
+          />
+          <small v-if="fieldErrors.sellerContactPhone" class="field-hint error-field-hint">{{ fieldErrors.sellerContactPhone }}</small>
+        </label>
+      </div>
+    </section>
+
+    <section class="publish-section">
+      <div class="form-grid">
+        <label>
           <span>上号方式 <i class="required-star">*</i><em class="inline-label-hint">配合租客登录账号的方式</em></span>
           <select v-model="publishForm.loginMethod" @change="handleFieldChange('loginMethod')">
             <option v-for="item in loginMethodOptions" :key="item" :value="item">{{ item }}</option>
@@ -852,6 +880,8 @@ export default {
       this.selectedWeaponSkins = splitMultiText(detail.weapon_skin)
 
       this.publishForm = {
+        sellerContactWechat: String(detail.seller_contact_wechat || ''),
+        sellerContactPhone: String(detail.seller_contact_phone || ''),
         insuranceLevel: normalizeInsuranceLevel(detail.insurance_level),
         compensationPlan: String(detail.compensation_plan || DEFAULT_COMPENSATION_PLAN),
         weightLevel: String(detail.weight_level || '7级'),
@@ -946,6 +976,12 @@ export default {
     validateField(field) {
       const value = this.publishForm[field]
       switch (field) {
+        case 'sellerContactWechat':
+          if (!value) return '联系微信为必填'
+          return /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(String(value).trim()) ? '' : '请输入正确的微信号'
+        case 'sellerContactPhone':
+          if (!value) return '联系手机号为必填'
+          return /^1[3-9]\d{9}$/.test(String(value).trim()) ? '' : '请输入正确的11位手机号'
         case 'loginMethod':
           return value ? '' : '上号方式为必填'
         case 'loginTimeRange':
@@ -1299,7 +1335,9 @@ export default {
 
       return {
         ownerName: this.ownerName || '匿名用户',
-          publishedAt: this.publishForm.publishedAt || getCurrentTimeText(),
+        sellerContactWechat: String(this.publishForm.sellerContactWechat || '').trim(),
+        sellerContactPhone: String(this.publishForm.sellerContactPhone || '').trim(),
+        publishedAt: this.publishForm.publishedAt || getCurrentTimeText(),
         insuranceLevel: this.publishForm.insuranceLevel,
         compensationPlan: this.publishForm.compensationPlan,
         weightLevel: this.publishForm.weightLevel,

@@ -1,6 +1,5 @@
 /**
- * 订单相关 HTTP 路由，处理买家、卖家与客服订单操作。
- */
+ * 璁㈠崟鐩稿叧 HTTP 璺敱锛屽鐞嗕拱瀹躲€佸崠瀹朵笌瀹㈡湇璁㈠崟鎿嶄綔銆? */
 
 import { OrderLifecycleError } from '../modules/order/order-lifecycle.service.js'
 import { OrderQueryError } from '../modules/order/order-query.service.js'
@@ -38,9 +37,8 @@ function handleOrderQueryError(error, res, fallbackMessage) {
 }
 
 /**
- * GET /api/orders/stats - 我的订单统计接口
- * 返回当前登录用户在各订单状态下的数量汇总，用于个人中心顶部统计卡片。
- */
+ * GET /api/orders/stats - 鎴戠殑璁㈠崟缁熻鎺ュ彛
+ * 杩斿洖褰撳墠鐧诲綍鐢ㄦ埛鍦ㄥ悇璁㈠崟鐘舵€佷笅鐨勬暟閲忔眹鎬伙紝鐢ㄤ簬涓汉涓績椤堕儴缁熻鍗＄墖銆? */
 app.get('/api/orders/stats', authRequired, authenticatedReadLimiter, async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -60,18 +58,16 @@ app.get('/api/orders/stats', authRequired, authenticatedReadLimiter, async (req,
 
     res.json(buildOrderStatsPayload(rows[0]))
   } catch (_error) {
-    res.status(500).json({ message: '获取订单统计失败' })
+    res.status(500).json({ message: '鑾峰彇璁㈠崟缁熻澶辫触' })
   }
 })
 
 /**
- * GET /api/orders - 我的订单列表接口
+ * GET /api/orders - 鎴戠殑璁㈠崟鍒楄〃鎺ュ彛
  *
- * 查询参数:
- *   status - 订单状态（all/pending_payment/paid/support_handling/settlement_pending/completed/cancelled）
- *   page/pageSize - 分页控制
- *   keyword - 关键字搜索（订单号/商品标题/卖家名称）
- */
+ * 鏌ヨ鍙傛暟:
+ *   status - 璁㈠崟鐘舵€侊紙all/pending_payment/paid/support_handling/settlement_pending/completed/cancelled锛? *   page/pageSize - 鍒嗛〉鎺у埗
+ *   keyword - 鍏抽敭瀛楁悳绱紙璁㈠崟鍙?鍟嗗搧鏍囬/鍗栧鍚嶇О锛? */
 app.get('/api/orders', authRequired, authenticatedReadLimiter, async (req, res) => {
   const page = Math.max(1, Number(req.query.page || 1))
   const pageSize = Math.min(20, Math.max(1, Number(req.query.pageSize || 10)))
@@ -88,15 +84,14 @@ app.get('/api/orders', authRequired, authenticatedReadLimiter, async (req, res) 
     })
     res.json(payload)
   } catch (_error) {
-    res.status(500).json({ message: '获取订单列表失败' })
+    res.status(500).json({ message: '鑾峰彇璁㈠崟鍒楄〃澶辫触' })
   }
 })
 
 /**
- * GET /api/seller/orders/stats - 我卖出的订单统计接口
+ * GET /api/seller/orders/stats - 鎴戝崠鍑虹殑璁㈠崟缁熻鎺ュ彛
  *
- * 优先按 seller_id 查询；为了兼容旧数据，若 seller_id 为空，则回退匹配 seller_name。
- */
+ * 浼樺厛鎸?seller_id 鏌ヨ锛涗负浜嗗吋瀹规棫鏁版嵁锛岃嫢 seller_id 涓虹┖锛屽垯鍥為€€鍖归厤 seller_name銆? */
 app.get('/api/seller/orders/stats', authRequired, authenticatedReadLimiter, async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -116,18 +111,16 @@ app.get('/api/seller/orders/stats', authRequired, authenticatedReadLimiter, asyn
 
     res.json(buildOrderStatsPayload(rows[0]))
   } catch (_error) {
-    res.status(500).json({ message: '获取卖家订单统计失败' })
+    res.status(500).json({ message: '鑾峰彇鍗栧璁㈠崟缁熻澶辫触' })
   }
 })
 
 /**
- * GET /api/seller/orders - 我卖出的订单列表接口
+ * GET /api/seller/orders - 鎴戝崠鍑虹殑璁㈠崟鍒楄〃鎺ュ彛
  *
- * 查询参数:
- *   status - 订单状态（all/pending_payment/paid/support_handling/settlement_pending/completed/cancelled）
- *   page/pageSize - 分页控制
- *   keyword - 关键字搜索（订单号/商品标题/买家名称）
- */
+ * 鏌ヨ鍙傛暟:
+ *   status - 璁㈠崟鐘舵€侊紙all/pending_payment/paid/support_handling/settlement_pending/completed/cancelled锛? *   page/pageSize - 鍒嗛〉鎺у埗
+ *   keyword - 鍏抽敭瀛楁悳绱紙璁㈠崟鍙?鍟嗗搧鏍囬/涔板鍚嶇О锛? */
 app.get('/api/seller/orders', authRequired, authenticatedReadLimiter, async (req, res) => {
   const page = Math.max(1, Number(req.query.page || 1))
   const pageSize = Math.min(20, Math.max(1, Number(req.query.pageSize || 10)))
@@ -145,7 +138,7 @@ app.get('/api/seller/orders', authRequired, authenticatedReadLimiter, async (req
     })
     res.json(payload)
   } catch (_error) {
-    res.status(500).json({ message: '获取卖家订单列表失败' })
+    res.status(500).json({ message: '鑾峰彇鍗栧璁㈠崟鍒楄〃澶辫触' })
   }
 })
 
@@ -155,28 +148,38 @@ app.post('/api/orders', authRequired, orderWriteLimiter, async (req, res) => {
   const acceptPaymentAgreement = Boolean(req.body?.accept_payment_agreement)
   const buyerAgreementVersion = String(req.body?.buyer_agreement_version || '').trim()
   const paymentAgreementVersion = String(req.body?.payment_agreement_version || '').trim()
+  const buyerContactWechat = String(req.body?.buyer_contact_wechat || '').trim()
+  const buyerContactPhone = String(req.body?.buyer_contact_phone || '').trim()
 
   if (!listingId || !Number.isFinite(listingId) || listingId < 1) {
-    return res.status(400).json({ message: '请选择要租用的商品' })
+    return res.status(400).json({ message: '璇烽€夋嫨瑕佺鐢ㄧ殑鍟嗗搧' })
+  }
+  if (!/^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(buyerContactWechat)) {
+    return res.status(400).json({ message: 'Invalid wechat id' })
+  }
+  if (!/^1[3-9]\d{9}$/.test(buyerContactPhone)) {
+    return res.status(400).json({ message: 'Invalid phone number' })
   }
   if (!acceptBuyerAgreement || !acceptPaymentAgreement) {
-    return res.status(400).json({ message: '下单前请先阅读并同意支付前协议与租客协议' })
+    return res.status(400).json({ message: '涓嬪崟鍓嶈鍏堥槄璇诲苟鍚屾剰鏀粯鍓嶅崗璁笌绉熷鍗忚' })
   }
   if (
     buyerAgreementVersion !== BUYER_AGREEMENT_VERSION ||
     paymentAgreementVersion !== PAYMENT_AGREEMENT_VERSION
   ) {
-    return res.status(400).json({ message: '协议版本已更新，请重新阅读并确认后再下单' })
+    return res.status(400).json({ message: '鍗忚鐗堟湰宸叉洿鏂帮紝璇烽噸鏂伴槄璇诲苟纭鍚庡啀涓嬪崟' })
   }
 
   try {
     const order = await orderLifecycleService.createOrder({
       listingId,
-      userId: req.auth.userId
+      userId: req.auth.userId,
+      buyerContactWechat,
+      buyerContactPhone
     })
     res.status(201).json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '创建订单失败')
+    handleOrderLifecycleError(error, res, '鍒涘缓璁㈠崟澶辫触')
   }
 })
 
@@ -184,7 +187,7 @@ app.put('/api/orders/:id/pay', authRequired, orderWriteLimiter, async (req, res)
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -194,7 +197,7 @@ app.put('/api/orders/:id/pay', authRequired, orderWriteLimiter, async (req, res)
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '支付确认失败')
+    handleOrderLifecycleError(error, res, '鏀粯纭澶辫触')
   }
 })
 
@@ -202,7 +205,7 @@ app.put('/api/orders/:id/cancel', authRequired, orderWriteLimiter, async (req, r
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -212,7 +215,7 @@ app.put('/api/orders/:id/cancel', authRequired, orderWriteLimiter, async (req, r
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '取消订单失败')
+    handleOrderLifecycleError(error, res, '鍙栨秷璁㈠崟澶辫触')
   }
 })
 
@@ -220,7 +223,7 @@ app.put('/api/seller/orders/:id/cancel', authRequired, orderWriteLimiter, async 
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -230,7 +233,7 @@ app.put('/api/seller/orders/:id/cancel', authRequired, orderWriteLimiter, async 
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '取消订单失败')
+    handleOrderLifecycleError(error, res, '鍙栨秷璁㈠崟澶辫触')
   }
 })
 
@@ -238,7 +241,7 @@ app.put('/api/orders/:id/complete', authRequired, orderWriteLimiter, async (req,
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -248,7 +251,7 @@ app.put('/api/orders/:id/complete', authRequired, orderWriteLimiter, async (req,
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '申请结算失败')
+    handleOrderLifecycleError(error, res, '鐢宠缁撶畻澶辫触')
   }
 })
 
@@ -256,7 +259,7 @@ app.put('/api/orders/:id/verify', authRequired, orderWriteLimiter, async (req, r
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -266,7 +269,7 @@ app.put('/api/orders/:id/verify', authRequired, orderWriteLimiter, async (req, r
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '确认继续履约失败')
+    handleOrderLifecycleError(error, res, '纭缁х画灞ョ害澶辫触')
   }
 })
 
@@ -276,7 +279,7 @@ app.put('/api/orders/:id/item-usage', authRequired, orderWriteLimiter, async (re
   const note = String(req.body?.note || '').trim().slice(0, 500)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -291,7 +294,7 @@ app.put('/api/orders/:id/item-usage', authRequired, orderWriteLimiter, async (re
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '提交额外物品使用表单失败')
+    handleOrderLifecycleError(error, res, '鎻愪氦棰濆鐗╁搧浣跨敤琛ㄥ崟澶辫触')
   }
 })
 
@@ -299,7 +302,7 @@ app.put('/api/orders/:id/item-usage/confirm', authRequired, orderWriteLimiter, a
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -309,7 +312,7 @@ app.put('/api/orders/:id/item-usage/confirm', authRequired, orderWriteLimiter, a
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '确认额外物品使用情况失败')
+    handleOrderLifecycleError(error, res, '纭棰濆鐗╁搧浣跨敤鎯呭喌澶辫触')
   }
 })
 
@@ -318,7 +321,7 @@ app.put('/api/orders/:id/item-usage/reject', authRequired, orderWriteLimiter, as
   const note = String(req.body?.note || '').trim().slice(0, 500)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -329,7 +332,7 @@ app.put('/api/orders/:id/item-usage/reject', authRequired, orderWriteLimiter, as
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '发起结算争议失败')
+    handleOrderLifecycleError(error, res, '鍙戣捣缁撶畻浜夎澶辫触')
   }
 })
 
@@ -338,7 +341,7 @@ app.put('/api/orders/:id/request-cancel', authRequired, orderWriteLimiter, async
   const reason = String(req.body?.reason || '').trim().slice(0, 500)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -349,7 +352,7 @@ app.put('/api/orders/:id/request-cancel', authRequired, orderWriteLimiter, async
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '发起取消申请失败')
+    handleOrderLifecycleError(error, res, '鍙戣捣鍙栨秷鐢宠澶辫触')
   }
 })
 
@@ -358,7 +361,7 @@ app.put('/api/orders/:id/respond-cancel', authRequired, orderWriteLimiter, async
   const agree = Boolean(req.body?.agree)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -369,7 +372,7 @@ app.put('/api/orders/:id/respond-cancel', authRequired, orderWriteLimiter, async
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '响应取消申请失败')
+    handleOrderLifecycleError(error, res, '鍝嶅簲鍙栨秷鐢宠澶辫触')
   }
 })
 
@@ -378,7 +381,7 @@ app.put('/api/orders/:id/report-mismatch', authRequired, orderWriteLimiter, asyn
   const note = String(req.body?.note || '').trim().slice(0, 500)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -389,7 +392,7 @@ app.put('/api/orders/:id/report-mismatch', authRequired, orderWriteLimiter, asyn
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '发起异常处理失败')
+    handleOrderLifecycleError(error, res, '鍙戣捣寮傚父澶勭悊澶辫触')
   }
 })
 
@@ -397,7 +400,7 @@ app.get('/api/orders/:id/settlement-preview', authRequired, authenticatedReadLim
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -413,7 +416,7 @@ app.get('/api/orders/:id/settlement-preview', authRequired, authenticatedReadLim
       buyer_refund_amount: normalizeOrderMoneyFields({ amount: preview.buyerRefundAmount, deposit_amount: 0 }).amount
     })
   } catch (error) {
-    handleOrderLifecycleError(error, res, '加载结算预览失败')
+    handleOrderLifecycleError(error, res, '鍔犺浇缁撶畻棰勮澶辫触')
   }
 })
 
@@ -421,7 +424,7 @@ app.put('/api/support/orders/:id/execute-settlement', authRequired, supportOnly,
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -431,7 +434,7 @@ app.put('/api/support/orders/:id/execute-settlement', authRequired, supportOnly,
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
-    handleOrderLifecycleError(error, res, '执行分账失败')
+    handleOrderLifecycleError(error, res, '鎵ц鍒嗚处澶辫触')
   }
 })
 
@@ -450,7 +453,7 @@ app.get('/api/wallet', authRequired, authenticatedReadLimiter, async (req, res) 
       withdrawable_balance: normalizeOrderMoneyFields({ amount: Number(accountRow?.balance || 0), deposit_amount: 0 }).amount
     })
   } catch (_error) {
-    res.status(500).json({ message: '获取钱包余额失败' })
+    res.status(500).json({ message: '鑾峰彇閽卞寘浣欓澶辫触' })
   }
 })
 
@@ -473,7 +476,7 @@ app.get('/api/wallet/ledger', authRequired, authenticatedReadLimiter, async (req
       }))
     })
   } catch (_error) {
-    res.status(500).json({ message: '获取钱包流水失败' })
+    res.status(500).json({ message: '鑾峰彇閽卞寘娴佹按澶辫触' })
   }
 })
 
@@ -481,7 +484,7 @@ app.get('/api/orders/:id', authRequired, authenticatedReadLimiter, async (req, r
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
+    return res.status(400).json({ message: '璁㈠崟ID鏃犳晥' })
   }
 
   try {
@@ -491,7 +494,7 @@ app.get('/api/orders/:id', authRequired, authenticatedReadLimiter, async (req, r
     })
     res.json(payload)
   } catch (error) {
-    handleOrderQueryError(error, res, '获取订单详情失败')
+    handleOrderQueryError(error, res, '鑾峰彇璁㈠崟璇︽儏澶辫触')
   }
 })
 }

@@ -105,7 +105,7 @@
                 <div class="order-card-meta order-card-meta--grid">
                   <span class="meta-cell">
                     <em>买家</em>
-                    <strong>{{ formatUserPhone(order.buyer_phone, order.buyer_name) }}</strong>
+                    <strong>{{ formatUserWechat(order.buyer_contact_wechat, order.buyer_name) }}</strong>
                   </span>
                   <span class="meta-cell">
                     <em>流程</em>
@@ -115,7 +115,7 @@
                 <div class="order-card-meta order-card-meta--grid">
                   <span class="meta-cell">
                     <em>卖家</em>
-                    <strong>{{ formatUserPhone(order.seller_phone, order.seller_name) }}</strong>
+                    <strong>{{ formatUserWechat(order.seller_contact_wechat, order.seller_name) }}</strong>
                   </span>
                   <span class="meta-cell">
                     <em>客服状态</em>
@@ -153,10 +153,12 @@
               @scroll="handlePanelScroll('detail')"
             >
               <div class="detail-grid">
+                <div><span>买家微信号：</span><strong>{{ activeOrder.buyer_contact_wechat || '-' }}</strong></div>
+                <div><span>买家手机号：</span><strong>{{ activeOrder.buyer_contact_phone || '-' }}</strong></div>
+                <div><span>卖家微信号：</span><strong>{{ activeOrder.seller_contact_wechat || '-' }}</strong></div>
+                <div><span>卖家手机号：</span><strong>{{ activeOrder.seller_contact_phone || '-' }}</strong></div>
                 <div><span>订单号</span><strong>{{ activeOrder.order_no }}</strong></div>
                 <div><span>商品标题</span><strong>{{ activeOrder.listing_title }}</strong></div>
-                <div><span>买家</span><strong>{{ formatUserPhone(activeOrder.buyer_phone, activeOrder.buyer_name) }}</strong></div>
-                <div><span>卖家</span><strong>{{ formatUserPhone(activeOrder.seller_phone, activeOrder.seller_name) }}</strong></div>
                 <div><span>当前流程</span><strong>{{ activeOrder.status_text || activeOrder.status }}</strong></div>
                 <div><span>当前客服</span><strong>{{ formatUserPhone(activeOrder.support_assignee_phone, activeOrder.support_assignee_name || '未分配') }}</strong></div>
                 <div v-if="activeOrder.support_scene === 'fund_frozen'">
@@ -1319,6 +1321,11 @@ export default {
       const safePhone = String(phone || '').trim()
       const safeFallback = String(fallbackValue || '').trim()
       return safePhone || safeFallback || '-'
+    },
+    formatUserWechat(wechat, fallbackValue = '-') {
+      const safeWechat = String(wechat || '').trim()
+      const safeFallback = String(fallbackValue || '').trim()
+      return safeWechat || safeFallback || '-'
     }
   }
 }

@@ -1244,6 +1244,16 @@ async function ensureListingReviewSchema() {
   const databaseName = process.env.DB_NAME || 'game_rental'
   const columns = [
     {
+      name: 'seller_contact_wechat',
+      sql: `ALTER TABLE listings
+            ADD COLUMN seller_contact_wechat VARCHAR(50) NOT NULL DEFAULT '' COMMENT '卖家联系微信号' AFTER owner_name`
+    },
+    {
+      name: 'seller_contact_phone',
+      sql: `ALTER TABLE listings
+            ADD COLUMN seller_contact_phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '卖家联系手机号' AFTER seller_contact_wechat`
+    },
+    {
       name: 'review_status',
       sql: `ALTER TABLE listings
             ADD COLUMN review_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'approved' COMMENT '审核状态：待审/通过/驳回' AFTER listing_status`
@@ -1510,6 +1520,26 @@ async function ensureOrderWorkflowSchema() {
   )
 
   const orderColumns = [
+    {
+      name: 'buyer_contact_wechat',
+      sql: `ALTER TABLE orders
+            ADD COLUMN buyer_contact_wechat VARCHAR(50) NOT NULL DEFAULT '' COMMENT '买家联系微信号快照' AFTER seller_name`
+    },
+    {
+      name: 'buyer_contact_phone',
+      sql: `ALTER TABLE orders
+            ADD COLUMN buyer_contact_phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '买家联系手机号快照' AFTER buyer_contact_wechat`
+    },
+    {
+      name: 'seller_contact_wechat',
+      sql: `ALTER TABLE orders
+            ADD COLUMN seller_contact_wechat VARCHAR(50) NOT NULL DEFAULT '' COMMENT '卖家联系微信号快照' AFTER buyer_contact_phone`
+    },
+    {
+      name: 'seller_contact_phone',
+      sql: `ALTER TABLE orders
+            ADD COLUMN seller_contact_phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '卖家联系手机号快照' AFTER seller_contact_wechat`
+    },
     {
       name: 'seller_rent_amount',
       sql: `ALTER TABLE orders

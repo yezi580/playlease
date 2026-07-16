@@ -7,6 +7,8 @@ import { ALLOWED_COMPENSATION_PLAN_VALUES } from '../../constants/compensationPl
 
 const requiredFields = [
   'ownerName',
+  'sellerContactWechat',
+  'sellerContactPhone',
   'insuranceLevel',
   'compensationPlan',
   'weightLevel',
@@ -44,6 +46,8 @@ const ALLOWED_RANKS = new Set(['无', '青铜', '白银', '黄金', '铂金', '�
 const ALLOWED_BOOLEAN_TEXT = new Set(['是', '否'])
 const ALLOWED_DIVE_LEVELS = new Set(['0', '1', '2', '3'])
 const LOGIN_TIME_RANGE_REGEX = /^([01]\d|2[0-3]):00-([01]\d|2[0-3]):00$/
+const WECHAT_ID_REGEX = /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/
+const PHONE_REGEX = /^1[3-9]\d{9}$/
 const VALID_REGION_TEXTS = new Set(
   REGION_OPTIONS.flatMap((item) => item.cities.map((city) => buildRegionText(item.province, city)))
 )
@@ -302,6 +306,16 @@ export function validateListingPayload(payload, options = {}) {
   const loginMethod = String(payload.loginMethod || '').trim()
   if (!ALLOWED_LOGIN_METHODS.has(loginMethod)) {
     return '上号方式不合法'
+  }
+
+  const sellerContactWechat = String(payload.sellerContactWechat || '').trim()
+  if (!WECHAT_ID_REGEX.test(sellerContactWechat)) {
+    return '鍗栧寰俊鍙锋牸寮忎笉姝ｇ‘'
+  }
+
+  const sellerContactPhone = String(payload.sellerContactPhone || '').trim()
+  if (!PHONE_REGEX.test(sellerContactPhone)) {
+    return '鍗栧鎵嬫満鍙锋牸寮忎笉姝ｇ‘'
   }
 
   const rank = String(payload.rank || '').trim()

@@ -193,6 +193,8 @@ export function registerListingRoutes(deps) {
       const listingValues = {
         ownerUserId: resolvedOwnerUserId,
         ownerName: resolvedOwnerName,
+        sellerContactWechat: String(payload.sellerContactWechat || '').trim(),
+        sellerContactPhone: String(payload.sellerContactPhone || '').trim(),
         listingStatus: 'pending_review',
         reviewStatus: 'pending',
         publishedAt: payload.publishedAt ? new Date(payload.publishedAt) : new Date(),
@@ -227,11 +229,11 @@ export function registerListingRoutes(deps) {
       const [listingResult] = await conn.execute(
         `INSERT INTO listings (
           listing_no, owner_user_id, owner_name, listing_status, review_status, published_at, insurance_level, compensation_plan, weight_level, deposit, base_ratio, login_method,
-          energy_level, hafu_coin, rent_price, rent_days, login_time_range, daily_cost,
+          energy_level, seller_contact_wechat, seller_contact_phone, hafu_coin, rent_price, rent_days, login_time_range, daily_cost,
           secret_kd, character_level, operator_appearance, gold_skin, rank_name,
           knife_skin, weapon_skin, region, face_verified, dive_level, seyed_unlocked,
           remark, ban_record
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
         [
           listingValues.listingNo,
           listingValues.ownerUserId,
@@ -246,6 +248,8 @@ export function registerListingRoutes(deps) {
           listingValues.baseRatio,
           listingValues.loginMethod,
           listingValues.energyLevel,
+          listingValues.sellerContactWechat,
+          listingValues.sellerContactPhone,
           listingValues.hafuCoin,
           listingValues.rentPrice,
           listingValues.rentDays,

@@ -33,8 +33,15 @@ export function normalizeListingMoneyFields(row) {
 
 export function buildListingDetailPayload(row, items, images, banImages = [], options = {}) {
   const includeBanMedia = Boolean(options.includeBanMedia)
+  const includeSellerContact = Boolean(options.includeSellerContact)
   return {
     ...normalizeListingMoneyFields(row),
+    ...(includeSellerContact
+      ? {
+          seller_contact_wechat: row.seller_contact_wechat || '',
+          seller_contact_phone: row.seller_contact_phone || ''
+        }
+      : {}),
     items: items.map((item) => {
       const normalizedItem = normalizeSaleItemRow(item)
       return {
