@@ -420,7 +420,7 @@ app.put('/api/support/orders/:id/note', authRequired, supportOnly, orderWriteLim
       `SELECT * FROM orders WHERE id = ? LIMIT 1`,
       [orderId]
     )
-    res.json(normalizeOrderMoneyFields(updated[0]))
+    res.json(normalizeOrderMoneyFields(updated[0], { includeSensitiveContacts: true }))
   } catch (_error) {
     res.status(500).json({ message: '保存内部备注失败' })
   }
@@ -440,7 +440,7 @@ app.put('/api/support/orders/:id/cancel', authRequired, supportOnly, orderWriteL
       supportUserId: req.auth.userId,
       note
     })
-    res.json(normalizeOrderMoneyFields(order))
+    res.json(normalizeOrderMoneyFields(order, { includeSensitiveContacts: true }))
   } catch (error) {
     const status = Number(error?.status || 0)
     if (status >= 400 && status < 600) {
@@ -464,7 +464,7 @@ app.put('/api/support/orders/:id/continue', authRequired, supportOnly, orderWrit
       supportUserId: req.auth.userId,
       note
     })
-    res.json(normalizeOrderMoneyFields(order))
+    res.json(normalizeOrderMoneyFields(order, { includeSensitiveContacts: true }))
   } catch (error) {
     const status = Number(error?.status || 0)
     if (status >= 400 && status < 600) {
@@ -488,7 +488,7 @@ app.put('/api/support/orders/:id/return-to-settlement', authRequired, supportOnl
       supportUserId: req.auth.userId,
       note
     })
-    res.json(normalizeOrderMoneyFields(order))
+    res.json(normalizeOrderMoneyFields(order, { includeSensitiveContacts: true }))
   } catch (error) {
     const status = Number(error?.status || 0)
     if (status >= 400 && status < 600) {
@@ -512,7 +512,7 @@ app.put('/api/support/orders/:id/freeze-funds', authRequired, supportOnly, requi
       supportUserId: req.auth.userId,
       freezeReason
     })
-    res.json(normalizeOrderMoneyFields(order))
+    res.json(normalizeOrderMoneyFields(order, { includeSensitiveContacts: true }))
   } catch (error) {
     const status = Number(error?.status || 0)
     if (status >= 400 && status < 600) {
@@ -536,7 +536,7 @@ app.put('/api/support/orders/:id/release-funds', authRequired, supportOnly, requ
       supportUserId: req.auth.userId,
       note
     })
-    res.json(normalizeOrderMoneyFields(order))
+    res.json(normalizeOrderMoneyFields(order, { includeSensitiveContacts: true }))
   } catch (error) {
     const status = Number(error?.status || 0)
     if (status >= 400 && status < 600) {

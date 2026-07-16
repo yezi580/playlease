@@ -195,7 +195,7 @@ app.put('/api/orders/:id/pay', authRequired, orderWriteLimiter, async (req, res)
       orderId,
       userId: req.auth.userId
     })
-    res.json(normalizeOrderMoneyFields(order))
+    res.json(normalizeOrderMoneyFields(order, { includeSensitiveContacts: true }))
   } catch (error) {
     handleOrderLifecycleError(error, res, '鏀粯纭澶辫触')
   }

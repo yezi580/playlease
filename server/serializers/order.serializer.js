@@ -18,13 +18,24 @@ export function orderStatusToLabel(status) {
   return orderStatusLabelMap[status] || '未知状态'
 }
 
-export function normalizeOrderMoneyFields(row) {
+export function normalizeOrderMoneyFields(row, options = {}) {
+  const includeSensitiveContacts = Boolean(options.includeSensitiveContacts)
   const amount = normalizeCentAmount(row.amount) ?? 0
   const depositAmount = normalizeCentAmount(row.deposit_amount) ?? 0
   const sellerRentAmount = normalizeCentAmount(row.seller_rent_amount) ?? 0
+  const normalizedRow = {
+    ...row
+  }
+
+  if (!includeSensitiveContacts) {
+    delete normalizedRow.buyer_contact_wechat
+    delete normalizedRow.buyer_contact_phone
+    delete normalizedRow.seller_contact_wechat
+    delete normalizedRow.seller_contact_phone
+  }
 
   return {
-    ...row,
+    ...normalizedRow,
     amount,
     seller_rent_amount: sellerRentAmount,
     deposit_amount: depositAmount,
