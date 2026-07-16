@@ -10,34 +10,6 @@
     <section class="publish-section">
       <div class="form-grid">
         <label>
-          <span>联系微信 <i class="required-star">*</i></span>
-          <input
-            v-model.trim="publishForm.sellerContactWechat"
-            type="text"
-            maxlength="20"
-            placeholder="请输入卖家微信号"
-            @blur="handleFieldBlur('sellerContactWechat')"
-          />
-          <small v-if="fieldErrors.sellerContactWechat" class="field-hint error-field-hint">{{ fieldErrors.sellerContactWechat }}</small>
-        </label>
-
-        <label>
-          <span>联系手机号 <i class="required-star">*</i></span>
-          <input
-            v-model.trim="publishForm.sellerContactPhone"
-            type="tel"
-            maxlength="11"
-            placeholder="请输入卖家手机号"
-            @blur="handleFieldBlur('sellerContactPhone')"
-          />
-          <small v-if="fieldErrors.sellerContactPhone" class="field-hint error-field-hint">{{ fieldErrors.sellerContactPhone }}</small>
-        </label>
-      </div>
-    </section>
-
-    <section class="publish-section">
-      <div class="form-grid">
-        <label>
           <span>上号方式 <i class="required-star">*</i><em class="inline-label-hint">配合租客登录账号的方式</em></span>
           <select v-model="publishForm.loginMethod" @change="handleFieldChange('loginMethod')">
             <option v-for="item in loginMethodOptions" :key="item" :value="item">{{ item }}</option>
@@ -441,6 +413,34 @@
         </div>
       </div>
       <small v-if="fieldErrors.images" class="field-hint error-field-hint">{{ fieldErrors.images }}</small>
+    </section>
+
+    <section class="publish-section">
+      <div class="form-grid">
+        <label>
+          <span>联系微信 <i class="required-star">*</i></span>
+          <input
+            v-model.trim="publishForm.sellerContactWechat"
+            type="text"
+            maxlength="20"
+            placeholder=""
+            @blur="handleFieldBlur('sellerContactWechat')"
+          />
+          <small v-if="fieldErrors.sellerContactWechat" class="field-hint error-field-hint">{{ fieldErrors.sellerContactWechat }}</small>
+        </label>
+
+        <label>
+          <span>联系手机号 <i class="required-star">*</i></span>
+          <input
+            v-model.trim="publishForm.sellerContactPhone"
+            type="tel"
+            maxlength="11"
+            placeholder=""
+            @blur="handleFieldBlur('sellerContactPhone')"
+          />
+          <small v-if="fieldErrors.sellerContactPhone" class="field-hint error-field-hint">{{ fieldErrors.sellerContactPhone }}</small>
+        </label>
+      </div>
     </section>
 
     <section class="publish-section compensation-section">

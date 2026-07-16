@@ -29,7 +29,7 @@
                 v-model.trim="buyerContactWechat"
                 type="text"
                 maxlength="20"
-                placeholder="请输入买家微信号"
+                placeholder=""
               />
             </label>
             <label class="contact-field">
@@ -38,7 +38,7 @@
                 v-model.trim="buyerContactPhone"
                 type="tel"
                 maxlength="11"
-                placeholder="请输入买家手机号"
+                placeholder=""
               />
             </label>
           </div>
@@ -49,8 +49,6 @@
             <div class="price-divider"></div>
             <div class="total-row"><span>合计金额</span><strong>￥{{ totalPrice }}</strong></div>
           </div>
-          <p class="order-price-hint">保险赔付费用由卖家承担，买家支付总价不变。</p>
-
         </div>
 
         <div class="modal-footer">
