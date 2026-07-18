@@ -77,8 +77,8 @@
                 <circle cx="25" cy="25" r="20" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-dasharray="90 31.4" stroke-linecap="round" class="spinner-circle"/>
               </svg>
             </div>
-            <p class="payment-processing-text">正在确认支付...</p>
-            <p class="payment-processing-hint">请稍候，系统正在处理本次订单支付</p>
+            <p class="payment-processing-text">{{ paymentProcessingText }}</p>
+            <p class="payment-processing-hint">{{ paymentProcessingHint }}</p>
             <p v-if="transactionNo" class="payment-transaction-no">支付流水号：{{ transactionNo }}</p>
           </div>
 
@@ -115,6 +115,8 @@ import { apiFetch } from '../utils/api.js'
 import { formatMoneyPrecise } from '../utils/money'
 import { fetchBusinessSettings, getBuyerRentLabel, getCachedBusinessSettings } from '../utils/businessSettings.js'
 import CopyTextButton from './CopyTextButton.vue'
+
+const PAYMENT_RETURN_CONTEXT_KEY = 'latest_payment_return_context'
 
 export default {
   name: 'PaymentModal',
@@ -167,10 +169,7 @@ export default {
   data() {
     return {
       businessSettings: getCachedBusinessSettings(),
-      selectedMethod: 'online',
-      paymentMethods: [
-        { key: 'online', name: '在线支付', icon: 'P' }
-      ],
+      selectedMethod: '',
       processing: false,
       awaitingPaymentResult: false,
       payResult: null,
@@ -184,18 +183,53 @@ export default {
   },
   async mounted() {
     this.businessSettings = await fetchBusinessSettings()
+    this.selectedMethod = this.defaultMethod
   },
   computed: {
+    terminalScene() {
+      if (typeof window === 'undefined') return 'pc'
+      const userAgent = String(window.navigator?.userAgent || '')
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile|HarmonyOS|Windows Phone/i.test(userAgent)
+      return isMobile ? 'h5' : 'pc'
+    },
+    defaultMethod() {
+      return this.terminalScene === 'h5' ? 'alipay_h5' : 'cashier_pc'
+    },
+    paymentMethods() {
+      if (this.terminalScene === 'h5') {
+        return [
+          { key: 'alipay_h5', name: '支付宝支付', icon: 'A' }
+        ]
+      }
+      return [
+        { key: 'cashier_pc', name: '微信/支付宝收银台', icon: 'C' }
+      ]
+    },
     buyerRentLabel() {
       return getBuyerRentLabel(this.businessSettings)
     },
     paymentAmountHint() {
       const rate = Number(this.businessSettings.platformCommission?.buyerServiceFeeRatePercent || 10)
-      return `当前租金已包含平台加收的 ${rate}% 手续费，押金不收取手续费；保险赔付费用由卖家承担，不额外增加买家总价。`
+      return this.terminalScene === 'h5'
+        ? `当前租金已包含平台加收的 ${rate}% 手续费。提交后将跳转支付宝收银台完成支付。`
+        : `当前租金已包含平台加收的 ${rate}% 手续费。提交后将跳转汇付收银台，可在收银台选择微信扫码或支付宝扫码。`
+    },
+    paymentProcessingText() {
+      return this.awaitingPaymentResult ? '正在确认支付...' : '正在跳转收银台...'
+    },
+    paymentProcessingHint() {
+      if (this.awaitingPaymentResult) {
+        return '请稍候，系统正在处理本次订单支付'
+      }
+      return '已生成支付流水，正在为你拉起收银台'
     }
   },
   watch: {
     visible(val) {
+      if (val) {
+        this.selectedMethod = this.defaultMethod
+        return
+      }
       if (!val) {
         this.resetState()
       }
@@ -206,7 +240,7 @@ export default {
   },
   methods: {
     resetState() {
-      this.selectedMethod = 'online'
+      this.selectedMethod = this.defaultMethod
       this.processing = false
       this.awaitingPaymentResult = false
       this.payResult = null
@@ -238,6 +272,10 @@ export default {
     },
     getSelectedMethodMeta() {
       return this.paymentMethods.find((item) => item.key === this.selectedMethod) || this.paymentMethods[0]
+    },
+    getReturnUrlBase() {
+      if (typeof window === 'undefined') return '/payment/result'
+      return `${window.location.origin}/payment/result`
     },
     computeRemainingSeconds(expiresAt) {
       const timestamp = Date.parse(expiresAt || '')
@@ -364,6 +402,36 @@ export default {
         message: message || '支付失败，请稍后重试'
       }
     },
+    persistReturnContext(extra = {}) {
+      if (typeof window === 'undefined') return
+      const selectedMethodMeta = this.getSelectedMethodMeta()
+      const payload = {
+        orderId: Number(this.orderId || 0),
+        orderTitle: this.orderTitle || '商品租赁',
+        listingNo: this.listingNo || '',
+        listingId: Number(this.listingId || 0),
+        total: Number(this.total || 0),
+        amount: Number(this.amount || 0),
+        deposit: Number(this.deposit || 0),
+        rentDays: Number(this.rentDays || 0),
+        coverImage: this.coverImage || '',
+        paymentMethod: selectedMethodMeta?.name || '',
+        paymentChannel: selectedMethodMeta?.key || this.selectedMethod,
+        transactionNo: this.transactionNo || '',
+        ...extra
+      }
+      try {
+        window.sessionStorage.setItem(PAYMENT_RETURN_CONTEXT_KEY, JSON.stringify(payload))
+      } catch (_error) {
+        // 忽略存储失败，支付主流程仍继续
+      }
+    },
+    redirectToCashier(jumpUrl) {
+      if (typeof window === 'undefined') {
+        throw new Error('当前环境不支持跳转收银台')
+      }
+      window.location.assign(jumpUrl)
+    },
     async handleConfirmPay() {
       this.processing = true
       this.awaitingPaymentResult = false
@@ -379,16 +447,27 @@ export default {
           method: 'POST',
           body: JSON.stringify({
             order_id: Number(this.orderId || 0),
-            channel: this.selectedMethod
+            channel: this.selectedMethod,
+            scene: this.terminalScene,
+            return_url_base: this.getReturnUrlBase()
           })
         })
         const transaction = data.transaction || {}
         const providerPayload = transaction.provider_payload || {}
+        const jumpUrl = transaction.jump_url || providerPayload.jumpUrl || providerPayload.jump_url || ''
         if (!transaction.transaction_no) {
           throw new Error('支付订单创建失败，请稍后重试')
         }
 
         this.transactionNo = String(transaction.transaction_no || '')
+        this.persistReturnContext({
+          transactionNo: this.transactionNo,
+          callbackUrl: transaction.callback_url || providerPayload.callbackUrl || providerPayload.callback_url || ''
+        })
+        if (jumpUrl) {
+          this.redirectToCashier(jumpUrl)
+          return
+        }
         this.expiresAt = transaction.expires_at || providerPayload.expiresAt || providerPayload.expires_at || ''
         this.remainingSeconds = this.computeRemainingSeconds(this.expiresAt)
         this.awaitingPaymentResult = true

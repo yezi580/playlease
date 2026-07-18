@@ -108,6 +108,7 @@ export default {
     handlePaymentSuccess(payload = {}) {
       const query = {
         orderId: String(payload.orderId || ''),
+        transactionNo: String(payload.transactionNo || ''),
         listingId: String(payload.listingId || ''),
         listingNo: payload.listingNo || '',
         title: payload.orderTitle || '',

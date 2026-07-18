@@ -457,6 +457,13 @@ app.use(express.json({
     req.rawBody = buffer?.length ? buffer.toString('utf8') : ''
   }
 }))
+app.use(express.urlencoded({
+  extended: false,
+  limit: '2mb',
+  verify: (req, _res, buffer) => {
+    req.rawBody = buffer?.length ? buffer.toString('utf8') : ''
+  }
+}))
 
 const socketMessageRateStore = await createSlidingWindowRateStore({
   namespace: 'socket-message',
@@ -591,7 +598,22 @@ const paymentProvider = createPaymentProvider({
   appName: process.env.APP_NAME || 'my-app',
   mockPaymentAutoSuccessSeconds: process.env.MOCK_PAYMENT_AUTO_SUCCESS_SECONDS,
   mockPaymentExpiresMinutes: process.env.MOCK_PAYMENT_EXPIRES_MINUTES,
-  mockWithdrawImmediateSuccess: process.env.MOCK_WITHDRAW_IMMEDIATE_SUCCESS
+  mockWithdrawImmediateSuccess: process.env.MOCK_WITHDRAW_IMMEDIATE_SUCCESS,
+  huifuGatewayUrl: process.env.HUIFU_GATEWAY_URL,
+  huifuSysId: process.env.HUIFU_SYS_ID,
+  huifuProductId: process.env.HUIFU_PRODUCT_ID,
+  huifuId: process.env.HUIFU_HUIFU_ID,
+  huifuHostingPreOrderUrl: process.env.HUIFU_HOSTING_PREORDER_URL,
+  huifuNotifyUrl: process.env.HUIFU_NOTIFY_URL,
+  huifuReturnUrl: process.env.HUIFU_RETURN_URL,
+  huifuHostingProjectTitle: process.env.HUIFU_HOSTING_PROJECT_TITLE,
+  huifuHostingProjectIdH5: process.env.HUIFU_HOSTING_PROJECT_ID_H5,
+  huifuHostingProjectIdPc: process.env.HUIFU_HOSTING_PROJECT_ID_PC,
+  huifuHostingStyleIdH5: process.env.HUIFU_HOSTING_STYLE_ID_H5,
+  huifuHostingStyleIdPc: process.env.HUIFU_HOSTING_STYLE_ID_PC,
+  huifuMerchantPrivateKey: process.env.HUIFU_MERCHANT_PRIVATE_KEY,
+  huifuPublicKey: process.env.HUIFU_PUBLIC_KEY,
+  huifuVerifyResponseSignature: process.env.HUIFU_VERIFY_RESPONSE_SIGNATURE
 })
 
 const chatModule = createChatModule({

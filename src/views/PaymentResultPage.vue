@@ -2,39 +2,45 @@
   <section class="payment-result-page">
     <div class="payment-result-card">
       <div class="payment-result-hero">
-        <div class="payment-result-hero-icon">✓</div>
+        <div :class="['payment-result-hero-icon', statusClass]">{{ statusIcon }}</div>
         <div>
-          <p class="payment-result-kicker">支付已完成</p>
-          <h2>订单支付成功</h2>
-          <p class="payment-result-subtitle">订单已进入已支付状态，可前往订单详情继续查看交易进度。</p>
+          <p class="payment-result-kicker">{{ statusKicker }}</p>
+          <h2>{{ statusTitle }}</h2>
+          <p class="payment-result-subtitle">{{ statusSubtitle }}</p>
         </div>
       </div>
 
       <div class="payment-result-summary">
         <div class="payment-result-row">
           <span>商品名称</span>
-          <strong>{{ orderTitle || '商品租赁' }}</strong>
+          <strong>{{ displayOrderTitle }}</strong>
         </div>
         <div class="payment-result-row">
           <span>订单编号</span>
-          <strong>#{{ orderId || '-' }}</strong>
+          <strong>#{{ displayOrderId }}</strong>
         </div>
         <div class="payment-result-row">
           <span>商品编号</span>
           <strong class="copy-inline">
-            <span>{{ displayListingId || '-' }}</span>
-            <CopyTextButton :text="displayListingId" label="商品编号" />
+            <span>{{ displayListingId }}</span>
+            <CopyTextButton v-if="displayListingId !== '-'" :text="displayListingId" label="商品编号" />
           </strong>
         </div>
         <div class="payment-result-row">
           <span>支付方式</span>
-          <strong>{{ paymentMethod || '-' }}</strong>
+          <strong>{{ displayPaymentMethod }}</strong>
+        </div>
+        <div class="payment-result-row">
+          <span>支付流水号</span>
+          <strong>{{ transactionNo || '-' }}</strong>
         </div>
         <div class="payment-result-row payment-result-row--amount">
           <span>实付金额</span>
-          <strong class="payment-result-amount-value">￥{{ formatMoneyPrecise(totalAmount) }}</strong>
+          <strong class="payment-result-amount-value">￥{{ formatMoneyPrecise(displayTotalAmount) }}</strong>
         </div>
       </div>
+
+      <p v-if="statusMessage" class="payment-result-status-note">{{ statusMessage }}</p>
 
       <div class="payment-result-actions">
         <button type="button" class="payment-result-btn payment-result-btn--primary" @click="viewOrderDetail">
@@ -50,51 +56,173 @@
 
 <script>
 import CopyTextButton from '../components/CopyTextButton.vue'
+import { apiFetch } from '../utils/api.js'
 import { formatMoneyPrecise as formatMoneyPreciseValue } from '../utils/money.js'
+
+const PAYMENT_RETURN_CONTEXT_KEY = 'latest_payment_return_context'
 
 export default {
   name: 'PaymentResultPage',
   components: {
     CopyTextButton
   },
+  data() {
+    return {
+      transaction: null,
+      loading: false,
+      pollTimer: null,
+      pollAttempts: 0,
+      returnContext: null,
+      statusMessage: ''
+    }
+  },
   computed: {
     orderId() {
       return String(this.$route.query.orderId || '')
     },
+    transactionNo() {
+      return String(this.$route.query.transactionNo || this.returnContext?.transactionNo || '')
+    },
     listingId() {
-      return String(this.$route.query.listingId || '')
+      return String(this.$route.query.listingId || this.returnContext?.listingId || '')
     },
     displayListingId() {
-      return this.listingId
+      return this.listingId || String(this.$route.query.listingNo || this.returnContext?.listingNo || '') || '-'
     },
     orderTitle() {
-      return String(this.$route.query.title || '')
+      return String(this.$route.query.title || this.returnContext?.orderTitle || '')
     },
     paymentMethod() {
-      return String(this.$route.query.method || '')
+      return String(this.$route.query.method || this.returnContext?.paymentMethod || '')
     },
     totalAmount() {
-      return Number(this.$route.query.total || 0)
+      return Number(this.$route.query.total || this.returnContext?.total || 0)
+    },
+    transactionStatus() {
+      return String(this.transaction?.status || '').trim().toLowerCase()
+    },
+    statusClass() {
+      if (this.transactionStatus === 'paid') return 'success'
+      if (['failed', 'cancelled'].includes(this.transactionStatus)) return 'fail'
+      if (this.loading || this.transactionStatus === 'pending' || this.transactionStatus === 'created') return 'pending'
+      return 'success'
+    },
+    statusIcon() {
+      if (this.statusClass === 'success') return '✓'
+      if (this.statusClass === 'fail') return '!'
+      return '...'
+    },
+    statusKicker() {
+      if (this.statusClass === 'success') return '支付已完成'
+      if (this.statusClass === 'fail') return '支付未完成'
+      return '支付处理中'
+    },
+    statusTitle() {
+      if (this.statusClass === 'success') return '订单支付成功'
+      if (this.statusClass === 'fail') return '订单支付失败'
+      return '正在确认支付结果'
+    },
+    statusSubtitle() {
+      if (this.statusClass === 'success') {
+        return '订单已进入已支付状态，可前往订单详情继续查看交易进度。'
+      }
+      if (this.statusClass === 'fail') {
+        return '本次支付未成功完成，如已扣款请稍后刷新订单页确认结果。'
+      }
+      return '汇付正在回传支付结果，页面会自动刷新最新状态。'
+    },
+    displayOrderId() {
+      return String(this.transaction?.order_id || this.orderId || this.returnContext?.orderId || '') || '-'
+    },
+    displayOrderTitle() {
+      return String(this.transaction?.subject || this.orderTitle || '') || '商品租赁'
+    },
+    displayPaymentMethod() {
+      if (this.paymentMethod) return this.paymentMethod
+      const channel = String(this.transaction?.channel || this.returnContext?.paymentChannel || '').trim().toLowerCase()
+      if (channel === 'alipay_h5') return '支付宝支付'
+      if (channel === 'cashier_pc') return '微信/支付宝收银台'
+      return '-'
+    },
+    displayTotalAmount() {
+      return Number(this.transaction?.amount || this.totalAmount || 0)
     }
+  },
+  async mounted() {
+    this.loadReturnContext()
+    await this.refreshTransactionStatus()
+  },
+  beforeUnmount() {
+    this.clearPollTimer()
   },
   methods: {
     formatMoneyPrecise(value) {
       return formatMoneyPreciseValue(value)
     },
+    loadReturnContext() {
+      if (typeof window === 'undefined') return
+      try {
+        const rawValue = window.sessionStorage.getItem(PAYMENT_RETURN_CONTEXT_KEY)
+        this.returnContext = rawValue ? JSON.parse(rawValue) : null
+      } catch (_error) {
+        this.returnContext = null
+      }
+    },
+    clearPollTimer() {
+      if (this.pollTimer) {
+        clearTimeout(this.pollTimer)
+        this.pollTimer = null
+      }
+    },
+    scheduleNextPoll(delay = 3000) {
+      this.clearPollTimer()
+      if (this.pollAttempts >= 20) {
+        this.statusMessage = '支付结果仍在同步中，可稍后到订单详情页再次查看。'
+        return
+      }
+      this.pollTimer = setTimeout(() => {
+        void this.refreshTransactionStatus()
+      }, Math.max(1000, Number(delay || 0)))
+    },
+    async refreshTransactionStatus() {
+      if (!this.transactionNo) {
+        return
+      }
+      this.loading = true
+      this.statusMessage = ''
+      try {
+        const data = await apiFetch(`/api/pay/transactions/${encodeURIComponent(this.transactionNo)}`)
+        this.transaction = data.transaction || null
+        this.pollAttempts += 1
+        if (['created', 'pending'].includes(String(this.transaction?.status || '').trim().toLowerCase())) {
+          this.statusMessage = '已收到回跳，正在等待支付结果最终同步。'
+          this.scheduleNextPoll(3000)
+        } else {
+          this.clearPollTimer()
+          if (this.statusClass === 'success' && typeof window !== 'undefined') {
+            window.sessionStorage.removeItem(PAYMENT_RETURN_CONTEXT_KEY)
+          }
+        }
+      } catch (error) {
+        this.statusMessage = error.message || '支付结果查询失败'
+      } finally {
+        this.loading = false
+      }
+    },
     viewOrderDetail() {
-      if (!this.orderId) {
+      if (this.displayOrderId === '-') {
         this.backToProfile()
         return
       }
 
       this.$router.push({
         name: 'order-detail',
-        params: { id: this.orderId },
+        params: { id: this.displayOrderId },
         query: {
           from: 'profile',
           role: 'buyer',
           section: 'orders',
-          orderStatus: 'paid'
+          orderStatus: this.statusClass === 'success' ? 'paid' : ''
         }
       })
     },
@@ -143,8 +271,21 @@ export default {
   justify-content: center;
   font-size: 28px;
   font-weight: 700;
+}
+
+.payment-result-hero-icon.success {
   color: #047857;
   background: #ecfdf5;
+}
+
+.payment-result-hero-icon.fail {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.payment-result-hero-icon.pending {
+  color: #1d4ed8;
+  background: #dbeafe;
 }
 
 .payment-result-kicker {
@@ -196,6 +337,12 @@ export default {
   gap: 12px;
   justify-content: flex-end;
   margin-top: 24px;
+}
+
+.payment-result-status-note {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: #6b7280;
 }
 
 .payment-result-btn {

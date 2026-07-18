@@ -328,6 +328,8 @@ export function createPaymentService(config = {}) {
     const orderId = Number(payload.orderId || 0)
     const userId = Number(payload.userId || 0)
     const channel = String(payload.channel || 'online').trim().toLowerCase() || 'online'
+    const scene = String(payload.scene || '').trim().toLowerCase()
+    const returnUrl = String(payload.returnUrl || '').trim()
 
     if (!orderId || !userId) {
       fail(400, { message: '订单信息不完整' })
@@ -402,10 +404,12 @@ export function createPaymentService(config = {}) {
       const providerResult = await paymentProvider.createPaymentOrder({
         transactionNo,
         channel,
+        scene,
         amount,
         orderId,
         subject: order.listing_title || order.order_no || `订单#${orderId}`,
-        payerUserId: userId
+        payerUserId: userId,
+        returnUrl
       })
 
       if (!providerResult?.ok) {

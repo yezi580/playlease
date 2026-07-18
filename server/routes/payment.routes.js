@@ -16,6 +16,7 @@ function normalizeAmount(normalizeOrderMoneyFields, amount) {
 
 function serializePaymentTransaction(normalizeOrderMoneyFields, row) {
   if (!row) return null
+  const providerPayload = row.provider_payload || null
   return {
     id: row.id,
     transaction_no: row.transaction_no,
@@ -33,7 +34,10 @@ function serializePaymentTransaction(normalizeOrderMoneyFields, row) {
     expires_at: row.expires_at || null,
     created_at: row.created_at || null,
     updated_at: row.updated_at || null,
-    provider_payload: row.provider_payload || null
+    cashier_type: providerPayload?.cashierType || providerPayload?.cashier_type || '',
+    jump_url: providerPayload?.jumpUrl || providerPayload?.jump_url || '',
+    callback_url: providerPayload?.callbackUrl || providerPayload?.callback_url || '',
+    provider_payload: providerPayload
   }
 }
 
@@ -84,6 +88,8 @@ export function registerPaymentRoutes(deps) {
   app.post('/api/pay/create', authRequired, orderWriteLimiter, async (req, res) => {
     const orderId = Number(req.body?.order_id || 0)
     const channel = String(req.body?.channel || 'online').trim().toLowerCase() || 'online'
+    const scene = String(req.body?.scene || '').trim().toLowerCase()
+    const returnUrl = String(req.body?.return_url || req.body?.return_url_base || '').trim()
 
     if (!orderId) {
       return res.status(400).json({ message: '订单ID无效' })
@@ -93,7 +99,9 @@ export function registerPaymentRoutes(deps) {
       const transaction = await paymentService.createOrderPayment({
         orderId,
         userId: req.auth.userId,
-        channel
+        channel,
+        scene,
+        returnUrl
       })
       res.status(201).json({
         transaction: serializePaymentTransaction(normalizeOrderMoneyFields, transaction)
@@ -134,14 +142,26 @@ export function registerPaymentRoutes(deps) {
   app.post('/api/pay/callback/:channel', async (req, res) => {
     const channel = String(req.params.channel || '').trim().toLowerCase()
     try {
-      const transaction = await paymentService.handlePaymentCallback({
+      const parsedCallback = typeof paymentProvider?.parsePaymentCallback === 'function'
+        ? await paymentProvider.parsePaymentCallback({
+          channel,
+          headers: req.headers || {},
+          body: req.body || {},
+          rawBody: req.rawBody || ''
+        })
+        : null
+      const callbackPayload = parsedCallback || {
         channel,
         transactionNo: req.body?.transaction_no,
         providerTradeNo: req.body?.provider_trade_no,
         status: req.body?.status,
         rawPayload: req.body || {}
-      })
-      res.json({
+      }
+      const transaction = await paymentService.handlePaymentCallback(callbackPayload)
+      if (parsedCallback?.callbackResponseText) {
+        return res.type('text/plain').send(parsedCallback.callbackResponseText)
+      }
+      return res.json({
         success: true,
         transaction: serializePaymentTransaction(normalizeOrderMoneyFields, transaction)
       })
