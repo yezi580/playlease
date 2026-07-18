@@ -154,9 +154,7 @@
             >
               <div class="detail-grid">
                 <div><span>买家微信号：</span><strong>{{ activeOrder.buyer_contact_wechat || '-' }}</strong></div>
-                <div><span>买家手机号：</span><strong>{{ activeOrder.buyer_contact_phone || '-' }}</strong></div>
                 <div><span>卖家微信号：</span><strong>{{ activeOrder.seller_contact_wechat || '-' }}</strong></div>
-                <div><span>卖家手机号：</span><strong>{{ activeOrder.seller_contact_phone || '-' }}</strong></div>
                 <div><span>订单号</span><strong>{{ activeOrder.order_no }}</strong></div>
                 <div><span>商品标题</span><strong>{{ activeOrder.listing_title }}</strong></div>
                 <div><span>当前流程</span><strong>{{ activeOrder.status_text || activeOrder.status }}</strong></div>

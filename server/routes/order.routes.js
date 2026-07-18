@@ -149,16 +149,12 @@ app.post('/api/orders', authRequired, orderWriteLimiter, async (req, res) => {
   const buyerAgreementVersion = String(req.body?.buyer_agreement_version || '').trim()
   const paymentAgreementVersion = String(req.body?.payment_agreement_version || '').trim()
   const buyerContactWechat = String(req.body?.buyer_contact_wechat || '').trim()
-  const buyerContactPhone = String(req.body?.buyer_contact_phone || '').trim()
 
   if (!listingId || !Number.isFinite(listingId) || listingId < 1) {
     return res.status(400).json({ message: '璇烽€夋嫨瑕佺鐢ㄧ殑鍟嗗搧' })
   }
   if (!/^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(buyerContactWechat)) {
     return res.status(400).json({ message: 'Invalid wechat id' })
-  }
-  if (!/^1[3-9]\d{9}$/.test(buyerContactPhone)) {
-    return res.status(400).json({ message: 'Invalid phone number' })
   }
   if (!acceptBuyerAgreement || !acceptPaymentAgreement) {
     return res.status(400).json({ message: '涓嬪崟鍓嶈鍏堥槄璇诲苟鍚屾剰鏀粯鍓嶅崗璁笌绉熷鍗忚' })
@@ -174,8 +170,7 @@ app.post('/api/orders', authRequired, orderWriteLimiter, async (req, res) => {
     const order = await orderLifecycleService.createOrder({
       listingId,
       userId: req.auth.userId,
-      buyerContactWechat,
-      buyerContactPhone
+      buyerContactWechat
     })
     res.status(201).json(normalizeOrderMoneyFields(order))
   } catch (error) {

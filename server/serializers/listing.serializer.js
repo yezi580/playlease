@@ -38,8 +38,7 @@ export function buildListingDetailPayload(row, items, images, banImages = [], op
     ...normalizeListingMoneyFields(row),
     ...(includeSellerContact
       ? {
-          seller_contact_wechat: row.seller_contact_wechat || '',
-          seller_contact_phone: row.seller_contact_phone || ''
+          seller_contact_wechat: row.seller_contact_wechat || ''
         }
       : {}),
     items: items.map((item) => {
@@ -76,4 +75,3 @@ export function buildMyListingStatsPayload(row) {
     rented: Number(row?.rented || 0)
   }
 }
-

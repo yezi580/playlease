@@ -32,15 +32,6 @@
                 placeholder=""
               />
             </label>
-            <label class="contact-field">
-              <span>联系手机号</span>
-              <input
-                v-model.trim="buyerContactPhone"
-                type="tel"
-                maxlength="11"
-                placeholder=""
-              />
-            </label>
           </div>
 
           <div class="price-detail">
@@ -98,8 +89,7 @@ export default {
     return {
       submitting: false,
       businessSettings: getCachedBusinessSettings(),
-      buyerContactWechat: '',
-      buyerContactPhone: ''
+      buyerContactWechat: ''
     }
   },
   async mounted() {
@@ -155,10 +145,6 @@ export default {
         showErrorToast('请输入正确的微信号')
         return
       }
-      if (!/^1[3-9]\d{9}$/.test(this.buyerContactPhone)) {
-        showErrorToast('请输入正确的11位手机号')
-        return
-      }
       this.submitting = true
       try {
         const data = await apiFetch('/api/orders', {
@@ -166,7 +152,6 @@ export default {
           body: JSON.stringify({
             listing_id: this.listing.id,
             buyer_contact_wechat: this.buyerContactWechat,
-            buyer_contact_phone: this.buyerContactPhone,
             accept_buyer_agreement: Boolean(this.agreements?.acceptBuyerAgreement),
             accept_payment_agreement: Boolean(this.agreements?.acceptPaymentAgreement),
             buyer_agreement_version: String(this.agreements?.buyerAgreementVersion || '').trim(),

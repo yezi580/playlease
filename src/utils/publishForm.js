@@ -62,7 +62,6 @@ export function createDefaultItems() {
 export function createDefaultPublishForm() {
   return {
     sellerContactWechat: '',
-    sellerContactPhone: '',
     insuranceLevel: '6格',
     compensationPlan: DEFAULT_COMPENSATION_PLAN,
     weightLevel: '7级',
@@ -130,7 +129,6 @@ export function splitLoginTimeRange(value) {
 export function createDefaultFieldErrors() {
   return {
     sellerContactWechat: '',
-    sellerContactPhone: '',
     loginMethod: '',
     loginTimeRange: '',
     insuranceLevel: '',

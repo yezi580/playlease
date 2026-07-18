@@ -1242,16 +1242,23 @@ async function ensureListingItemModeSchema() {
 
 async function ensureListingReviewSchema() {
   const databaseName = process.env.DB_NAME || 'game_rental'
+  const hasListingColumn = async (columnName) => {
+    const [rows] = await pool.execute(
+      `SELECT COLUMN_NAME
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'listings'
+         AND COLUMN_NAME = ?
+       LIMIT 1`,
+      [databaseName, columnName]
+    )
+    return rows.length > 0
+  }
   const columns = [
     {
       name: 'seller_contact_wechat',
       sql: `ALTER TABLE listings
             ADD COLUMN seller_contact_wechat VARCHAR(50) NOT NULL DEFAULT '' COMMENT '卖家联系微信号' AFTER owner_name`
-    },
-    {
-      name: 'seller_contact_phone',
-      sql: `ALTER TABLE listings
-            ADD COLUMN seller_contact_phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '卖家联系手机号' AFTER seller_contact_wechat`
     },
     {
       name: 'review_status',
@@ -1276,18 +1283,13 @@ async function ensureListingReviewSchema() {
   ]
 
   for (const column of columns) {
-    const [rows] = await pool.execute(
-      `SELECT COLUMN_NAME
-       FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = ?
-         AND TABLE_NAME = 'listings'
-         AND COLUMN_NAME = ?
-       LIMIT 1`,
-      [databaseName, column.name]
-    )
-    if (!rows.length) {
+    if (!(await hasListingColumn(column.name))) {
       await pool.execute(column.sql)
     }
+  }
+
+  if (await hasListingColumn('seller_contact_phone')) {
+    await pool.execute('ALTER TABLE listings DROP COLUMN `seller_contact_phone`')
   }
 
   await pool.execute(
@@ -1526,19 +1528,9 @@ async function ensureOrderWorkflowSchema() {
             ADD COLUMN buyer_contact_wechat VARCHAR(50) NOT NULL DEFAULT '' COMMENT '买家联系微信号快照' AFTER seller_name`
     },
     {
-      name: 'buyer_contact_phone',
-      sql: `ALTER TABLE orders
-            ADD COLUMN buyer_contact_phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '买家联系手机号快照' AFTER buyer_contact_wechat`
-    },
-    {
       name: 'seller_contact_wechat',
       sql: `ALTER TABLE orders
-            ADD COLUMN seller_contact_wechat VARCHAR(50) NOT NULL DEFAULT '' COMMENT '卖家联系微信号快照' AFTER buyer_contact_phone`
-    },
-    {
-      name: 'seller_contact_phone',
-      sql: `ALTER TABLE orders
-            ADD COLUMN seller_contact_phone VARCHAR(20) NOT NULL DEFAULT '' COMMENT '卖家联系手机号快照' AFTER seller_contact_wechat`
+            ADD COLUMN seller_contact_wechat VARCHAR(50) NOT NULL DEFAULT '' COMMENT '卖家联系微信号快照' AFTER buyer_contact_wechat`
     },
     {
       name: 'seller_rent_amount',
@@ -1621,6 +1613,9 @@ async function ensureOrderWorkflowSchema() {
       await pool.execute(column.sql)
     }
   }
+
+  await dropOrderColumnIfExists('buyer_contact_phone')
+  await dropOrderColumnIfExists('seller_contact_phone')
 
   if (await hasOrderColumn('seller_rent_amount')) {
     await pool.execute(

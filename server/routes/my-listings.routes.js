@@ -167,7 +167,7 @@ app.get('/api/my-listings/:id', authRequired, authenticatedReadLimiter, async (r
   try {
     const [rows] = await pool.execute(
       `SELECT
-        id, listing_no, owner_user_id, owner_name, seller_contact_wechat, seller_contact_phone, insurance_level, compensation_plan, weight_level, deposit, base_ratio, login_method,
+        id, listing_no, owner_user_id, owner_name, seller_contact_wechat, insurance_level, compensation_plan, weight_level, deposit, base_ratio, login_method,
         energy_level, hafu_coin, rent_price, rent_days, login_time_range, daily_cost,
         secret_kd, character_level, operator_appearance, gold_skin, rank_name,
         knife_skin, weapon_skin, region, face_verified, dive_level, seyed_unlocked,
@@ -314,7 +314,6 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
     const listingValues = {
       ownerName: existingListing.owner_name || req.auth.username || payload.ownerName || '匿名用户',
       sellerContactWechat: String(payload.sellerContactWechat || '').trim(),
-      sellerContactPhone: String(payload.sellerContactPhone || '').trim(),
       insuranceLevel: normalizeInsuranceLevel(payload.insuranceLevel),
       compensationPlan: String(payload.compensationPlan || '').trim(),
       weightLevel: String(payload.weightLevel || '').trim(),
@@ -346,7 +345,7 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
       `UPDATE listings SET
         owner_name = ?, listing_status = ?, review_status = ?, reviewed_by = NULL, reviewed_at = NULL, review_reason = NULL,
         insurance_level = ?, compensation_plan = ?, weight_level = ?, deposit = ?, base_ratio = ?, login_method = ?,
-        energy_level = ?, seller_contact_wechat = ?, seller_contact_phone = ?, hafu_coin = ?, rent_price = ?, rent_days = ?, login_time_range = ?, daily_cost = ?,
+        energy_level = ?, seller_contact_wechat = ?, hafu_coin = ?, rent_price = ?, rent_days = ?, login_time_range = ?, daily_cost = ?,
         secret_kd = ?, character_level = ?, operator_appearance = ?, gold_skin = ?, rank_name = ?,
         knife_skin = ?, weapon_skin = ?, region = ?, face_verified = ?, dive_level = ?, seyed_unlocked = ?,
         remark = ?, ban_record = ?
@@ -363,7 +362,6 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
         listingValues.loginMethod,
         listingValues.energyLevel,
         listingValues.sellerContactWechat,
-        listingValues.sellerContactPhone,
         listingValues.hafuCoin,
         listingValues.rentPrice,
         listingValues.rentDays,

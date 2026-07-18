@@ -429,17 +429,6 @@
           <small v-if="fieldErrors.sellerContactWechat" class="field-hint error-field-hint">{{ fieldErrors.sellerContactWechat }}</small>
         </label>
 
-        <label>
-          <span>联系手机号 <i class="required-star">*</i></span>
-          <input
-            v-model.trim="publishForm.sellerContactPhone"
-            type="tel"
-            maxlength="11"
-            placeholder=""
-            @blur="handleFieldBlur('sellerContactPhone')"
-          />
-          <small v-if="fieldErrors.sellerContactPhone" class="field-hint error-field-hint">{{ fieldErrors.sellerContactPhone }}</small>
-        </label>
       </div>
     </section>
 
@@ -881,7 +870,6 @@ export default {
 
       this.publishForm = {
         sellerContactWechat: String(detail.seller_contact_wechat || ''),
-        sellerContactPhone: String(detail.seller_contact_phone || ''),
         insuranceLevel: normalizeInsuranceLevel(detail.insurance_level),
         compensationPlan: String(detail.compensation_plan || DEFAULT_COMPENSATION_PLAN),
         weightLevel: String(detail.weight_level || '7级'),
@@ -979,9 +967,6 @@ export default {
         case 'sellerContactWechat':
           if (!value) return '联系微信为必填'
           return /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(String(value).trim()) ? '' : '请输入正确的微信号'
-        case 'sellerContactPhone':
-          if (!value) return '联系手机号为必填'
-          return /^1[3-9]\d{9}$/.test(String(value).trim()) ? '' : '请输入正确的11位手机号'
         case 'loginMethod':
           return value ? '' : '上号方式为必填'
         case 'loginTimeRange':
@@ -1336,7 +1321,6 @@ export default {
       return {
         ownerName: this.ownerName || '匿名用户',
         sellerContactWechat: String(this.publishForm.sellerContactWechat || '').trim(),
-        sellerContactPhone: String(this.publishForm.sellerContactPhone || '').trim(),
         publishedAt: this.publishForm.publishedAt || getCurrentTimeText(),
         insuranceLevel: this.publishForm.insuranceLevel,
         compensationPlan: this.publishForm.compensationPlan,

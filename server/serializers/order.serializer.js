@@ -29,9 +29,7 @@ export function normalizeOrderMoneyFields(row, options = {}) {
 
   if (!includeSensitiveContacts) {
     delete normalizedRow.buyer_contact_wechat
-    delete normalizedRow.buyer_contact_phone
     delete normalizedRow.seller_contact_wechat
-    delete normalizedRow.seller_contact_phone
   }
 
   return {
