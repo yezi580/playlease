@@ -24,7 +24,7 @@
             </button>
 
             <Transition name="dropdown-fade">
-              <div v-if="activeDropdown === key" class="dropdown-menu" @click.stop>
+              <div v-show="activeDropdown === key && !isMobileView" class="dropdown-menu" @click.stop>
                 <div v-if="filterConfigs[key].regionPicker" class="region-picker-section">
                   <select v-model="selectedRegionProvince" @change="handleRegionProvinceChange">
                     <option value="">全部省份</option>
@@ -125,6 +125,103 @@
         <button class="apply-btn" @click="emitChange">筛选</button>
       </div>
     </div>
+
+    <!-- 移动端独立下拉框 (解决 iOS Safari overflow 裁剪 bug) -->
+    <template v-for="key in allFilterKeys" :key="'mobile-' + key">
+      <Transition name="dropdown-fade">
+        <div v-show="activeDropdown === key && isMobileView" class="dropdown-menu mobile-dropdown" @click.stop>
+          <div v-if="filterConfigs[key].regionPicker" class="region-picker-section">
+            <select v-model="selectedRegionProvince" @change="handleRegionProvinceChange">
+              <option value="">全部省份</option>
+              <option
+                v-for="province in provinceOptions"
+                :key="province"
+                :value="province"
+              >
+                {{ province }}
+              </option>
+            </select>
+
+            <select
+              v-if="requiresRegionCity || !selectedRegionProvince"
+              v-model="selectedRegionCity"
+              @change="handleRegionCityChange"
+            >
+              <option value="">
+                {{ selectedRegionProvince ? '全部城市' : '请先选择省份' }}
+              </option>
+              <option
+                v-for="city in availableRegionCities"
+                :key="city"
+                :value="city"
+              >
+                {{ city }}
+              </option>
+            </select>
+            <div v-else class="region-picker-placeholder">/</div>
+
+            <button
+              v-if="selectedValues.region"
+              class="region-reset-btn"
+              @click="clearRegionSelection"
+            >
+              清空地区
+            </button>
+          </div>
+
+          <template v-else>
+            <div class="dropdown-options">
+              <div
+                v-for="opt in filterConfigs[key].options"
+                :key="opt.value"
+                class="dropdown-item"
+                :class="{
+                  selected: selectedValues[key] === opt.value,
+                  disabled: isCustomInputActive(key) && opt.value !== ''
+                }"
+                @click="selectOption(key, opt.value)"
+              >
+                {{ opt.label }}
+              </div>
+            </div>
+          </template>
+
+          <div v-if="filterConfigs[key].customRange" class="custom-range-section">
+            <div class="custom-input-row">
+              <input
+                v-model.number="customInputs[key].min"
+                type="number"
+                placeholder="最小值"
+                :min="filterConfigs[key].customRange.min"
+                :max="filterConfigs[key].customRange.max"
+                @focus="onCustomFocus(key)"
+                @input="onCustomInput(key)"
+              />
+
+              <span class="range-separator">-</span>
+
+              <input
+                v-model.number="customInputs[key].max"
+                type="number"
+                placeholder="最大值"
+                :min="filterConfigs[key].customRange.min"
+                :max="filterConfigs[key].customRange.max"
+                @focus="onCustomFocus(key)"
+                @input="onCustomInput(key)"
+              />
+
+              <button
+                v-if="customInputs[key].min !== '' || customInputs[key].max !== ''"
+                class="confirm-custom-btn"
+                @click="confirmCustomRange(key)"
+              >
+                应用
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </template>
   </div>
 </template>
 
@@ -198,6 +295,9 @@ export default {
     },
     isCompactView() {
       return this.viewportWidth <= 1200
+    },
+    isMobileView() {
+      return this.viewportWidth <= 960
     },
     isUltraCompactView() {
       return this.viewportWidth <= 768
@@ -497,6 +597,7 @@ export default {
   box-shadow: none; /* Removed shadow */
   margin-bottom: 0; 
   position: relative; /* Make it a containing block for absolute mobile dropdowns */
+  z-index: 50; /* 确保移动端下拉框能覆盖下方内容 */
 }
 
 .filter-layout {
@@ -538,6 +639,16 @@ export default {
   font-size: 14px;
   line-height: 1.2;
   transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+/* 彻底消除移动端 300ms 点击延迟 */
+.filter-trigger,
+.dropdown-item,
+.apply-btn,
+.reset-btn,
+.region-reset-btn,
+.confirm-custom-btn {
+  touch-action: manipulation;
 }
 
 .filter-trigger {
@@ -682,6 +793,7 @@ export default {
   border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  will-change: transform, opacity; /* 提前分配 GPU 渲染层，防止首帧动画掉帧 */
 }
 
 .dropdown-options,
