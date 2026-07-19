@@ -18,12 +18,19 @@ export function registerSupportRoutes(deps) {
   } = deps
   const {
     normalizeSupportStatus,
+    normalizePresaleSupportStatus,
     sanitizeSupportSearchKeyword,
     buildSupportTimeoutMeta,
     getSupportOrderTimeline,
     buildLegacySupportTimeline,
+    buildPresaleConsultationNo,
     sanitizeSupportNote,
     getOrderConversationAccess,
+    getPresaleConversationAccess,
+    ensurePresaleConversation,
+    getConversationForUser,
+    createConversationMessage,
+    emitConversationMessage,
     emitSupportEvent
   } = chatModule
 
@@ -301,6 +308,322 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
     })
   } catch (_error) {
     res.status(500).json({ message: '加载客服订单失败' })
+  }
+})
+
+app.get('/api/support/presale-consultations', authRequired, supportOnly, authenticatedReadLimiter, async (req, res) => {
+  const page = Math.max(1, Number(req.query?.page || 1) || 1)
+  const pageSize = Math.min(100, Math.max(1, Number(req.query?.pageSize || 20) || 20))
+  const offset = (page - 1) * pageSize
+  const status = normalizePresaleSupportStatus(req.query?.status || 'handling')
+  const keyword = sanitizeSupportSearchKeyword(req.query?.keyword)
+
+  try {
+    const keywordWhereSql = keyword
+      ? `AND (
+          consultation_user.username LIKE ?
+          OR support_user.username LIKE ?
+          OR CAST(pc.id AS CHAR) LIKE ?
+        )`
+      : ''
+    const keywordParams = keyword
+      ? [
+          `%${keyword}%`,
+          `%${keyword}%`,
+          `%${keyword}%`
+        ]
+      : []
+
+    const [countRows] = await pool.execute(
+      `SELECT
+          pc.support_status AS support_bucket,
+          COUNT(*) AS total
+       FROM presale_consultations pc
+       JOIN users consultation_user
+         ON consultation_user.id = pc.user_id
+       LEFT JOIN users support_user
+         ON support_user.id = pc.support_assignee_id
+       WHERE pc.support_assignee_id = ?
+         ${keywordWhereSql}
+       GROUP BY pc.support_status`,
+      [req.auth.userId, ...keywordParams]
+    )
+
+    const counts = {
+      handling: 0,
+      resolved: 0
+    }
+    countRows.forEach((row) => {
+      const key = normalizePresaleSupportStatus(row.support_bucket)
+      counts[key] = Number(row.total || 0)
+    })
+
+    const [[countRow]] = await pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM presale_consultations pc
+       JOIN users consultation_user
+         ON consultation_user.id = pc.user_id
+       LEFT JOIN users support_user
+         ON support_user.id = pc.support_assignee_id
+       WHERE pc.support_assignee_id = ?
+         AND pc.support_status = ?
+         ${keywordWhereSql}`,
+      [req.auth.userId, status, ...keywordParams]
+    )
+
+    const [[statsRow]] = await pool.execute(
+      `SELECT
+          SUM(CASE WHEN support_status = 'handling' AND support_assignee_id = ? THEN 1 ELSE 0 END) AS my_handling_count,
+          SUM(CASE WHEN support_status = 'resolved' AND support_assignee_id = ? THEN 1 ELSE 0 END) AS my_resolved_total,
+          SUM(
+            CASE
+              WHEN support_status = 'resolved'
+               AND support_assignee_id = ?
+               AND DATE(resolved_at) = CURDATE()
+              THEN 1 ELSE 0
+            END
+          ) AS my_resolved_today
+       FROM presale_consultations
+       WHERE support_assignee_id = ?`,
+      [
+        req.auth.userId,
+        req.auth.userId,
+        req.auth.userId,
+        req.auth.userId
+      ]
+    )
+
+    const [rows] = await pool.query(
+      `SELECT
+          pc.id,
+          pc.user_id,
+          pc.support_assignee_id,
+          pc.support_status,
+          pc.support_note,
+          pc.created_at,
+          pc.updated_at,
+          pc.resolved_at,
+          consultation_user.username AS consultation_user_name,
+          support_user.username AS support_assignee_name,
+          COALESCE(chat_cp.unread_message_count, 0) AS conversation_unread_count,
+          c.last_message_at
+       FROM presale_consultations pc
+       JOIN users consultation_user
+         ON consultation_user.id = pc.user_id
+       LEFT JOIN users support_user
+         ON support_user.id = pc.support_assignee_id
+       LEFT JOIN conversations c
+         ON c.type = 'presale'
+        AND c.ref_id = pc.id
+       LEFT JOIN conversation_participants chat_cp
+         ON chat_cp.conversation_id = c.id
+        AND chat_cp.user_id = ?
+       WHERE pc.support_assignee_id = ?
+         AND pc.support_status = ?
+         ${keywordWhereSql}
+       ORDER BY COALESCE(c.last_message_at, pc.updated_at, pc.created_at) DESC, pc.id DESC
+       LIMIT ${pageSize} OFFSET ${offset}`,
+      [req.auth.userId, req.auth.userId, status, ...keywordParams]
+    )
+
+    res.json({
+      total: Number(countRow?.total || 0),
+      page,
+      pageSize,
+      status,
+      counts,
+      alerts: {
+        pending_timeout_total: 0,
+        pending_timeout_minutes: 0
+      },
+      workload: {
+        my_handling_count: Number(statsRow?.my_handling_count || 0),
+        my_resolved_total: Number(statsRow?.my_resolved_total || 0),
+        my_resolved_today: Number(statsRow?.my_resolved_today || 0)
+      },
+      keyword,
+      list: rows.map((row) => ({
+        id: Number(row.id || 0),
+        consultation_no: buildPresaleConsultationNo(row.id, row.created_at),
+        user_id: Number(row.user_id || 0),
+        user_name: row.consultation_user_name || `用户 #${Number(row.user_id || 0)}`,
+        support_status: normalizePresaleSupportStatus(row.support_status),
+        support_note: row.support_note || '',
+        support_assignee_id: Number(row.support_assignee_id || 0),
+        support_assignee_name: row.support_assignee_name || '客服',
+        conversation_unread_count: Number(row.conversation_unread_count || 0),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        resolved_at: row.resolved_at,
+        last_message_at: row.last_message_at || row.updated_at || row.created_at
+      }))
+    })
+  } catch (_error) {
+    res.status(500).json({ message: '加载售前咨询失败' })
+  }
+})
+
+app.put('/api/support/presale-consultations/:id/note', authRequired, supportOnly, orderWriteLimiter, async (req, res) => {
+  const consultationId = Number(req.params?.id)
+  const note = sanitizeSupportNote(req.body?.note)
+
+  if (!consultationId || !Number.isFinite(consultationId) || consultationId < 1) {
+    return res.status(400).json({ message: '售前咨询ID无效' })
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, user_id, support_assignee_id, support_status, created_at, updated_at, resolved_at
+       FROM presale_consultations
+       WHERE id = ?
+       LIMIT 1`,
+      [consultationId]
+    )
+    const consultation = rows[0]
+    if (!consultation) {
+      return res.status(404).json({ message: '售前咨询不存在' })
+    }
+    if (Number(consultation.support_assignee_id || 0) !== Number(req.auth.userId)) {
+      return res.status(403).json({ message: '只有当前负责客服可以修改售前备注' })
+    }
+
+    await pool.execute(
+      `UPDATE presale_consultations
+       SET support_note = ?
+       WHERE id = ?`,
+      [note || null, consultationId]
+    )
+
+    const [updatedRows] = await pool.execute(
+      `SELECT
+          pc.id,
+          pc.user_id,
+          pc.support_assignee_id,
+          pc.support_status,
+          pc.support_note,
+          pc.created_at,
+          pc.updated_at,
+          pc.resolved_at,
+          consultation_user.username AS consultation_user_name,
+          support_user.username AS support_assignee_name
+       FROM presale_consultations pc
+       JOIN users consultation_user
+         ON consultation_user.id = pc.user_id
+       LEFT JOIN users support_user
+         ON support_user.id = pc.support_assignee_id
+       WHERE pc.id = ?
+       LIMIT 1`,
+      [consultationId]
+    )
+
+    const updated = updatedRows[0]
+    res.json({
+      id: Number(updated?.id || 0),
+      consultation_no: buildPresaleConsultationNo(updated?.id, updated?.created_at),
+      user_id: Number(updated?.user_id || 0),
+      user_name: updated?.consultation_user_name || '',
+      support_status: normalizePresaleSupportStatus(updated?.support_status),
+      support_note: updated?.support_note || '',
+      support_assignee_id: Number(updated?.support_assignee_id || 0),
+      support_assignee_name: updated?.support_assignee_name || '客服',
+      created_at: updated?.created_at || null,
+      updated_at: updated?.updated_at || null,
+      resolved_at: updated?.resolved_at || null
+    })
+  } catch (_error) {
+    res.status(500).json({ message: '保存售前备注失败' })
+  }
+})
+
+app.put('/api/support/presale-consultations/:id/resolve', authRequired, supportOnly, orderWriteLimiter, async (req, res) => {
+  const consultationId = Number(req.params?.id)
+  const note = sanitizeSupportNote(req.body?.note)
+
+  if (!consultationId || !Number.isFinite(consultationId) || consultationId < 1) {
+    return res.status(400).json({ message: '售前咨询ID无效' })
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, support_assignee_id, support_status
+       FROM presale_consultations
+       WHERE id = ?
+       LIMIT 1`,
+      [consultationId]
+    )
+    const consultation = rows[0]
+    if (!consultation) {
+      return res.status(404).json({ message: '售前咨询不存在' })
+    }
+    if (Number(consultation.support_assignee_id || 0) !== Number(req.auth.userId)) {
+      return res.status(403).json({ message: '只有当前负责客服可以完成售前咨询' })
+    }
+    if (normalizePresaleSupportStatus(consultation.support_status) === 'resolved') {
+      return res.status(400).json({ message: '当前售前咨询已完成' })
+    }
+
+    await pool.execute(
+      `UPDATE presale_consultations
+       SET support_status = 'resolved',
+           support_note = ?,
+           resolved_at = NOW()
+       WHERE id = ?`,
+      [note || null, consultationId]
+    )
+
+    const accessibleConsultation = await getPresaleConversationAccess(consultationId, req.auth.userId, 'support')
+    if (accessibleConsultation) {
+      const conversationId = await ensurePresaleConversation(accessibleConsultation)
+      const conversation = await getConversationForUser(conversationId, req.auth.userId)
+      if (conversation) {
+        const systemMessage = await createConversationMessage({
+          conversationId,
+          senderUserId: req.auth.userId,
+          messageType: 'system',
+          content: `售前咨询已处理完成。${note ? `说明：${note}` : '如有其他问题，可重新发起咨询。'}`
+        })
+        await emitConversationMessage(conversation, systemMessage, req.auth.userId)
+      }
+    }
+
+    const [updatedRows] = await pool.execute(
+      `SELECT
+          pc.id,
+          pc.user_id,
+          pc.support_assignee_id,
+          pc.support_status,
+          pc.support_note,
+          pc.created_at,
+          pc.updated_at,
+          pc.resolved_at,
+          consultation_user.username AS consultation_user_name,
+          support_user.username AS support_assignee_name
+       FROM presale_consultations pc
+       JOIN users consultation_user
+         ON consultation_user.id = pc.user_id
+       LEFT JOIN users support_user
+         ON support_user.id = pc.support_assignee_id
+       WHERE pc.id = ?
+       LIMIT 1`,
+      [consultationId]
+    )
+
+    const updated = updatedRows[0]
+    res.json({
+      id: Number(updated?.id || 0),
+      consultation_no: buildPresaleConsultationNo(updated?.id, updated?.created_at),
+      user_id: Number(updated?.user_id || 0),
+      user_name: updated?.consultation_user_name || '',
+      support_status: normalizePresaleSupportStatus(updated?.support_status),
+      support_note: updated?.support_note || '',
+      support_assignee_id: Number(updated?.support_assignee_id || 0),
+      support_assignee_name: updated?.support_assignee_name || '客服',
+      created_at: updated?.created_at || null,
+      updated_at: updated?.updated_at || null,
+      resolved_at: updated?.resolved_at || null
+    })
+  } catch (_error) {
+    res.status(500).json({ message: '完成售前咨询失败' })
   }
 })
 

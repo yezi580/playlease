@@ -548,7 +548,9 @@
     />
     <ConversationPanel
       :visible="showConversationPanel"
+      :conversation-type="selectedConversationType"
       :order-id="selectedConversationOrderId"
+      :consultation-id="selectedConversationConsultationId"
       :user-role="selectedConversationUserRole"
       @close="handleConversationPanelClose"
     />
@@ -688,7 +690,9 @@ export default {
       messageLoading: false,
       messageError: '',
       showConversationPanel: false,
+      selectedConversationType: 'order',
       selectedConversationOrderId: 0,
+      selectedConversationConsultationId: 0,
       selectedConversationUserRole: 'buyer',
       showPaymentModal: false,
       selectedPaymentOrder: null,
@@ -1875,9 +1879,15 @@ export default {
       await this.openNotification(messageItem)
     },
     async openConversation(conversation) {
-      const orderId = Number(conversation?.order_id || conversation?.ref_id || 0)
-      if (!orderId) {
+      const conversationType = String(conversation?.type || '').trim().toLowerCase() === 'presale' ? 'presale' : 'order'
+      const orderId = Number(conversation?.order_id || 0)
+      const consultationId = Number(conversation?.consultation_id || (conversationType === 'presale' ? conversation?.ref_id : 0) || 0)
+      if (conversationType === 'order' && !orderId) {
         showErrorToast('该聊天室缺少订单信息，暂时无法打开')
+        return
+      }
+      if (conversationType === 'presale' && !consultationId) {
+        showErrorToast('该售前咨询缺少会话信息，暂时无法打开')
         return
       }
 
@@ -1894,8 +1904,10 @@ export default {
         )
       }
 
-      this.selectedConversationOrderId = orderId
-      this.selectedConversationUserRole = conversation?.self_role || 'buyer'
+      this.selectedConversationType = conversationType
+      this.selectedConversationOrderId = conversationType === 'order' ? orderId : 0
+      this.selectedConversationConsultationId = conversationType === 'presale' ? consultationId : 0
+      this.selectedConversationUserRole = conversation?.self_role || (conversationType === 'presale' ? 'user' : 'buyer')
       this.showConversationPanel = true
     },
     async openNotification(notification) {
@@ -1919,6 +1931,9 @@ export default {
     },
     async handleConversationPanelClose() {
       this.showConversationPanel = false
+      this.selectedConversationType = 'order'
+      this.selectedConversationOrderId = 0
+      this.selectedConversationConsultationId = 0
       await this.loadMessageData({ silent: true })
     },
     handlePaymentModalClose() {

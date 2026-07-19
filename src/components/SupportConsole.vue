@@ -8,7 +8,7 @@
           type="text"
           class="search-input"
           maxlength="50"
-          placeholder="搜索订单号、买家、卖家"
+          :placeholder="searchPlaceholder"
           @keydown.enter.prevent="applyFilters"
         >
         <button type="button" class="search-submit-btn" aria-label="搜索客服订单" @click="applyFilters">
@@ -30,7 +30,7 @@
         >
           {{ tab.label }} {{ tab.count }}
         </button>
-        <button type="button" class="ghost-btn" :disabled="loading" @click="applyFilters">
+        <button type="button" class="ghost-btn" :disabled="currentLoading" @click="applyFilters">
           刷新
         </button>
         <button
@@ -46,41 +46,58 @@
 
     <div class="summary-grid">
       <article class="summary-card">
-        <span>待客服跟进</span>
-        <strong>{{ workload.my_handling_count }}</strong>
+        <span>{{ isAfterSaleDesk ? '待售后跟进' : '待售前跟进' }}</span>
+        <strong>{{ currentWorkload.my_handling_count }}</strong>
       </article>
       <article class="summary-card">
         <span>已完成</span>
-        <strong>{{ workload.my_resolved_total }}</strong>
+        <strong>{{ currentWorkload.my_resolved_total }}</strong>
       </article>
       <article class="summary-card">
         <span>今日完成</span>
-        <strong>{{ workload.my_resolved_today }}</strong>
+        <strong>{{ currentWorkload.my_resolved_today }}</strong>
       </article>
       <article class="summary-card">
-        <span>超时提醒</span>
-        <strong>{{ alerts.pending_timeout_total }}</strong>
+        <span>{{ isAfterSaleDesk ? '超时提醒' : '当前列表' }}</span>
+        <strong>{{ isAfterSaleDesk ? alerts.pending_timeout_total : (currentCounts[activeStatus] || 0) }}</strong>
       </article>
     </div>
 
     <div class="shell">
       <aside class="panel panel--orders">
         <div class="panel-head">
-          <h3>我的订单</h3>
-          <span>{{ counts[activeStatus] || 0 }} 条</span>
+          <div class="desk-tabs">
+            <button
+              type="button"
+              class="desk-tab-btn"
+              :class="{ 'desk-tab-btn--active': activeDesk === 'aftersale' }"
+              @click="changeDesk('aftersale')"
+            >
+              售后
+            </button>
+            <button
+              type="button"
+              class="desk-tab-btn"
+              :class="{ 'desk-tab-btn--active': activeDesk === 'presale' }"
+              @click="changeDesk('presale')"
+            >
+              售前
+            </button>
+          </div>
+          <span>{{ currentCounts[activeStatus] || 0 }} 条</span>
         </div>
         <div class="panel-scroll-shell">
           <div
             ref="ordersPanel"
             class="panel-body panel-body--orders"
-            :style="{ opacity: loading ? 0.6 : 1, pointerEvents: loading ? 'none' : 'auto', transition: 'opacity 0.2s' }"
+            :style="{ opacity: currentLoading ? 0.6 : 1, pointerEvents: currentLoading ? 'none' : 'auto', transition: 'opacity 0.2s' }"
             @wheel.stop
             @scroll="handlePanelScroll('orders')"
           >
-            <div v-if="loading && !orders.length" class="state">正在加载订单...</div>
-            <div v-else-if="error" class="state state--error">{{ error }}</div>
-            <div v-else-if="!orders.length && !loading" class="state">当前没有匹配订单。</div>
-            <template v-else>
+            <div v-if="currentLoading && !currentList.length" class="state">{{ isAfterSaleDesk ? '正在加载订单...' : '正在加载售前咨询...' }}</div>
+            <div v-else-if="currentError" class="state state--error">{{ currentError }}</div>
+            <div v-else-if="!currentList.length && !currentLoading" class="state">{{ isAfterSaleDesk ? '当前没有匹配订单。' : '当前没有匹配的售前咨询。' }}</div>
+            <template v-else-if="isAfterSaleDesk">
               <button
                 v-for="order in orders"
                 :key="order.id"
@@ -124,6 +141,40 @@
                 </div>
               </button>
             </template>
+            <template v-else>
+              <button
+                v-for="consultation in presaleConsultations"
+                :key="consultation.id"
+                type="button"
+                class="order-card"
+                :class="{ 'order-card--active': Number(consultation.id) === Number(activePresaleId) }"
+                @click="selectPresaleConsultation(consultation.id)"
+              >
+                <div class="order-card-top">
+                  <div class="order-card-title">
+                    <strong>{{ consultation.consultation_no }}</strong>
+                    <span
+                      v-if="Number(consultation.conversation_unread_count || 0) > 0"
+                      class="order-card-unread-badge"
+                    >
+                      {{ formatUnreadCount(consultation.conversation_unread_count) }}
+                    </span>
+                  </div>
+                  <span>{{ formatDateTime(consultation.last_message_at || consultation.created_at) }}</span>
+                </div>
+                <p>咨询用户：{{ consultation.user_name }}</p>
+                <div class="order-card-meta order-card-meta--grid">
+                  <span class="meta-cell">
+                    <em>当前客服</em>
+                    <strong>{{ consultation.support_assignee_name || '客服' }}</strong>
+                  </span>
+                  <span class="meta-cell">
+                    <em>咨询状态</em>
+                    <strong>{{ getSupportStatusLabel(consultation.support_status) }}</strong>
+                  </span>
+                </div>
+              </button>
+            </template>
           </div>
           <div
             v-show="ordersScrollbarEnabled"
@@ -137,7 +188,74 @@
       </aside>
 
       <section class="panel panel--detail">
-        <template v-if="activeOrder">
+        <template v-if="!isAfterSaleDesk && activePresaleConsultation">
+          <div class="panel-head">
+            <h3>售前详情</h3>
+            <span class="badge" :class="`badge--${activePresaleConsultation.support_status}`">
+              {{ getSupportStatusLabel(activePresaleConsultation.support_status) }}
+            </span>
+          </div>
+
+          <div class="panel-scroll-shell">
+            <div
+              ref="detailPanel"
+              class="panel-body panel-body--detail"
+              @wheel.stop
+              @scroll="handlePanelScroll('detail')"
+            >
+              <div class="detail-grid">
+                <div><span>咨询单号</span><strong>{{ activePresaleConsultation.consultation_no }}</strong></div>
+                <div><span>咨询用户</span><strong>{{ activePresaleConsultation.user_name }}</strong></div>
+                <div><span>当前客服</span><strong>{{ activePresaleConsultation.support_assignee_name || '客服' }}</strong></div>
+                <div><span>咨询状态</span><strong>{{ getSupportStatusLabel(activePresaleConsultation.support_status) }}</strong></div>
+                <div><span>创建时间</span><strong>{{ formatDateTime(activePresaleConsultation.created_at) }}</strong></div>
+                <div><span>最后更新</span><strong>{{ formatDateTime(activePresaleConsultation.updated_at || activePresaleConsultation.created_at) }}</strong></div>
+              </div>
+
+              <div class="detail-actions">
+                <button type="button" class="primary-btn" @click="openConversation(activePresaleConsultation.id, 'presale')">
+                  进入咨询会话
+                </button>
+                <button type="button" class="ghost-btn" :disabled="presaleNoteSaving || !canSavePresaleNote" @click="savePresaleNote">
+                  {{ presaleNoteSaving ? '保存中...' : '保存备注' }}
+                </button>
+                <button
+                  v-if="canResolvePresale"
+                  type="button"
+                  class="ok-btn"
+                  :disabled="presaleResolving"
+                  @click="resolvePresaleConsultation"
+                >
+                  {{ presaleResolving ? '提交中...' : '标记完成' }}
+                </button>
+              </div>
+
+              <article class="info-block">
+                <div class="note-head">
+                  <h4>内部备注</h4>
+                  <span>{{ presaleNoteDraft.length }}/500</span>
+                </div>
+                <textarea
+                  v-model.trim="presaleNoteDraft"
+                  class="note-textarea"
+                  rows="4"
+                  maxlength="500"
+                  placeholder="记录售前沟通重点、意向问题与处理结果。"
+                ></textarea>
+              </article>
+            </div>
+            <div
+              v-show="detailScrollbarEnabled"
+              class="panel-scrollbar"
+              :class="{ 'panel-scrollbar--visible': detailScrollbarVisible }"
+              aria-hidden="true"
+            >
+              <span class="panel-scrollbar-thumb" :style="getScrollbarThumbStyle('detail')"></span>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="isAfterSaleDesk && activeOrder">
           <div class="panel-head">
             <h3>订单详情</h3>
             <span class="badge" :class="`badge--${activeOrder.support_status}`">
@@ -302,7 +420,7 @@
             @wheel.stop
             @scroll="handlePanelScroll('detail')"
           >
-            <div class="state">请选择一条订单查看详情。</div>
+            <div class="state">{{ isAfterSaleDesk ? '请选择一条订单查看详情。' : '请选择一条售前咨询查看详情。' }}</div>
           </div>
           <div
             v-show="detailScrollbarEnabled"
@@ -319,9 +437,11 @@
     <ConversationPanel
       v-if="canAccessOrderDesk"
       :visible="messagePanelVisible"
-      :order-id="activeOrderId"
+      :conversation-type="activeConversationType"
+      :order-id="activeConversationOrderId"
+      :consultation-id="activeConversationConsultationId"
       user-role="support"
-      @close="messagePanelVisible = false"
+      @close="handleConversationClose"
     />
     <Transition name="freeze-dialog-fade">
       <div
@@ -612,6 +732,7 @@ export default {
   },
   data() {
     return {
+      activeDesk: 'aftersale',
       loading: false,
       error: '',
       keyword: '',
@@ -634,6 +755,18 @@ export default {
       cancelSubmitting: false,
       settlementSubmitting: false,
       messagePanelVisible: false,
+      activeConversationType: 'order',
+      activeConversationOrderId: 0,
+      activeConversationConsultationId: 0,
+      presaleLoading: false,
+      presaleError: '',
+      presaleCounts: { handling: 0, resolved: 0 },
+      presaleWorkload: { my_handling_count: 0, my_resolved_total: 0, my_resolved_today: 0 },
+      presaleConsultations: [],
+      activePresaleId: 0,
+      presaleNoteDraft: '',
+      presaleNoteSaving: false,
+      presaleResolving: false,
       ordersScrollbarVisible: false,
       detailScrollbarVisible: false,
       ordersScrollbarEnabled: false,
@@ -678,10 +811,32 @@ export default {
     canAccessWithdrawDesk() {
       return this.isAdminUser
     },
+    isAfterSaleDesk() {
+      return this.activeDesk === 'aftersale'
+    },
+    searchPlaceholder() {
+      return this.isAfterSaleDesk ? '搜索订单号、买家、卖家' : '搜索咨询编号、咨询用户、客服'
+    },
+    currentLoading() {
+      return this.isAfterSaleDesk ? this.loading : this.presaleLoading
+    },
+    currentError() {
+      return this.isAfterSaleDesk ? this.error : this.presaleError
+    },
+    currentCounts() {
+      return this.isAfterSaleDesk ? this.counts : this.presaleCounts
+    },
+    currentWorkload() {
+      return this.isAfterSaleDesk ? this.workload : this.presaleWorkload
+    },
+    currentList() {
+      return this.isAfterSaleDesk ? this.orders : this.presaleConsultations
+    },
     statusTabs() {
+      const counts = this.currentCounts
       return [
-        { value: 'handling', label: '处理中', count: this.counts.handling || 0 },
-        { value: 'resolved', label: '已完成', count: this.counts.resolved || 0 }
+        { value: 'handling', label: '处理中', count: counts.handling || 0 },
+        { value: 'resolved', label: '已完成', count: counts.resolved || 0 }
       ]
     },
     withdrawStatusTabs() {
@@ -695,6 +850,9 @@ export default {
     },
     activeOrder() {
       return this.orders.find((item) => Number(item.id) === Number(this.activeOrderId)) || null
+    },
+    activePresaleConsultation() {
+      return this.presaleConsultations.find((item) => Number(item.id) === Number(this.activePresaleId)) || null
     },
     filteredWithdrawRequests() {
       const keyword = String(this.withdrawKeyword || '').trim().toLowerCase()
@@ -726,6 +884,13 @@ export default {
     },
     canSaveNote() {
       return this.activeOrder && String(this.noteDraft || '').trim() !== String(this.activeOrder.support_note || '').trim()
+    },
+    canSavePresaleNote() {
+      return this.activePresaleConsultation
+        && String(this.presaleNoteDraft || '').trim() !== String(this.activePresaleConsultation.support_note || '').trim()
+    },
+    canResolvePresale() {
+      return this.activePresaleConsultation?.support_status !== 'resolved'
     },
     canExecuteSettlement() {
       return (
@@ -778,6 +943,7 @@ export default {
     activeOrderId: {
       immediate: true,
       handler(orderId) {
+        if (!this.isAfterSaleDesk) return
         if (!Number(orderId || 0)) {
           this.timeline = []
           this.$nextTick(() => {
@@ -786,6 +952,15 @@ export default {
           return
         }
         this.fetchTimeline(orderId)
+      }
+    },
+    activePresaleConsultation: {
+      immediate: true,
+      handler(consultation) {
+        this.presaleNoteDraft = consultation?.support_note || ''
+        this.$nextTick(() => {
+          this.updateScrollbar('detail')
+        })
       }
     },
     activeWithdrawRequest: {
@@ -931,9 +1106,51 @@ export default {
         this.refreshScrollbars()
       }
     },
+    async fetchPresaleConsultations(status = this.activeStatus) {
+      this.activeStatus = status
+      this.presaleLoading = true
+      this.presaleError = ''
+      try {
+        const params = new URLSearchParams({
+          page: '1',
+          pageSize: '50',
+          status
+        })
+        if (this.keyword) {
+          params.set('keyword', this.keyword)
+        }
+        const data = await apiFetch(`/api/support/presale-consultations?${params.toString()}`)
+        this.presaleConsultations = Array.isArray(data.list) ? data.list : []
+        this.presaleCounts = {
+          handling: Number(data.counts?.handling || 0),
+          resolved: Number(data.counts?.resolved || 0)
+        }
+        this.presaleWorkload = {
+          my_handling_count: Number(data.workload?.my_handling_count || 0),
+          my_resolved_total: Number(data.workload?.my_resolved_total || 0),
+          my_resolved_today: Number(data.workload?.my_resolved_today || 0)
+        }
+        if (this.presaleConsultations.length && !this.presaleConsultations.some((item) => Number(item.id) === Number(this.activePresaleId))) {
+          this.activePresaleId = Number(this.presaleConsultations[0].id)
+        }
+        if (!this.presaleConsultations.length) {
+          this.activePresaleId = 0
+        }
+        this.refreshScrollbars()
+      } catch (error) {
+        this.presaleError = error.message || '加载售前咨询失败'
+      } finally {
+        this.presaleLoading = false
+        this.refreshScrollbars()
+      }
+    },
     async applyFilters() {
       this.keyword = String(this.keywordDraft || '').trim().slice(0, 50)
-      await this.fetchOrders(this.activeStatus)
+      if (this.isAfterSaleDesk) {
+        await this.fetchOrders(this.activeStatus)
+        return
+      }
+      await this.fetchPresaleConsultations(this.activeStatus)
     },
     applyWithdrawFilters() {
       this.withdrawKeyword = String(this.withdrawKeywordDraft || '').trim().slice(0, 50)
@@ -947,7 +1164,24 @@ export default {
     },
     changeStatus(status) {
       if (status === this.activeStatus) return
-      this.fetchOrders(status)
+      if (this.isAfterSaleDesk) {
+        this.fetchOrders(status)
+        return
+      }
+      this.fetchPresaleConsultations(status)
+    },
+    async changeDesk(desk) {
+      const nextDesk = desk === 'presale' ? 'presale' : 'aftersale'
+      if (nextDesk === this.activeDesk) return
+      this.activeDesk = nextDesk
+      this.messagePanelVisible = false
+      this.handleConversationClose()
+      this.refreshScrollbars()
+      if (this.isAfterSaleDesk) {
+        await this.fetchOrders(this.activeStatus)
+        return
+      }
+      await this.fetchPresaleConsultations(this.activeStatus)
     },
     async fetchWithdrawRequests() {
       this.withdrawLoading = true
@@ -1039,14 +1273,38 @@ export default {
     selectOrder(orderId) {
       this.activeOrderId = Number(orderId || 0)
     },
-    openConversation(orderId) {
-      this.activeOrderId = Number(orderId || 0)
-      this.orders = this.orders.map((item) => (
-        Number(item.id) === Number(this.activeOrderId)
-          ? { ...item, conversation_unread_count: 0 }
-          : item
-      ))
+    selectPresaleConsultation(consultationId) {
+      this.activePresaleId = Number(consultationId || 0)
+    },
+    openConversation(targetId, type = 'order') {
+      const conversationType = String(type || '').trim().toLowerCase() === 'presale' ? 'presale' : 'order'
+      this.activeConversationType = conversationType
+      if (conversationType === 'presale') {
+        this.activePresaleId = Number(targetId || 0)
+        this.activeConversationOrderId = 0
+        this.activeConversationConsultationId = Number(targetId || 0)
+        this.presaleConsultations = this.presaleConsultations.map((item) => (
+          Number(item.id) === Number(this.activeConversationConsultationId)
+            ? { ...item, conversation_unread_count: 0 }
+            : item
+        ))
+      } else {
+        this.activeOrderId = Number(targetId || 0)
+        this.activeConversationOrderId = Number(targetId || 0)
+        this.activeConversationConsultationId = 0
+        this.orders = this.orders.map((item) => (
+          Number(item.id) === Number(this.activeConversationOrderId)
+            ? { ...item, conversation_unread_count: 0 }
+            : item
+        ))
+      }
       this.messagePanelVisible = true
+    },
+    handleConversationClose() {
+      this.messagePanelVisible = false
+      this.activeConversationType = this.isAfterSaleDesk ? 'order' : 'presale'
+      this.activeConversationOrderId = 0
+      this.activeConversationConsultationId = 0
     },
     openFreezeDialog() {
       if (!this.canFreezeFunds || this.statusSubmitting) return
@@ -1114,6 +1372,51 @@ export default {
         showErrorToast(error.message || '保存内部备注失败')
       } finally {
         this.noteSaving = false
+      }
+    },
+    async savePresaleNote() {
+      if (!this.activePresaleConsultation || !this.canSavePresaleNote) return
+      this.presaleNoteSaving = true
+      try {
+        const updated = await apiFetch(`/api/support/presale-consultations/${this.activePresaleConsultation.id}/note`, {
+          method: 'PUT',
+          body: JSON.stringify({ note: this.presaleNoteDraft })
+        })
+        this.presaleConsultations = this.presaleConsultations.map((item) => (
+          Number(item.id) === Number(updated.id)
+            ? { ...item, ...updated, support_note: updated.support_note || '' }
+            : item
+        ))
+        showSuccessToast('售前备注已保存')
+      } catch (error) {
+        showErrorToast(error.message || '保存售前备注失败')
+      } finally {
+        this.presaleNoteSaving = false
+      }
+    },
+    async resolvePresaleConsultation() {
+      if (!this.activePresaleConsultation || this.presaleResolving || !this.canResolvePresale) return
+      const confirmed = await showConfirm({
+        title: '完成售前咨询',
+        message: '确认将当前售前咨询标记为已完成吗？系统会同步向会话内发送完成通知。',
+        confirmText: '确认完成',
+        cancelText: '返回',
+        tone: 'primary'
+      })
+      if (!confirmed) return
+
+      this.presaleResolving = true
+      try {
+        await apiFetch(`/api/support/presale-consultations/${this.activePresaleConsultation.id}/resolve`, {
+          method: 'PUT',
+          body: JSON.stringify({ note: this.presaleNoteDraft })
+        })
+        showSuccessToast('售前咨询已完成')
+        await this.fetchPresaleConsultations(this.activeStatus)
+      } catch (error) {
+        showErrorToast(error.message || '完成售前咨询失败')
+      } finally {
+        this.presaleResolving = false
       }
     },
     async executeSettlement() {
@@ -1649,6 +1952,36 @@ export default {
   align-items: center;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.desk-tabs {
+  display: flex;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 8px;
+  gap: 4px;
+}
+
+.desk-tab-btn {
+  border: none;
+  background: transparent;
+  padding: 6px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.desk-tab-btn:hover {
+  color: #334155;
+}
+
+.desk-tab-btn--active {
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .panel-head--sub {

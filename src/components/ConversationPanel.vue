@@ -168,9 +168,17 @@ export default {
       type: Boolean,
       default: false
     },
+    conversationType: {
+      type: String,
+      default: 'order'
+    },
     orderId: {
       type: [Number, String],
-      required: true
+      default: 0
+    },
+    consultationId: {
+      type: [Number, String],
+      default: 0
     },
     userRole: {
       type: String,
@@ -198,12 +206,28 @@ export default {
     }
   },
   computed: {
+    normalizedConversationType() {
+      return String(this.conversationType || '').trim().toLowerCase() === 'presale' ? 'presale' : 'order'
+    },
+    targetResourceId() {
+      return this.normalizedConversationType === 'presale'
+        ? Number(this.consultationId || 0)
+        : Number(this.orderId || 0)
+    },
+    targetConversationKey() {
+      const resourceId = this.targetResourceId
+      return `${this.normalizedConversationType}:${resourceId > 0 ? resourceId : 'self'}`
+    },
     headerTitle() {
-      return this.conversation?.title || '订单沟通'
+      if (this.conversation?.title) return this.conversation.title
+      return this.normalizedConversationType === 'presale' ? '售前咨询' : '订单沟通'
     },
     counterpartName() {
       if (this.conversation?.counterpart_name) {
         return this.conversation.counterpart_name
+      }
+      if (this.normalizedConversationType === 'presale') {
+        return this.userRole === 'support' ? '咨询用户' : '售前客服'
       }
       if (this.userRole === 'support') {
         return '买家 / 卖家'
@@ -211,6 +235,10 @@ export default {
       return this.userRole === 'seller' ? '买家' : '卖家'
     },
     headerSubtitle() {
+      if (this.normalizedConversationType === 'presale') {
+        const consultationNo = this.conversation?.consultation_no ? `咨询单号：${this.conversation.consultation_no}` : '售前咨询会话'
+        return `${consultationNo} · 对方：${this.counterpartName}`
+      }
       const orderNo = this.conversation?.order_no ? `订单号：${this.conversation.order_no}` : '订单会话'
       return `${orderNo} · 对方：${this.counterpartName}`
     },
@@ -233,6 +261,14 @@ export default {
       }
     },
     orderId() {
+      if (!this.visible) return
+      this.initializeConversation()
+    },
+    consultationId() {
+      if (!this.visible) return
+      this.initializeConversation()
+    },
+    conversationType() {
       if (!this.visible) return
       this.initializeConversation()
     },
@@ -280,7 +316,7 @@ export default {
     isLatestConversationRequest(requestId, orderId) {
       return this.visible
         && this.conversationRequestId === requestId
-        && String(this.orderId || '') === String(orderId || '')
+        && this.targetConversationKey === String(orderId || '')
     },
     handlePageVisibilityChange() {
       this.pageVisible = typeof document === 'undefined' || document.visibilityState === 'visible'
@@ -297,7 +333,7 @@ export default {
       }
     },
     async initializeConversation() {
-      const targetOrderId = String(this.orderId || '')
+      const targetConversationKey = this.targetConversationKey
       this.teardownConversation()
       const requestId = ++this.conversationRequestId
       this.loading = true
@@ -310,14 +346,27 @@ export default {
       this.joinedConversation = false
 
       try {
-        const conversation = await apiFetch(`/api/conversations/order/${targetOrderId}`, {
-          method: 'POST'
-        })
-        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
+        let conversation = null
+        if (this.normalizedConversationType === 'presale') {
+          const consultationId = Number(this.consultationId || 0)
+          const endpoint = consultationId > 0
+            ? `/api/conversations/presale/${consultationId}`
+            : '/api/conversations/presale'
+          conversation = await apiFetch(endpoint, { method: 'POST' })
+        } else {
+          const orderId = Number(this.orderId || 0)
+          if (!orderId) {
+            throw new Error('订单ID无效')
+          }
+          conversation = await apiFetch(`/api/conversations/order/${orderId}`, {
+            method: 'POST'
+          })
+        }
+        if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
         this.conversation = conversation
 
         const history = await apiFetch(`/api/conversations/${conversation.id}/messages?page=1&pageSize=100`)
-        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
+        if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
         this.currentUserId = Number(
           history.current_user_id
           || history.conversation?.current_user_id
@@ -327,16 +376,16 @@ export default {
         this.messages = this.normalizeMessages(history.list)
 
         await this.tryMarkConversationRead()
-        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
+        if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
         await nextTick()
-        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
+        if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
         this.scrollToBottom()
         this.setupSocket()
       } catch (error) {
-        if (!this.isLatestConversationRequest(requestId, targetOrderId)) return
+        if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
         this.error = error.message || '加载会话失败，请稍后重试'
       } finally {
-        if (this.isLatestConversationRequest(requestId, targetOrderId)) {
+        if (this.isLatestConversationRequest(requestId, targetConversationKey)) {
           this.loading = false
         }
       }

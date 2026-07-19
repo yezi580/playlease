@@ -94,6 +94,11 @@ function normalizeConversationMessageType(messageType) {
   return ['text', 'image', 'system'].includes(normalized) ? normalized : 'text'
 }
 
+function normalizeConversationType(type) {
+  const normalized = String(type || '').trim().toLowerCase()
+  return ['order', 'presale'].includes(normalized) ? normalized : 'order'
+}
+
 function sanitizeConversationMediaUrl(mediaUrl) {
   const normalized = String(mediaUrl || '').trim()
   if (!normalized) return ''
@@ -130,6 +135,11 @@ function sanitizeSupportNote(note) {
 function normalizeSupportStatus(status) {
   const value = String(status || '').trim()
   return ['pending', 'handling', 'resolved'].includes(value) ? value : 'none'
+}
+
+function normalizePresaleSupportStatus(status) {
+  const value = String(status || '').trim()
+  return value === 'resolved' ? 'resolved' : 'handling'
 }
 
 function sanitizeSupportSearchKeyword(keyword) {
@@ -538,32 +548,70 @@ function buildOrderConversationTitle(order) {
   return `订单沟通 - 订单 #${order?.id || ''}`.trim()
 }
 
+function buildPresaleConsultationNo(id, createdAt) {
+  const safeId = Number(id || 0)
+  const date = createdAt ? new Date(createdAt) : new Date()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `QZ${year}${month}${day}${String(safeId).padStart(6, '0')}`
+}
+
+function buildPresaleConversationTitle(consultation) {
+  const userName = String(
+    consultation?.consultation_user_name
+    || consultation?.user_name
+    || consultation?.username
+    || ''
+  ).trim()
+  if (userName) return `售前咨询 - ${userName}`
+  return `售前咨询 #${consultation?.id || ''}`.trim()
+}
+
 function serializeConversationRow(row, viewerUserId) {
+  const conversationType = normalizeConversationType(row.type)
+  const isPresaleConversation = conversationType === 'presale'
+  const currentUserId = Number(viewerUserId || 0)
   const buyerId = Number(row.buyer_id || 0)
   const sellerId = Number(row.seller_id || 0)
-  const currentUserId = Number(viewerUserId || 0)
-  const selfRole = buyerId === currentUserId ? 'buyer' : (sellerId === currentUserId ? 'seller' : String(row.participant_role || 'buyer'))
-  const counterpartName = selfRole === 'buyer'
-    ? (row.seller_user_name || row.seller_name || '卖家')
-    : (selfRole === 'seller'
-        ? (row.buyer_name || '买家')
-        : `${row.buyer_name || '买家'} / ${row.seller_user_name || row.seller_name || '卖家'}`)
+  const consultationUserId = Number(row.consultation_user_id || 0)
+  const supportAssigneeId = Number(row.consultation_support_assignee_id || row.support_assignee_id || 0)
+  const selfRole = isPresaleConversation
+    ? (consultationUserId === currentUserId ? 'user' : String(row.participant_role || 'support'))
+    : (buyerId === currentUserId ? 'buyer' : (sellerId === currentUserId ? 'seller' : String(row.participant_role || 'buyer')))
+  const counterpartName = isPresaleConversation
+    ? (selfRole === 'support'
+        ? (row.consultation_user_name || '咨询用户')
+        : (row.consultation_support_name || '售前客服'))
+    : (selfRole === 'buyer'
+        ? (row.seller_user_name || row.seller_name || '卖家')
+        : (selfRole === 'seller'
+            ? (row.buyer_name || '买家')
+            : `${row.buyer_name || '买家'} / ${row.seller_user_name || row.seller_name || '卖家'}`))
 
   return {
     id: Number(row.id),
-    type: row.type,
+    type: conversationType,
     ref_id: Number(row.ref_id),
-    title: row.title || buildOrderConversationTitle(row),
+    title: row.title || (isPresaleConversation ? buildPresaleConversationTitle(row) : buildOrderConversationTitle(row)),
     status: row.status,
-    order_id: Number(row.ref_id),
-    order_no: row.order_no || '',
-    listing_title: row.listing_title || '',
-    support_status: normalizeSupportStatus(row.support_status),
+    order_id: isPresaleConversation ? 0 : Number(row.ref_id),
+    order_no: isPresaleConversation ? '' : (row.order_no || ''),
+    listing_title: isPresaleConversation ? '' : (row.listing_title || ''),
+    consultation_id: isPresaleConversation ? Number(row.ref_id) : 0,
+    consultation_no: isPresaleConversation
+      ? buildPresaleConsultationNo(row.ref_id, row.consultation_created_at || row.created_at)
+      : '',
+    support_status: isPresaleConversation
+      ? normalizePresaleSupportStatus(row.presale_support_status)
+      : normalizeSupportStatus(row.support_status),
     self_role: selfRole,
     counterpart_name: counterpartName,
-    buyer_name: row.buyer_name || '买家',
-    seller_name: row.seller_user_name || row.seller_name || '卖家',
-    support_assignee_id: Number(row.support_assignee_id || 0),
+    buyer_name: isPresaleConversation ? (row.consultation_user_name || '咨询用户') : (row.buyer_name || '买家'),
+    seller_name: isPresaleConversation ? '' : (row.seller_user_name || row.seller_name || '卖家'),
+    consultation_user_name: row.consultation_user_name || '',
+    support_assignee_id: supportAssigneeId,
+    support_assignee_name: isPresaleConversation ? (row.consultation_support_name || '') : (row.support_assignee_name || ''),
     last_message_preview: row.last_message_preview || '',
     last_message_at: row.last_message_at,
     updated_at: row.updated_at,
@@ -592,7 +640,7 @@ async function ensureConversationSchema() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS conversations (
       id INT AUTO_INCREMENT PRIMARY KEY COMMENT '会话唯一ID',
-      type ENUM('order') NOT NULL DEFAULT 'order' COMMENT '会话类型',
+      type ENUM('order', 'presale') NOT NULL DEFAULT 'order' COMMENT '会话类型',
       ref_id INT NOT NULL COMMENT '关联业务ID，当前为订单ID',
       title VARCHAR(255) NOT NULL DEFAULT '' COMMENT '会话标题',
       status ENUM('active', 'closed') NOT NULL DEFAULT 'active' COMMENT '会话状态',
@@ -688,6 +736,23 @@ async function ensureConversationSchema() {
     await pool.execute(
       `ALTER TABLE conversation_messages
        MODIFY COLUMN message_type ENUM('text', 'image', 'system') NOT NULL DEFAULT 'text' COMMENT '消息类型'`
+    )
+  }
+
+  const [conversationTypeRows] = await pool.execute(
+    `SELECT COLUMN_TYPE
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'conversations'
+       AND COLUMN_NAME = 'type'
+     LIMIT 1`,
+    [databaseName]
+  )
+  const currentConversationType = String(conversationTypeRows[0]?.COLUMN_TYPE || '')
+  if (currentConversationType && !currentConversationType.includes("'presale'")) {
+    await pool.execute(
+      `ALTER TABLE conversations
+       MODIFY COLUMN type ENUM('order', 'presale') NOT NULL DEFAULT 'order' COMMENT '会话类型'`
     )
   }
 
@@ -889,6 +954,26 @@ async function ensureOrderSupportSchema() {
   }
 }
 
+async function ensurePresaleSupportSchema() {
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS presale_consultations (
+      id INT AUTO_INCREMENT PRIMARY KEY COMMENT '售前咨询ID',
+      user_id INT NOT NULL COMMENT '发起咨询的用户ID',
+      support_assignee_id INT NOT NULL COMMENT '当前负责客服ID',
+      support_status ENUM('handling', 'resolved') NOT NULL DEFAULT 'handling' COMMENT '售前咨询处理状态',
+      support_note VARCHAR(500) DEFAULT NULL COMMENT '客服内部备注',
+      resolved_at DATETIME DEFAULT NULL COMMENT '处理完成时间',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (support_assignee_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_presale_consultations_user_status (user_id, support_status, id),
+      INDEX idx_presale_consultations_support_status (support_assignee_id, support_status, id),
+      INDEX idx_presale_consultations_updated_at (updated_at, id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+}
+
 async function ensureSupportEventSchema() {
   const databaseName = process.env.DB_NAME || 'game_rental'
 
@@ -988,6 +1073,74 @@ async function getOrderConversationAccess(orderId, viewerUserId, viewerRole = 'u
   }
 }
 
+async function assignPresaleSupportUser(executor) {
+  const [rows] = await executor.execute(
+    `SELECT
+        u.id,
+        u.username,
+        COUNT(pc.id) AS active_consultation_count,
+        MAX(pc.created_at) AS last_assigned_at
+     FROM users u
+     LEFT JOIN presale_consultations pc
+       ON pc.support_assignee_id = u.id
+      AND pc.support_status = 'handling'
+     WHERE u.role = 'support'
+     GROUP BY u.id, u.username
+     ORDER BY active_consultation_count ASC, COALESCE(last_assigned_at, '1970-01-01 00:00:00') ASC, u.id ASC
+     LIMIT 1`
+  )
+
+  if (!rows.length) {
+    throw new Error('当前暂无可分配的客服，请稍后再试')
+  }
+
+  return {
+    id: Number(rows[0].id || 0),
+    username: rows[0].username || '客服'
+  }
+}
+
+async function getPresaleConversationAccess(consultationId, viewerUserId, viewerRole = 'user') {
+  const [rows] = await pool.execute(
+    `SELECT
+        pc.id,
+        pc.user_id AS consultation_user_id,
+        pc.support_assignee_id AS consultation_support_assignee_id,
+        pc.support_status AS presale_support_status,
+        pc.support_note,
+        pc.created_at AS consultation_created_at,
+        pc.updated_at AS consultation_updated_at,
+        pc.resolved_at AS consultation_resolved_at,
+        consultation_user.username AS consultation_user_name,
+        support_user.username AS consultation_support_name
+     FROM presale_consultations pc
+     JOIN users consultation_user
+       ON consultation_user.id = pc.user_id
+     LEFT JOIN users support_user
+       ON support_user.id = pc.support_assignee_id
+     WHERE pc.id = ?
+     LIMIT 1`,
+    [consultationId]
+  )
+
+  if (!rows.length) return null
+
+  const consultation = rows[0]
+  const userId = Number(viewerUserId || 0)
+  const isOwner = Number(consultation.consultation_user_id || 0) === userId
+  const isSupport = String(viewerRole || '') === 'support'
+    && Number(consultation.consultation_support_assignee_id || 0) === userId
+
+  if (!isOwner && !isSupport) {
+    return null
+  }
+
+  return {
+    ...consultation,
+    participant_role: isOwner ? 'user' : 'support'
+  }
+}
+
 async function ensureOrderConversation(order) {
   const orderId = Number(order?.id || 0)
   if (!orderId) throw new Error('缺少订单信息')
@@ -1043,6 +1196,56 @@ async function ensureOrderConversation(order) {
   return conversationId
 }
 
+async function ensurePresaleConversation(consultation) {
+  const consultationId = Number(consultation?.id || 0)
+  if (!consultationId) throw new Error('缺少售前咨询信息')
+
+  const [existingRows] = await chatExecute(
+    'ensurePresaleConversation:findExisting',
+    `SELECT *
+     FROM conversations
+     WHERE type = 'presale' AND ref_id = ?
+     LIMIT 1`,
+    [consultationId]
+  )
+
+  let conversationId = Number(existingRows[0]?.id || 0)
+  const title = buildPresaleConversationTitle(consultation)
+
+  if (!conversationId) {
+    const [result] = await chatExecute(
+      'ensurePresaleConversation:create',
+      `INSERT INTO conversations (type, ref_id, title, status)
+       VALUES ('presale', ?, ?, 'active')`,
+      [consultationId, title]
+    )
+    conversationId = Number(result.insertId || 0)
+  } else {
+    await chatExecute(
+      'ensurePresaleConversation:updateTitle',
+      `UPDATE conversations
+       SET title = ?, status = 'active'
+       WHERE id = ?`,
+      [title, conversationId]
+    )
+  }
+
+  await chatExecute(
+    'ensurePresaleConversation:upsertParticipants',
+    `INSERT INTO conversation_participants (conversation_id, user_id, role)
+     VALUES (?, ?, 'buyer'), (?, ?, 'support')
+     ON DUPLICATE KEY UPDATE role = VALUES(role)`,
+    [
+      conversationId,
+      Number(consultation.consultation_user_id || consultation.user_id || 0),
+      conversationId,
+      Number(consultation.consultation_support_assignee_id || consultation.support_assignee_id || 0)
+    ]
+  )
+
+  return conversationId
+}
+
 async function ensureSupportConversationParticipant(conversationId, supportUserId) {
   const safeConversationId = Number(conversationId || 0)
   const safeSupportUserId = Number(supportUserId || 0)
@@ -1056,6 +1259,114 @@ async function ensureSupportConversationParticipant(conversationId, supportUserI
     [safeConversationId, safeSupportUserId]
   )
   await syncParticipantUnreadCount(safeConversationId, safeSupportUserId)
+}
+
+async function getOrCreatePresaleConversationForUser(userId) {
+  const safeUserId = Number(userId || 0)
+  if (!safeUserId) {
+    throw new Error('用户ID无效')
+  }
+
+  const conn = await pool.getConnection()
+  let consultation = null
+  let created = false
+
+  try {
+    await conn.beginTransaction()
+
+    const [existingRows] = await conn.execute(
+      `SELECT
+          pc.id,
+          pc.user_id AS consultation_user_id,
+          pc.support_assignee_id AS consultation_support_assignee_id,
+          pc.support_status AS presale_support_status,
+          pc.support_note,
+          pc.created_at AS consultation_created_at,
+          pc.updated_at AS consultation_updated_at,
+          pc.resolved_at AS consultation_resolved_at,
+          consultation_user.username AS consultation_user_name,
+          support_user.username AS consultation_support_name
+       FROM presale_consultations pc
+       JOIN users consultation_user
+         ON consultation_user.id = pc.user_id
+       LEFT JOIN users support_user
+         ON support_user.id = pc.support_assignee_id
+       WHERE pc.user_id = ?
+         AND pc.support_status = 'handling'
+       ORDER BY pc.id DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [safeUserId]
+    )
+
+    consultation = existingRows[0] || null
+
+    if (!consultation) {
+      const supportUser = await assignPresaleSupportUser(conn)
+      const [insertResult] = await conn.execute(
+        `INSERT INTO presale_consultations (
+            user_id,
+            support_assignee_id,
+            support_status,
+            support_note,
+            resolved_at
+          ) VALUES (?, ?, 'handling', NULL, NULL)`,
+        [safeUserId, supportUser.id]
+      )
+      const consultationId = Number(insertResult.insertId || 0)
+      const [createdRows] = await conn.execute(
+        `SELECT
+            pc.id,
+            pc.user_id AS consultation_user_id,
+            pc.support_assignee_id AS consultation_support_assignee_id,
+            pc.support_status AS presale_support_status,
+            pc.support_note,
+            pc.created_at AS consultation_created_at,
+            pc.updated_at AS consultation_updated_at,
+            pc.resolved_at AS consultation_resolved_at,
+            consultation_user.username AS consultation_user_name,
+            support_user.username AS consultation_support_name
+         FROM presale_consultations pc
+         JOIN users consultation_user
+           ON consultation_user.id = pc.user_id
+         LEFT JOIN users support_user
+           ON support_user.id = pc.support_assignee_id
+         WHERE pc.id = ?
+         LIMIT 1`,
+        [consultationId]
+      )
+      consultation = createdRows[0] || null
+      created = true
+    }
+
+    await conn.commit()
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally {
+    conn.release()
+  }
+
+  if (!consultation) {
+    throw new Error('创建售前咨询失败')
+  }
+
+  const conversationId = await ensurePresaleConversation(consultation)
+
+  if (created && Number(consultation.consultation_support_assignee_id || 0) > 0) {
+    const systemMessage = await createConversationMessage({
+      conversationId,
+      senderUserId: Number(consultation.consultation_support_assignee_id || 0),
+      messageType: 'system',
+      content: `已接入售前客服 ${consultation.consultation_support_name || '客服'}，请详细描述你的咨询问题。`
+    })
+    const userConversation = await getConversationForUser(conversationId, safeUserId)
+    if (userConversation) {
+      await emitConversationMessage(userConversation, systemMessage, Number(consultation.consultation_support_assignee_id || 0))
+    }
+  }
+
+  return getConversationForUser(conversationId, safeUserId)
 }
 
 async function getConversationForUser(conversationId, viewerUserId) {
@@ -1077,11 +1388,18 @@ async function getConversationForUser(conversationId, viewerUserId) {
         o.listing_title,
         o.support_status,
         o.support_assignee_id,
+        support.username AS support_assignee_name,
         o.buyer_id,
         o.seller_id,
         o.seller_name,
         buyer.username AS buyer_name,
-        seller.username AS seller_user_name
+        seller.username AS seller_user_name,
+        pc.user_id AS consultation_user_id,
+        pc.support_assignee_id AS consultation_support_assignee_id,
+        pc.support_status AS presale_support_status,
+        pc.created_at AS consultation_created_at,
+        consultation_user.username AS consultation_user_name,
+        consultation_support.username AS consultation_support_name
      FROM conversations c
      JOIN conversation_participants cp
        ON cp.conversation_id = c.id
@@ -1089,10 +1407,19 @@ async function getConversationForUser(conversationId, viewerUserId) {
      LEFT JOIN orders o
        ON c.type = 'order'
       AND c.ref_id = o.id
+     LEFT JOIN users support
+       ON support.id = o.support_assignee_id
      LEFT JOIN users buyer
        ON buyer.id = o.buyer_id
      LEFT JOIN users seller
        ON seller.id = o.seller_id
+     LEFT JOIN presale_consultations pc
+       ON c.type = 'presale'
+      AND c.ref_id = pc.id
+     LEFT JOIN users consultation_user
+       ON consultation_user.id = pc.user_id
+     LEFT JOIN users consultation_support
+       ON consultation_support.id = pc.support_assignee_id
      WHERE c.id = ?
      LIMIT 1`,
     [viewerUserId, conversationId]
@@ -1210,11 +1537,18 @@ async function getConversationListForUser(viewerUserId, page = 1, pageSize = 20,
         o.listing_title,
         o.support_status,
         o.support_assignee_id,
+        support.username AS support_assignee_name,
         o.buyer_id,
         o.seller_id,
         o.seller_name,
         buyer.username AS buyer_name,
         seller.username AS seller_user_name,
+        pc.user_id AS consultation_user_id,
+        pc.support_assignee_id AS consultation_support_assignee_id,
+        pc.support_status AS presale_support_status,
+        pc.created_at AS consultation_created_at,
+        consultation_user.username AS consultation_user_name,
+        consultation_support.username AS consultation_support_name,
         cp.unread_message_count AS unread_count
      FROM conversations c
      JOIN conversation_participants cp
@@ -1224,10 +1558,19 @@ async function getConversationListForUser(viewerUserId, page = 1, pageSize = 20,
      LEFT JOIN orders o
        ON c.type = 'order'
       AND c.ref_id = o.id
+     LEFT JOIN users support
+       ON support.id = o.support_assignee_id
      LEFT JOIN users buyer
        ON buyer.id = o.buyer_id
      LEFT JOIN users seller
        ON seller.id = o.seller_id
+     LEFT JOIN presale_consultations pc
+       ON c.type = 'presale'
+      AND c.ref_id = pc.id
+     LEFT JOIN users consultation_user
+       ON consultation_user.id = pc.user_id
+     LEFT JOIN users consultation_support
+       ON consultation_support.id = pc.support_assignee_id
      ORDER BY COALESCE(c.last_message_at, c.updated_at, c.created_at) DESC, c.id DESC
      LIMIT ${safePageSize} OFFSET ${offset}`,
     [viewerUserId, ...scopeFilter.params]
@@ -1253,7 +1596,10 @@ async function getUnreadSummaryForUser(viewerUserId) {
           SUM(
             CASE
               WHEN cp.role = 'support'
-               AND COALESCE(o.support_status, 'handling') = 'handling'
+               AND (
+                 (c.type = 'order' AND COALESCE(o.support_status, 'handling') = 'handling')
+                 OR (c.type = 'presale' AND COALESCE(pc.support_status, 'handling') = 'handling')
+               )
               THEN cp.unread_message_count
               ELSE 0
             END
@@ -1266,6 +1612,9 @@ async function getUnreadSummaryForUser(viewerUserId) {
      LEFT JOIN orders o
        ON c.type = 'order'
       AND c.ref_id = o.id
+     LEFT JOIN presale_consultations pc
+       ON c.type = 'presale'
+      AND c.ref_id = pc.id
      WHERE cp.user_id = ?`,
     [safeUserId]
   )
@@ -1542,6 +1891,7 @@ async function emitConversationMessage(conversation, message, actorUserId) {
     consumeSocketMessageQuota,
     sanitizeSupportNote,
     normalizeSupportStatus,
+    normalizePresaleSupportStatus,
     sanitizeSupportSearchKeyword,
     normalizeSupportAssigneeScope,
     getSupportTimeoutMinutes,
@@ -1550,14 +1900,19 @@ async function emitConversationMessage(conversation, message, actorUserId) {
     getSupportOrderTimeline,
     buildLegacySupportTimeline,
     emitSupportEvent,
+    buildPresaleConsultationNo,
     serializeConversationRow,
     ensureConversationSchema,
     ensureUserRoleSchema,
     ensureOrderSupportSchema,
+    ensurePresaleSupportSchema,
     ensureSupportEventSchema,
     getOrderConversationAccess,
+    getPresaleConversationAccess,
     ensureOrderConversation,
+    ensurePresaleConversation,
     ensureSupportConversationParticipant,
+    getOrCreatePresaleConversationForUser,
     getConversationForUser,
     getConversationMessages,
     normalizeConversationScope,

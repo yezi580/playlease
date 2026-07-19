@@ -18,6 +18,7 @@ export async function runBootstrapSchemaTasks({
   ensureUserNotificationSchema,
   ensureConversationSchema,
   ensureOrderSupportSchema,
+  ensurePresaleSupportSchema,
   ensureOrderWorkflowSchema,
   ensureSupportEventSchema,
   ensureWalletSchema,
@@ -43,6 +44,7 @@ export async function runBootstrapSchemaTasks({
   await ensureUserNotificationSchema()
   await ensureConversationSchema()
   await ensureOrderSupportSchema()
+  await ensurePresaleSupportSchema()
   await ensureOrderWorkflowSchema()
   await ensureSupportEventSchema()
   await ensureWalletSchema()

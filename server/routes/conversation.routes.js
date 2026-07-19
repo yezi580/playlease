@@ -12,7 +12,10 @@ export function registerConversationRoutes(deps) {
   } = deps
   const {
     getOrderConversationAccess,
+    getPresaleConversationAccess,
+    getOrCreatePresaleConversationForUser,
     ensureOrderConversation,
+    ensurePresaleConversation,
     ensureSupportConversationParticipant,
     getConversationForUser,
     serializeConversationRow,
@@ -57,6 +60,62 @@ app.post('/api/conversations/order/:orderId', authRequired, conversationApiLimit
       message: error.message || 'unknown'
     })
     res.status(500).json({ message: '获取订单会话失败' })
+  }
+})
+
+app.post('/api/conversations/presale', authRequired, conversationApiLimiter, async (req, res) => {
+  if (String(req.auth?.role || '') === 'support') {
+    return res.status(400).json({ message: '客服请从工作台进入指定售前咨询会话' })
+  }
+
+  try {
+    const conversation = await getOrCreatePresaleConversationForUser(req.auth.userId)
+    if (!conversation) {
+      return res.status(500).json({ message: '创建售前咨询失败' })
+    }
+    res.json(serializeConversationRow(conversation, req.auth.userId))
+  } catch (error) {
+    logChatEvent('error', 'api:create-presale-conversation', {
+      userId: req.auth?.userId,
+      role: req.auth?.role,
+      message: error.message || 'unknown'
+    })
+    res.status(500).json({ message: error.message || '获取售前咨询失败' })
+  }
+})
+
+app.post('/api/conversations/presale/:consultationId', authRequired, conversationApiLimiter, async (req, res) => {
+  const consultationId = Number(req.params?.consultationId)
+
+  if (!consultationId || !Number.isFinite(consultationId) || consultationId < 1) {
+    return res.status(400).json({ message: '售前咨询ID无效' })
+  }
+
+  try {
+    const consultation = await getPresaleConversationAccess(consultationId, req.auth.userId, req.auth.role)
+    if (!consultation) {
+      return res.status(403).json({ message: '无权进入该售前咨询会话' })
+    }
+
+    const conversationId = await ensurePresaleConversation(consultation)
+    if (String(req.auth.role || '') === 'support') {
+      await ensureSupportConversationParticipant(conversationId, req.auth.userId)
+    }
+    const conversation = await getConversationForUser(conversationId, req.auth.userId)
+
+    if (!conversation) {
+      return res.status(500).json({ message: '创建售前咨询会话失败' })
+    }
+
+    res.json(serializeConversationRow(conversation, req.auth.userId))
+  } catch (error) {
+    logChatEvent('error', 'api:open-presale-conversation', {
+      consultationId,
+      userId: req.auth?.userId,
+      role: req.auth?.role,
+      message: error.message || 'unknown'
+    })
+    res.status(500).json({ message: '获取售前咨询会话失败' })
   }
 })
 
