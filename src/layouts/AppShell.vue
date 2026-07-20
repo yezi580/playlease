@@ -102,13 +102,6 @@
         aria-label="邀新赚钱"
         @click="goInviteCenter"
       >
-        <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M8 5h8" />
-          <path d="M10 2h4a1 1 0 0 1 1 1v2H9V3a1 1 0 0 1 1-1Z" />
-          <path d="M8 5c-3.5 1.5-5 5-5 9a9 9 0 0 0 18 0c0-4-1.5-7.5-5-9" />
-          <line x1="12" x2="12" y1="9" y2="19" />
-          <path d="M14.5 11H10a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H9.5" />
-        </svg>
         <div class="action-text"><span>邀新</span><span>赚钱</span></div>
       </button>
       <button
@@ -118,10 +111,6 @@
         aria-label="售前咨询"
         @click="openPresaleConsultation"
       >
-        <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z" />
-          <path d="M21 16v2a4 4 0 0 1-4 4h-5" />
-        </svg>
         <div class="action-text"><span>售前</span><span>咨询</span></div>
       </button>
     </div>
@@ -581,15 +570,6 @@ function handleLogout() {
   box-shadow: 0 6px 20px rgba(16, 185, 129, 0.18);
 }
 
-.action-icon {
-  width: 22px;
-  height: 22px;
-  position: absolute;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  opacity: 1;
-  transform: scale(1);
-}
-
 .action-text {
   position: absolute;
   display: flex;
@@ -598,19 +578,6 @@ function handleLogout() {
   font-size: 12px;
   line-height: 1.2;
   font-weight: 600;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  opacity: 0;
-  transform: scale(0.8);
-}
-
-.home-quick-action-btn:hover .action-icon {
-  opacity: 0;
-  transform: scale(0.8);
-}
-
-.home-quick-action-btn:hover .action-text {
-  opacity: 1;
-  transform: scale(1);
 }
 
 @media (max-width: 960px) {
@@ -635,11 +602,6 @@ function handleLogout() {
   .home-quick-action-btn {
     width: 46px;
     height: 46px;
-  }
-  
-  .action-icon {
-    width: 20px;
-    height: 20px;
   }
   
   .action-text {
