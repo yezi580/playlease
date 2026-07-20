@@ -74,6 +74,7 @@
               @click="changeDesk('aftersale')"
             >
               售后
+              <span v-if="hasAfterSaleUnreadDot" class="desk-tab-dot" aria-hidden="true"></span>
             </button>
             <button
               type="button"
@@ -82,6 +83,7 @@
               @click="changeDesk('presale')"
             >
               售前
+              <span v-if="hasPresaleUnreadDot" class="desk-tab-dot" aria-hidden="true"></span>
             </button>
           </div>
           <span>{{ currentCounts[activeStatus] || 0 }} 条</span>
@@ -798,6 +800,10 @@ export default {
         orders: null,
         detail: null
       },
+      supportDeskUnreadSummary: {
+        aftersale: 0,
+        presale: 0
+      },
       realtimeSocket: null,
       realtimeRefreshTimer: null,
       realtimeRefreshQueuedDesk: ''
@@ -818,6 +824,12 @@ export default {
     },
     isAfterSaleDesk() {
       return this.activeDesk === 'aftersale'
+    },
+    hasAfterSaleUnreadDot() {
+      return Number(this.supportDeskUnreadSummary.aftersale || 0) > 0
+    },
+    hasPresaleUnreadDot() {
+      return Number(this.supportDeskUnreadSummary.presale || 0) > 0
     },
     searchPlaceholder() {
       return this.isAfterSaleDesk ? '搜索订单号、买家、卖家' : '搜索咨询编号、咨询用户、客服'
@@ -981,6 +993,7 @@ export default {
   mounted() {
     if (this.canAccessOrderDesk) {
       this.fetchOrders()
+      this.fetchSupportDeskUnreadSummary()
       this.setupRealtimeSupportDeskSocket()
     } else if (this.canAccessWithdrawDesk) {
       this.fetchWithdrawRequests()
@@ -994,6 +1007,31 @@ export default {
     window.removeEventListener('resize', this.refreshScrollbars)
   },
   methods: {
+    applySupportDeskUnreadSummary(summary = {}) {
+      this.supportDeskUnreadSummary = {
+        aftersale: Math.max(0, Number(
+          summary?.support_aftersale_unread_total
+          ?? summary?.supportAftersaleUnreadTotal
+          ?? this.supportDeskUnreadSummary.aftersale
+          ?? 0
+        )),
+        presale: Math.max(0, Number(
+          summary?.support_presale_unread_total
+          ?? summary?.supportPresaleUnreadTotal
+          ?? this.supportDeskUnreadSummary.presale
+          ?? 0
+        ))
+      }
+    },
+    async fetchSupportDeskUnreadSummary() {
+      if (!this.canAccessOrderDesk) return
+      try {
+        const summary = await apiFetch('/api/conversations/unread-summary')
+        this.applySupportDeskUnreadSummary(summary)
+      } catch (_error) {
+        // 红点拉取失败不阻断客服工作台主流程。
+      }
+    },
     setupRealtimeSupportDeskSocket() {
       if (!this.canAccessOrderDesk || this.realtimeSocket) return
       const socket = io(getSocketServerUrl(), {
@@ -1006,6 +1044,14 @@ export default {
           ? 'presale'
           : 'aftersale'
         this.queueRealtimeDeskRefresh(desk)
+      })
+
+      socket.on('message:notify', (payload = {}) => {
+        this.applySupportDeskUnreadSummary(payload?.unread_summary || {})
+      })
+
+      socket.on('message:read', (payload = {}) => {
+        this.applySupportDeskUnreadSummary(payload?.unread_summary || {})
       })
 
       socket.on('connect_error', () => {
@@ -2036,6 +2082,11 @@ export default {
 }
 
 .desk-tab-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: none;
   background: transparent;
   padding: 6px 16px;
@@ -2055,6 +2106,15 @@ export default {
   background: #ffffff;
   color: #111827;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.desk-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+  flex-shrink: 0;
 }
 
 .panel-head--sub {
