@@ -629,6 +629,7 @@ const chatModule = createChatModule({
 const {
   getConversationRoomName,
   getUserRoomName,
+  emitSupportDeskUpdate,
   logChatEvent,
   consumeSocketMessageQuota,
   sanitizeSupportNote,
@@ -691,7 +692,8 @@ const orderLifecycleService = createOrderLifecycleService({
   getConversationForUser,
   createConversationMessage,
   emitConversationMessage,
-  emitSupportEvent
+  emitSupportEvent,
+  emitSupportDeskUpdate
 })
 const paymentService = createPaymentService({
   pool,

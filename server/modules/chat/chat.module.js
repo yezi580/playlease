@@ -21,6 +21,27 @@ function getUserRoomName(userId) {
   return `user:${userId}`
 }
 
+function emitSupportDeskUpdate({
+  supportUserId,
+  desk = 'aftersale',
+  resourceId = 0,
+  reason = 'updated'
+} = {}) {
+  const safeSupportUserId = Number(supportUserId || 0)
+  if (!safeSupportUserId) return
+
+  const normalizedDesk = String(desk || '').trim().toLowerCase() === 'presale'
+    ? 'presale'
+    : 'aftersale'
+
+  io.to(getUserRoomName(safeSupportUserId)).emit('support:desk:update', {
+    desk: normalizedDesk,
+    resource_id: Number(resourceId || 0),
+    reason: String(reason || 'updated').trim() || 'updated',
+    emitted_at: new Date().toISOString()
+  })
+}
+
 function logChatEvent(level, event, detail = {}) {
   const logger = level === 'error'
     ? console.error
@@ -1364,6 +1385,12 @@ async function getOrCreatePresaleConversationForUser(userId) {
     if (userConversation) {
       await emitConversationMessage(userConversation, systemMessage, Number(consultation.consultation_support_assignee_id || 0))
     }
+    emitSupportDeskUpdate({
+      supportUserId: Number(consultation.consultation_support_assignee_id || 0),
+      desk: 'presale',
+      resourceId: Number(consultation.id || 0),
+      reason: 'assigned'
+    })
   }
 
   return getConversationForUser(conversationId, safeUserId)
@@ -1596,6 +1623,30 @@ async function getUnreadSummaryForUser(viewerUserId) {
           SUM(
             CASE
               WHEN cp.role = 'support'
+               AND c.type = 'order'
+               AND COALESCE(o.support_status, 'handling') = 'handling'
+              THEN cp.unread_message_count
+              ELSE 0
+            END
+          ),
+          0
+        ) AS support_aftersale_unread_total,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN cp.role = 'support'
+               AND c.type = 'presale'
+               AND COALESCE(pc.support_status, 'handling') = 'handling'
+              THEN cp.unread_message_count
+              ELSE 0
+            END
+          ),
+          0
+        ) AS support_presale_unread_total,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN cp.role = 'support'
                AND (
                  (c.type = 'order' AND COALESCE(o.support_status, 'handling') = 'handling')
                  OR (c.type = 'presale' AND COALESCE(pc.support_status, 'handling') = 'handling')
@@ -1623,6 +1674,8 @@ async function getUnreadSummaryForUser(viewerUserId) {
     unread_total: Number(rows[0]?.unread_total || 0),
     support_unread_total: Number(rows[0]?.support_unread_total || 0),
     regular_unread_total: Number(rows[0]?.regular_unread_total || 0),
+    support_aftersale_unread_total: Number(rows[0]?.support_aftersale_unread_total || 0),
+    support_presale_unread_total: Number(rows[0]?.support_presale_unread_total || 0),
     support_handling_unread_total: Number(rows[0]?.support_handling_unread_total || 0)
   }
 }
@@ -1632,6 +1685,8 @@ function buildConversationUnreadSocketPayload(summary = {}) {
     conversation_unread_total: Number(summary?.unread_total || 0),
     regular_conversation_unread_total: Number(summary?.regular_unread_total || 0),
     support_unread_total: Number(summary?.support_unread_total || 0),
+    support_aftersale_unread_total: Number(summary?.support_aftersale_unread_total || 0),
+    support_presale_unread_total: Number(summary?.support_presale_unread_total || 0),
     support_handling_unread_total: Number(summary?.support_handling_unread_total || 0)
   }
 }
@@ -1887,6 +1942,7 @@ async function emitConversationMessage(conversation, message, actorUserId) {
   return {
     getConversationRoomName,
     getUserRoomName,
+    emitSupportDeskUpdate,
     logChatEvent,
     consumeSocketMessageQuota,
     sanitizeSupportNote,

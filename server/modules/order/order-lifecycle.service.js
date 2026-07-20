@@ -56,7 +56,8 @@ export function createOrderLifecycleService({
   getConversationForUser,
   createConversationMessage,
   emitConversationMessage,
-  emitSupportEvent
+  emitSupportEvent,
+  emitSupportDeskUpdate
 }) {
   const createOrderNo = typeof generateOrderNo === 'function' ? generateOrderNo : buildDefaultOrderNo
 
@@ -622,6 +623,13 @@ export function createOrderLifecycleService({
 
           const updated = await fetchOrderById(conn, orderId)
           await conn.commit()
+
+          emitSupportDeskUpdate({
+            supportUserId: supportUser.id,
+            desk: 'aftersale',
+            resourceId: orderId,
+            reason: 'assigned'
+          })
 
           const orderConversation = await getOrderConversationAccess(orderId, userId)
           if (orderConversation) {

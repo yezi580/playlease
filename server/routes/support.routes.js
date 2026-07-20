@@ -31,7 +31,8 @@ export function registerSupportRoutes(deps) {
     getConversationForUser,
     createConversationMessage,
     emitConversationMessage,
-    emitSupportEvent
+    emitSupportEvent,
+    emitSupportDeskUpdate
   } = chatModule
 
 app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimiter, async (req, res) => {
@@ -517,6 +518,12 @@ app.put('/api/support/presale-consultations/:id/note', authRequired, supportOnly
     )
 
     const updated = updatedRows[0]
+    emitSupportDeskUpdate({
+      supportUserId: Number(updated?.support_assignee_id || 0),
+      desk: 'presale',
+      resourceId: consultationId,
+      reason: 'resolved'
+    })
     res.json({
       id: Number(updated?.id || 0),
       consultation_no: buildPresaleConsultationNo(updated?.id, updated?.created_at),

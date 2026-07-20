@@ -707,6 +707,7 @@
 </template>
 
 <script>
+import { io } from 'socket.io-client'
 import {
   apiFetch,
   getStepUpRequirementMessage,
@@ -717,6 +718,7 @@ import {
   registerCurrentUserPasskey
 } from '../utils/api.js'
 import { formatMoneyFixed } from '../utils/money'
+import { getSocketServerUrl } from '../utils/runtime.js'
 import { showErrorToast, showSuccessToast } from '../utils/toast.js'
 import { showConfirm } from '../utils/confirm.js'
 import ConversationPanel from './ConversationPanel.vue'
@@ -795,7 +797,10 @@ export default {
       scrollbarFadeTimers: {
         orders: null,
         detail: null
-      }
+      },
+      realtimeSocket: null,
+      realtimeRefreshTimer: null,
+      realtimeRefreshQueuedDesk: ''
     }
   },
   computed: {
@@ -976,6 +981,7 @@ export default {
   mounted() {
     if (this.canAccessOrderDesk) {
       this.fetchOrders()
+      this.setupRealtimeSupportDeskSocket()
     } else if (this.canAccessWithdrawDesk) {
       this.fetchWithdrawRequests()
     }
@@ -984,9 +990,76 @@ export default {
   beforeUnmount() {
     this.clearScrollbarFadeTimer('orders')
     this.clearScrollbarFadeTimer('detail')
+    this.teardownRealtimeSupportDeskSocket()
     window.removeEventListener('resize', this.refreshScrollbars)
   },
   methods: {
+    setupRealtimeSupportDeskSocket() {
+      if (!this.canAccessOrderDesk || this.realtimeSocket) return
+      const socket = io(getSocketServerUrl(), {
+        withCredentials: true,
+        transports: ['websocket', 'polling']
+      })
+
+      socket.on('support:desk:update', (payload = {}) => {
+        const desk = String(payload?.desk || '').trim().toLowerCase() === 'presale'
+          ? 'presale'
+          : 'aftersale'
+        this.queueRealtimeDeskRefresh(desk)
+      })
+
+      socket.on('connect_error', () => {
+        // 实时同步失败时保留手动刷新作为兜底，不打断页面使用。
+      })
+
+      this.realtimeSocket = socket
+    },
+    teardownRealtimeSupportDeskSocket() {
+      if (this.realtimeRefreshTimer) {
+        window.clearTimeout(this.realtimeRefreshTimer)
+        this.realtimeRefreshTimer = null
+      }
+      this.realtimeRefreshQueuedDesk = ''
+      if (this.realtimeSocket) {
+        this.realtimeSocket.disconnect()
+        this.realtimeSocket = null
+      }
+    },
+    queueRealtimeDeskRefresh(desk = 'aftersale') {
+      const normalizedDesk = String(desk || '').trim().toLowerCase() === 'presale'
+        ? 'presale'
+        : 'aftersale'
+      this.realtimeRefreshQueuedDesk = normalizedDesk
+      if (this.realtimeRefreshTimer) {
+        window.clearTimeout(this.realtimeRefreshTimer)
+      }
+      this.realtimeRefreshTimer = window.setTimeout(() => {
+        const queuedDesk = this.realtimeRefreshQueuedDesk
+        this.realtimeRefreshTimer = null
+        this.realtimeRefreshQueuedDesk = ''
+        void this.refreshDeskByRealtimeEvent(queuedDesk)
+      }, 250)
+    },
+    async refreshDeskByRealtimeEvent(desk = 'aftersale') {
+      if (!this.canAccessOrderDesk) return
+      const normalizedDesk = String(desk || '').trim().toLowerCase() === 'presale'
+        ? 'presale'
+        : 'aftersale'
+      if (normalizedDesk !== this.activeDesk) return
+      if (normalizedDesk === 'presale') {
+        if (this.presaleLoading) {
+          this.queueRealtimeDeskRefresh(normalizedDesk)
+          return
+        }
+        await this.fetchPresaleConsultations(this.activeStatus)
+        return
+      }
+      if (this.loading) {
+        this.queueRealtimeDeskRefresh(normalizedDesk)
+        return
+      }
+      await this.fetchOrders(this.activeStatus)
+    },
     handlePanelScroll(panel) {
       const visibleKey = this.getScrollbarStateKey(panel, 'Visible')
       this.updateScrollbar(panel)

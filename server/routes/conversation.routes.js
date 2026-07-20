@@ -212,6 +212,8 @@ app.put('/api/conversations/:id/read', authRequired, conversationApiLimiter, asy
         conversation_unread_total: Number(unreadSummary?.unread_total || 0),
         regular_conversation_unread_total: Number(unreadSummary?.regular_unread_total || 0),
         support_unread_total: Number(unreadSummary?.support_unread_total || 0),
+        support_aftersale_unread_total: Number(unreadSummary?.support_aftersale_unread_total || 0),
+        support_presale_unread_total: Number(unreadSummary?.support_presale_unread_total || 0),
         support_handling_unread_total: Number(unreadSummary?.support_handling_unread_total || 0)
       }
     })
