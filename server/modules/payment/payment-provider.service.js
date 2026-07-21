@@ -227,8 +227,16 @@ function createHuifuCashierProvider(config = {}) {
     const callbackUrl = buildReturnUrl(payload.returnUrl || runtimeConfig.returnUrl, payload)
     const hostingData = {
       scene: sceneConfig.scene,
+      project_id: sceneConfig.projectId,
+      project_title: runtimeConfig.defaultProjectTitle,
       order_id: String(payload.orderId || ''),
       payer_user_id: String(payload.payerUserId || '')
+    }
+    if (callbackUrl) {
+      hostingData.callback_url = callbackUrl
+    }
+    if (sceneConfig.styleId) {
+      hostingData.style_id = sceneConfig.styleId
     }
 
     const businessData = {
@@ -238,19 +246,10 @@ function createHuifuCashierProvider(config = {}) {
       trans_amt: toCentAmountYuanString(payload.amount),
       goods_desc: String(payload.subject || payload.transactionNo || `${runtimeConfig.appName}支付订单`).trim().slice(0, 128),
       pre_order_type: '1',
-      project_title: runtimeConfig.defaultProjectTitle,
-      project_id: sceneConfig.projectId,
       hosting_data: JSON.stringify(hostingData)
-    }
-
-    if (sceneConfig.styleId) {
-      businessData.style_id = sceneConfig.styleId
     }
     if (runtimeConfig.notifyUrl) {
       businessData.notify_url = runtimeConfig.notifyUrl
-    }
-    if (callbackUrl) {
-      businessData.callback_url = callbackUrl
     }
     return {
       sceneConfig,

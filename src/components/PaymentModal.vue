@@ -19,10 +19,6 @@
               </div>
               <div class="payment-product-info">
                 <span class="payment-product-name">{{ orderTitle || '商品租赁' }}</span>
-                <span v-if="listingId || listingNo" class="payment-listing-no">
-                  <span>商品编号：{{ listingId || listingNo }}</span>
-                  <CopyTextButton :text="String(listingId || listingNo || '')" label="商品编号" />
-                </span>
                 <span class="payment-rent-days">租用 {{ rentDays }} 天</span>
               </div>
             </div>
@@ -41,7 +37,6 @@
                 <span class="payment-total-value">￥{{ formatMoney(total) }}</span>
               </div>
             </div>
-            <p class="payment-amount-hint">{{ paymentAmountHint }}</p>
 
             <div class="payment-method-section">
               <h4 class="payment-method-title">选择支付方式</h4>
@@ -114,15 +109,11 @@
 import { apiFetch } from '../utils/api.js'
 import { formatMoneyPrecise } from '../utils/money'
 import { fetchBusinessSettings, getBuyerRentLabel, getCachedBusinessSettings } from '../utils/businessSettings.js'
-import CopyTextButton from './CopyTextButton.vue'
 
 const PAYMENT_RETURN_CONTEXT_KEY = 'latest_payment_return_context'
 
 export default {
   name: 'PaymentModal',
-  components: {
-    CopyTextButton
-  },
   emits: ['close', 'success'],
   props: {
     visible: {
@@ -207,12 +198,6 @@ export default {
     },
     buyerRentLabel() {
       return getBuyerRentLabel(this.businessSettings)
-    },
-    paymentAmountHint() {
-      const rate = Number(this.businessSettings.platformCommission?.buyerServiceFeeRatePercent || 10)
-      return this.terminalScene === 'h5'
-        ? `当前租金已包含平台加收的 ${rate}% 手续费。提交后将跳转支付宝收银台完成支付。`
-        : `当前租金已包含平台加收的 ${rate}% 手续费。提交后将跳转汇付收银台，可在收银台选择微信扫码或支付宝扫码。`
     },
     paymentProcessingText() {
       return this.awaitingPaymentResult ? '正在确认支付...' : '正在跳转收银台...'
@@ -607,32 +592,11 @@ export default {
   white-space: nowrap;
 }
 
-.payment-listing-no {
-  font-size: 12px;
-  color: #1d4ed8;
-  background: linear-gradient(135deg, #eff6ff, #dbeafe);
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-family: 'SF Mono', Monaco, Consolas, monospace;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 6px;
-}
-
 .payment-amount-card {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 4px 0;
   margin-bottom: 20px;
-}
-
-.payment-amount-hint {
-  margin: -8px 0 20px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #6b7280;
 }
 
 .payment-amount-row {
