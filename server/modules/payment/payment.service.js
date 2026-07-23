@@ -314,6 +314,14 @@ export function createPaymentService(config = {}) {
         await updatePaymentBusinessSync(transactionNo, syncResult)
         return syncResult
       }
+      if (currentStatus === 'cancelled') {
+        const syncResult = {
+          businessSyncStatus: 'failed',
+          businessSyncMessage: '订单已超时取消，收到延迟支付回调，请人工核对资金状态'
+        }
+        await updatePaymentBusinessSync(transactionNo, syncResult)
+        return syncResult
+      }
 
       const syncResult = {
         businessSyncStatus: 'failed',

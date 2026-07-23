@@ -456,7 +456,7 @@ function createHuifuCashierProvider(config = {}) {
 
 function createMockPaymentProvider(config = {}) {
   const autoSuccessDelaySeconds = Math.max(0, Number(config.mockPaymentAutoSuccessSeconds ?? 3) || 3)
-  const paymentExpiresMinutes = Math.max(1, Number(config.mockPaymentExpiresMinutes ?? 15) || 15)
+  const paymentExpiresMinutes = Math.max(1, Number(config.mockPaymentExpiresMinutes ?? 10) || 10)
   const withdrawImmediateSuccess = !['0', 'false', 'off', 'no'].includes(
     String(config.mockWithdrawImmediateSuccess ?? 'true').trim().toLowerCase()
   )

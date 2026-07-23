@@ -246,7 +246,7 @@ const DEFAULT_ADMIN_BUSINESS_SETTINGS = Object.freeze({
     smallAmountHafuCoinMax: 150,
     highRatioBaseRatioMin: 43,
     homepageNewTagHours: 72,
-    pendingPaymentTimeoutMinutes: 30
+    pendingPaymentTimeoutMinutes: 10
   },
   saleItems: [
     { key: 'topCard', itemName: '顶级保险卡', unitPriceInCent: 200, enabled: true },

@@ -2224,7 +2224,7 @@ const { computeListingDerivedValues, resolveRentDaysRecommendation } = createLis
 
 async function expirePendingPaymentOrders() {
   const readConn = await pool.getConnection()
-  let pendingPaymentTimeoutMinutes = 30
+  let pendingPaymentTimeoutMinutes = 10
   let expiredRows = []
   try {
     const businessSettings = await loadBusinessSettings(readConn)
@@ -2313,6 +2313,23 @@ async function expirePendingPaymentOrders() {
         : null
 
       if (!queryResult?.ok) {
+        const providerUnsupported = String(queryResult?.reason || '').trim() === 'provider_not_implemented'
+        if (providerUnsupported) {
+          await paymentService.handlePaymentCallback({
+            channel: transaction.channel,
+            transactionNo,
+            providerTradeNo: transaction.provider_trade_no,
+            status: 'cancelled',
+            rawPayload: {
+              autoExpiredLocally: true,
+              reason: 'provider_query_not_implemented',
+              timeoutMinutes: pendingPaymentTimeoutMinutes,
+              provider: transaction.provider,
+              originalExpiresAt: transaction.expires_at || null
+            }
+          })
+          continue
+        }
         shouldCancelOrder = false
         break
       }

@@ -54,7 +54,7 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
     smallAmountHafuCoinMax: 150,
     highRatioBaseRatioMin: 43,
     homepageNewTagHours: 72,
-    pendingPaymentTimeoutMinutes: 30
+    pendingPaymentTimeoutMinutes: 10
   },
   saleItems: [
     { key: 'topCard', itemName: '顶级保险卡', unitPriceInCent: 200, enabled: true },
@@ -333,5 +333,5 @@ export function getRecommendedRentDays(hafuCoin, settings = null) {
 
 export function getPendingPaymentTimeoutMinutes(settings = null) {
   const normalizedSettings = normalizeBusinessSettings(settings || getCachedBusinessSettings())
-  return Number(normalizedSettings.discoveryThresholds.pendingPaymentTimeoutMinutes || 30)
+  return Number(normalizedSettings.discoveryThresholds.pendingPaymentTimeoutMinutes || 10)
 }

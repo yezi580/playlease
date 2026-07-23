@@ -20,13 +20,6 @@
           <strong>#{{ displayOrderId }}</strong>
         </div>
         <div class="payment-result-row">
-          <span>商品编号</span>
-          <strong class="copy-inline">
-            <span>{{ displayListingId }}</span>
-            <CopyTextButton v-if="displayListingId !== '-'" :text="displayListingId" label="商品编号" />
-          </strong>
-        </div>
-        <div class="payment-result-row">
           <span>支付方式</span>
           <strong>{{ displayPaymentMethod }}</strong>
         </div>
@@ -55,7 +48,6 @@
 </template>
 
 <script>
-import CopyTextButton from '../components/CopyTextButton.vue'
 import { apiFetch } from '../utils/api.js'
 import { formatMoneyPrecise as formatMoneyPreciseValue } from '../utils/money.js'
 
@@ -63,9 +55,6 @@ const PAYMENT_RETURN_CONTEXT_KEY = 'latest_payment_return_context'
 
 export default {
   name: 'PaymentResultPage',
-  components: {
-    CopyTextButton
-  },
   data() {
     return {
       transaction: null,
@@ -82,12 +71,6 @@ export default {
     },
     transactionNo() {
       return String(this.$route.query.transactionNo || this.returnContext?.transactionNo || '')
-    },
-    listingId() {
-      return String(this.$route.query.listingId || this.returnContext?.listingId || '')
-    },
-    displayListingId() {
-      return this.listingId || String(this.$route.query.listingNo || this.returnContext?.listingNo || '') || '-'
     },
     orderTitle() {
       return String(this.$route.query.title || this.returnContext?.orderTitle || '')
@@ -360,12 +343,6 @@ export default {
   border-color: var(--brand-primary);
   background: var(--brand-primary);
   color: #ffffff;
-}
-
-.copy-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
 @media (max-width: 960px) {
