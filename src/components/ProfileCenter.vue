@@ -116,7 +116,7 @@
 
                 <div class="order-meta-grid order-meta-grid--orders">
                   <p class="copy-inline mobile-full-row"><span>商品编号</span><span>{{ order.listing_no || '-' }}</span><CopyTextButton :text="order.listing_no || ''" label="商品编号" /></p>
-                  <p class="mobile-full-row"><span>订单编号</span>{{ order.order_no }}</p>
+                  <p class="mobile-full-row mobile-inline-meta"><span>订单编号</span><strong class="meta-value">{{ order.order_no }}</strong></p>
                   <p><span>租用天数</span>{{ order.rent_days || 0 }} 天</p>
                   <p><span>下单时间</span>{{ formatOrderDate(order.created_at) }}</p>
                   <p><span>租金</span>￥{{ formatMoney(order.amount) }}</p>
@@ -229,7 +229,7 @@
 
                   <div class="order-meta-grid">
                     <p class="copy-inline mobile-full-row"><span>商品编号</span><span>{{ item.listing_no || '-' }}</span><CopyTextButton :text="item.listing_no || ''" label="商品编号" /></p>
-                    <p class="mobile-full-row"><span>订单编号</span>{{ item.order_no }}</p>
+                    <p class="mobile-full-row mobile-inline-meta"><span>订单编号</span><strong class="meta-value">{{ item.order_no }}</strong></p>
                     <p><span>租用天数</span>{{ item.rent_days || 0 }} 天</p>
                     <p><span>下单时间</span>{{ formatOrderDate(item.created_at) }}</p>
                     <p><span>发布租金</span>￥{{ formatMoney(item.seller_rent_amount) }}</p>
@@ -272,7 +272,7 @@
 
                   <div class="listing-meta-grid">
                     <p class="copy-inline mobile-full-row"><span>商品编号</span><span>#{{ item.listing_no || item.id }}</span><CopyTextButton :text="item.listing_no || item.id || ''" label="商品编号" /></p>
-                    <p class="mobile-full-row"><span>发布时间</span>{{ formatOrderDate(item.published_at || item.created_at) }}</p>
+                    <p class="mobile-full-row mobile-inline-meta"><span>发布时间</span><strong class="meta-value">{{ formatOrderDate(item.published_at || item.created_at) }}</strong></p>
                     <p><span>租用天数</span>{{ item.rent_days || 0 }} 天</p>
                     <p><span>段位</span>{{ item.rank_name || '未设置段位' }}</p>
                     <p><span>租金</span><strong>￥{{ formatMoney(item.rent_price) }}</strong></p>
@@ -3259,10 +3259,26 @@ export default {
     align-items: center;
   }
 
+  .order-meta-grid p.mobile-inline-meta,
+  .listing-meta-grid p.mobile-inline-meta {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
   .order-meta-grid span,
   .listing-meta-grid span {
     min-width: 0;
     line-height: 1.4;
+  }
+
+  .order-meta-grid .meta-value,
+  .listing-meta-grid .meta-value {
+    min-width: 0;
+    color: #374151;
+    font-weight: 500;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
   }
 
   .mobile-full-row {
