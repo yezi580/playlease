@@ -454,19 +454,49 @@
 
     <div class="submit-row">
       <div class="submit-container">
-        <div class="price-summary">
-          <div class="summary-row"><span>卖家发布租金</span><em>{{ formatMoneyValue(computedRentPrice) }} 元</em></div>
-          <div class="summary-row"><span>{{ sellerServiceFeeLabel }}</span><em>{{ formatMoneyValue(serviceFeeYuan) }} 元</em></div>
-          <div class="summary-row"><span>{{ compensationFeeLabel }}</span><em>{{ formatMoneyValue(compensationFeeYuan) }} 元</em></div>
-          <div class="summary-row summary-row--highlight"><span>预计到账租金</span><em>{{ formatMoneyValue(sellerIncomeRentYuan) }} 元</em></div>
-          <div class="summary-row"><span>押金</span><em>{{ formatMoneyValue(Number(publishForm.deposit || 0)) }} 元</em></div>
-          <div class="summary-row"><span>额外物品总价</span><em>{{ formatMoneyValue(totalItemsPrice) }} 元</em></div>
+        <div class="submit-left">
+          <div class="price-summary">
+            <div class="price-summary-row">
+              <div class="summary-row"><span>卖家发布租金</span><em>{{ formatMoneyValue(computedRentPrice) }} 元</em></div>
+              <div class="summary-row"><span>{{ sellerServiceFeeLabel }}</span><em>{{ formatMoneyValue(serviceFeeYuan) }} 元</em></div>
+              <div class="summary-row"><span>{{ compensationFeeLabel }}</span><em>{{ formatMoneyValue(compensationFeeYuan) }} 元</em></div>
+              <div class="summary-row"><span>额外物品总价</span><em>{{ formatMoneyValue(totalItemsPrice) }} 元</em></div>
+            </div>
+            <div class="price-summary-row">
+              <div class="summary-row"><span>押金</span><em>{{ formatMoneyValue(Number(publishForm.deposit || 0)) }} 元</em></div>
+              <div class="summary-row summary-row--highlight"><span>预计到账租金</span><em>{{ formatMoneyValue(sellerIncomeRentYuan) }} 元</em></div>
+            </div>
+          </div>
+          <div class="agreements-row">
+            <label class="agreement-label">
+              <input type="checkbox" v-model="agreedToTerms" />
+              <span>我已阅读并同意 <a href="#" @click.prevent="showAgreement('virtual')">《虚拟资产出售协议》</a> 和 <a href="#" @click.prevent="showAgreement('owner')">《号主协议》</a></span>
+            </label>
+          </div>
         </div>
         <button class="submit-btn" :disabled="submitting" @click="submitPublish">
           {{ submitting ? submittingText : submitActionText }}
         </button>
       </div>
     </div>
+    <Teleport to="body">
+      <Transition name="media-preview-fade">
+        <div v-if="showingAgreement" class="media-preview-overlay" @click.self="closeAgreement">
+          <div class="agreement-modal">
+            <div class="agreement-modal-header">
+              <h3>{{ showingAgreement === 'virtual' ? '虚拟资产出售协议' : '号主协议' }}</h3>
+              <button type="button" class="agreement-close-btn" @click="closeAgreement">✕</button>
+            </div>
+            <div class="agreement-modal-body">
+              <pre>{{ showingAgreement === 'virtual' ? virtualAssetAgreementContent : ownerAgreementContent }}</pre>
+            </div>
+            <div class="agreement-modal-footer">
+              <button type="button" class="submit-btn agreement-confirm-btn" @click="closeAgreement">我已阅读</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
     <Teleport to="body">
       <Transition name="media-preview-fade">
         <div v-if="previewMediaUrl" class="media-preview-overlay" @click.self="closeMediaPreview">
@@ -495,6 +525,7 @@
 <script>
 import { apiFetch, clearAuth, createAuthorizedObjectUrl } from '../utils/api.js'
 import { REGION_OPTIONS, getCitiesByProvince, buildRegionText, isProvinceWithoutCityRequired, resolveRegionSelection } from '../constants/regionData.js'
+import { VIRTUAL_ASSET_AGREEMENT, OWNER_AGREEMENT } from '../constants/agreements.js'
 import {
   calculateBaseRatio,
   fetchBusinessSettings,
@@ -578,7 +609,11 @@ export default {
       previewMediaUrl: '',
       previewMediaName: '',
       fieldErrors: createDefaultFieldErrors(),
-      publishForm: createDefaultPublishForm()
+      publishForm: createDefaultPublishForm(),
+      agreedToTerms: false,
+      showingAgreement: null,
+      virtualAssetAgreementContent: VIRTUAL_ASSET_AGREEMENT,
+      ownerAgreementContent: OWNER_AGREEMENT
     }
   },
   computed: {
@@ -766,9 +801,20 @@ export default {
       event.preventDefault()
     },
     handlePreviewKeydown(event) {
-      if (event?.key === 'Escape' && this.previewMediaUrl) {
-        this.closeMediaPreview()
+      if (event?.key === 'Escape') {
+        if (this.previewMediaUrl) {
+          this.closeMediaPreview()
+        }
+        if (this.showingAgreement) {
+          this.closeAgreement()
+        }
       }
+    },
+    showAgreement(type) {
+      this.showingAgreement = type
+    },
+    closeAgreement() {
+      this.showingAgreement = null
     },
     openImagePreview(imageUrl, imageName = '') {
       const targetUrl = String(imageUrl || '').trim()
@@ -1351,6 +1397,11 @@ export default {
       }
     },
     async submitPublish() {
+      if (!this.agreedToTerms) {
+        showWarningToast('请先阅读并勾选同意相关协议')
+        return
+      }
+
       this.publishErrors = this.validatePublishForm()
       if (this.publishErrors.length) {
         showWarningToast(`请先完成以下内容：\n\n${this.publishErrors.join('\n')}`, { duration: 4200 })
@@ -2124,18 +2175,38 @@ export default {
   max-width: 900px;
 }
 
+.submit-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow: hidden;
+}
+
 .price-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.price-summary-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: 16px;
+}
+
+.price-summary::-webkit-scrollbar {
+  display: none;
 }
 
 .summary-row,
 .summary-total {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 5px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .summary-row span {
@@ -2145,11 +2216,104 @@ export default {
 .summary-row em {
   font-style: normal;
   color: #111827;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 14px;
 }
 
 .summary-row--highlight em {
   color: #dc2626;
+}
+
+.agreements-row {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.agreement-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #4b5563;
+}
+
+.agreement-label input {
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.agreement-label a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.agreement-label a:hover {
+  text-decoration: underline;
+}
+
+.agreement-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.agreement-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.agreement-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #111827;
+}
+
+.agreement-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.agreement-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.agreement-modal-body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.agreement-modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.agreement-confirm-btn {
+  padding: 8px 24px;
+  font-size: 14px;
 }
 
 .summary-total {
@@ -2263,14 +2427,27 @@ export default {
     gap: 12px;
   }
 
+  .submit-left {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
   .price-summary {
     flex-direction: column;
     align-items: stretch;
+    flex-wrap: nowrap;
     gap: 8px;
     padding: 12px;
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
+  }
+
+  .price-summary-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
 
   .summary-row,
