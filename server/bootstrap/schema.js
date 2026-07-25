@@ -9,6 +9,7 @@ export async function runBootstrapSchemaTasks({
   ensureListingNumberSchema,
   ensureBanMediaSchema,
   ensureListingItemModeSchema,
+  ensureListingDecontaminationChamberLevelSchema,
   ensureListingReviewSchema,
   ensureAdminOperationLogSchema,
   ensureAdminBusinessSettingsSchema,
@@ -35,6 +36,7 @@ export async function runBootstrapSchemaTasks({
   await ensureListingNumberSchema()
   await ensureBanMediaSchema()
   await ensureListingItemModeSchema()
+  await ensureListingDecontaminationChamberLevelSchema()
   await ensureListingReviewSchema()
   await ensureAdminOperationLogSchema()
   await ensureAdminBusinessSettingsSchema()

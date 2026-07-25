@@ -1245,6 +1245,26 @@ async function ensureListingItemModeSchema() {
   }
 }
 
+async function ensureListingDecontaminationChamberLevelSchema() {
+  const databaseName = process.env.DB_NAME || 'game_rental'
+  const [columnRows] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'listings'
+       AND COLUMN_NAME = 'decontamination_chamber_level'
+     LIMIT 1`,
+    [databaseName]
+  )
+
+  if (!columnRows.length) {
+    await pool.execute(
+      `ALTER TABLE listings
+       ADD COLUMN decontamination_chamber_level TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '洗消舱等级（0-3）' AFTER dive_level`
+    )
+  }
+}
+
 async function ensureListingReviewSchema() {
   const databaseName = process.env.DB_NAME || 'game_rental'
   const hasListingColumn = async (columnName) => {
@@ -2642,6 +2662,7 @@ export function createApp() {
     ensureListingNumberSchema,
     ensureBanMediaSchema,
     ensureListingItemModeSchema,
+    ensureListingDecontaminationChamberLevelSchema,
     ensureListingReviewSchema,
     ensureAdminOperationLogSchema,
     ensureAdminBusinessSettingsSchema,
