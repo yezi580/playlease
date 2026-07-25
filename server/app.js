@@ -216,7 +216,8 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     message: '用户角色变更需要完成二次校验',
     maxAgeMinutes: 15,
     requirePasskey: true,
-    requireTrustedDevice: true
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: true
   },
   banUser: {
     action: 'ban_user',
@@ -279,21 +280,24 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     message: '安全设置修改需要完成二次校验',
     maxAgeMinutes: 5,
     requirePasskey: true,
-    requireTrustedDevice: true
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: true
   },
   updateBusinessSettings: {
     action: 'update_business_settings',
     message: '修改平台参数需要完成二次校验',
     maxAgeMinutes: 5,
     requirePasskey: true,
-    requireTrustedDevice: false
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: true
   },
   reviewWithdraw: {
     action: 'review_withdraw',
     message: '审核提现申请需要完成二次校验',
     maxAgeMinutes: 5,
     requirePasskey: true,
-    requireTrustedDevice: true
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: true
   },
   approveListing: {
     action: 'approve_listing',

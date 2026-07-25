@@ -1185,7 +1185,8 @@ app.post('/api/admin/step-up/options', authRequired, async (req, res) => {
       policy: {
         maxAgeMinutes: policy.maxAgeMinutes,
         requirePasskey: policy.requirePasskey,
-        requireTrustedDevice: policy.requireTrustedDevice
+        requireTrustedDevice: policy.requireTrustedDevice,
+        allowTrustedDeviceBypassPasskey: Boolean(policy.allowTrustedDeviceBypassPasskey)
       },
       publicKey,
       credentialCount: passkeys.length
