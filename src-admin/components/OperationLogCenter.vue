@@ -15,6 +15,7 @@
         <option value="listing">商品管理</option>
         <option value="order">订单管理</option>
         <option value="user">用户管理</option>
+        <option value="wallet">提现管理</option>
         <option value="security">安全设置</option>
         <option value="config">参数配置</option>
         <option value="feedback">问题反馈</option>
@@ -92,6 +93,7 @@ const MODULE_LABELS = Object.freeze({
   order: '订单管理',
   listing: '商品管理',
   review: '商品审核',
+  wallet: '提现管理',
   security: '安全设置',
   config: '参数配置',
   feedback: '问题反馈'
@@ -105,6 +107,8 @@ const ACTION_LABELS = Object.freeze({
   deactivate_listing: '下架商品',
   approve_listing: '审核通过',
   reject_listing: '审核驳回',
+  approve_withdraw: '提现通过',
+  reject_withdraw: '提现驳回',
   delete_passkey: '删除 Passkey',
   trust_current_device: '信任当前设备',
   revoke_trusted_device: '移除受信任设备',

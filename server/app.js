@@ -2569,6 +2569,7 @@ registerOrdersRoutes({
 })
 registerPaymentRoutes({
   app,
+  pool,
   authRequired,
   adminOnly,
   requireStepUpAuth,

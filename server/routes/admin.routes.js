@@ -2495,7 +2495,7 @@ app.get('/api/admin/operation-logs', authRequired, adminOnly, async (req, res) =
   const keyword = sanitizeAdminKeyword(req.query?.keyword)
   const date = sanitizeAdminDate(req.query?.date)
   const nextDate = getNextAdminDate(date)
-  const moduleName = sanitizeAdminSelectValue(req.query?.module, ['all', 'user', 'order', 'listing', 'review', 'security', 'config', 'feedback'], 'all')
+  const moduleName = sanitizeAdminSelectValue(req.query?.module, ['all', 'user', 'order', 'listing', 'review', 'security', 'config', 'feedback', 'wallet'], 'all')
 
   try {
     const whereParts = []

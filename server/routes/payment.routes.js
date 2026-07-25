@@ -1,5 +1,74 @@
 import { PaymentServiceError } from '../modules/payment/payment.service.js'
 
+async function recordAdminOperationSafely(pool, payload = {}) {
+  if (!pool) return
+  try {
+    await pool.execute(
+      `INSERT INTO admin_operation_logs (
+          operator_user_id,
+          operator_name,
+          module,
+          action,
+          target_type,
+          target_id,
+          target_label,
+          before_snapshot,
+          after_snapshot,
+          remark
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        payload.operatorUserId || null,
+        payload.operatorName || null,
+        payload.module || null,
+        payload.action || null,
+        payload.targetType || null,
+        payload.targetId || null,
+        payload.targetLabel || null,
+        payload.beforeSnapshot ? JSON.stringify(payload.beforeSnapshot) : null,
+        payload.afterSnapshot ? JSON.stringify(payload.afterSnapshot) : null,
+        payload.remark || null
+      ]
+    )
+  } catch (error) {
+    console.error('[payment] record admin operation log failed', error)
+  }
+}
+
+async function getWithdrawRequestSnapshotById(pool, withdrawRequestId) {
+  const safeWithdrawRequestId = Number(withdrawRequestId || 0)
+  if (!pool || !safeWithdrawRequestId) return null
+  const [rows] = await pool.execute(
+    `SELECT
+        wr.id,
+        wr.request_no,
+        wr.user_id,
+        u.username,
+        u.phone,
+        wr.channel,
+        wr.provider,
+        wr.amount,
+        wr.fee_amount,
+        wr.net_amount,
+        wr.status,
+        wr.account_name,
+        wr.account_no_masked,
+        wr.provider_request_id,
+        wr.remark,
+        wr.failure_reason,
+        wr.reviewed_by_user_id,
+        wr.reviewed_at,
+        wr.paid_at,
+        wr.created_at,
+        wr.updated_at
+     FROM wallet_withdraw_requests wr
+     JOIN users u ON u.id = wr.user_id
+     WHERE wr.id = ?
+     LIMIT 1`,
+    [safeWithdrawRequestId]
+  )
+  return rows[0] || null
+}
+
 function handlePaymentServiceError(error, res, fallbackMessage) {
   if (error instanceof PaymentServiceError) {
     return res.status(error.status).json(error.body)
@@ -72,6 +141,7 @@ function serializeWithdrawRequest(normalizeOrderMoneyFields, row) {
 export function registerPaymentRoutes(deps) {
   const {
     app,
+    pool,
     authRequired,
     adminOnly,
     requireStepUpAuth,
@@ -240,6 +310,7 @@ export function registerPaymentRoutes(deps) {
     }
 
     try {
+      const beforeSnapshot = await getWithdrawRequestSnapshotById(pool, withdrawRequestId)
       const request = await paymentService.reviewWithdraw({
         withdrawRequestId,
         adminUserId: req.auth.userId,
@@ -256,6 +327,18 @@ export function registerPaymentRoutes(deps) {
           relatedId: Number(request.id || 0)
         })
       }
+      await recordAdminOperationSafely(pool, {
+        operatorUserId: req.auth?.userId,
+        operatorName: req.auth?.username,
+        module: 'wallet',
+        action: action === 'approve' ? 'approve_withdraw' : 'reject_withdraw',
+        targetType: 'withdraw',
+        targetId: Number(request.id || withdrawRequestId || 0),
+        targetLabel: `${request.request_no || `提现申请 #${withdrawRequestId}`}`,
+        beforeSnapshot,
+        afterSnapshot: request,
+        remark: remark || (action === 'approve' ? '审核通过提现申请' : '驳回提现申请')
+      })
       res.json({
         withdraw_request: serializeWithdrawRequest(normalizeOrderMoneyFields, request)
       })
