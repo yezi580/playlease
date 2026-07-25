@@ -86,8 +86,8 @@
 
           <article class="panel">
             <div class="panel-head">
-              <strong>刀皮与枪皮选项</strong>
-              <span>控制发布页可选的刀皮和枪皮名单，支持后台直接增删</span>
+              <strong>刀皮、干员外观与枪皮选项</strong>
+              <span>控制发布页可选的刀皮、干员外观和枪皮名单，支持后台直接增删</span>
             </div>
             <div class="skin-config-grid">
               <section class="skin-config-card">
@@ -115,6 +115,38 @@
                       class="toolbar-btn toolbar-btn--danger toolbar-btn--small"
                       :disabled="form.listingAppearanceOptions.knifeSkins.length <= 1"
                       @click="removeSkinOption('knifeSkins', index)"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="skin-config-card">
+                <div class="skin-config-head">
+                  <strong>干员外观列表</strong>
+                  <button type="button" class="toolbar-btn toolbar-btn--ghost toolbar-btn--small" @click="addSkinOption('operatorAppearances')">
+                    新增干员外观
+                  </button>
+                </div>
+                <div class="skin-option-list">
+                  <div
+                    v-for="(item, index) in form.listingAppearanceOptions.operatorAppearances"
+                    :key="`operator-${index}`"
+                    class="skin-option-row"
+                  >
+                    <input
+                      :value="item"
+                      type="text"
+                      maxlength="40"
+                      placeholder="请输入干员外观名称"
+                      @input="updateSkinOption('operatorAppearances', index, $event.target.value)"
+                    >
+                    <button
+                      type="button"
+                      class="toolbar-btn toolbar-btn--danger toolbar-btn--small"
+                      :disabled="form.listingAppearanceOptions.operatorAppearances.length <= 1"
+                      @click="removeSkinOption('operatorAppearances', index)"
                     >
                       删除
                     </button>
@@ -732,6 +764,7 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 14px;
+  align-items: stretch;
 }
 
 .skin-config-card {
@@ -739,7 +772,8 @@ export default {
   border-radius: 14px;
   border: 1px solid #e5e7eb;
   background: #f9fafb;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 

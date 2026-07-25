@@ -252,9 +252,15 @@
                     <div class="detail-subsection">
                       <h4>商品图片</h4>
                       <div v-if="detail.images?.length" class="image-grid">
-                        <a v-for="(image, index) in detail.images" :key="`image-${index}`" class="image-card" :href="image" target="_blank" rel="noreferrer">
+                        <button
+                          v-for="(image, index) in detail.images"
+                          :key="`image-${index}`"
+                          type="button"
+                          class="image-card"
+                          @click="openMediaPreview({ type: 'image', src: image, title: `商品图片${index + 1}` })"
+                        >
                           <img :src="image" :alt="`商品图片${index + 1}`">
-                        </a>
+                        </button>
                       </div>
                       <div v-else class="state-card state-card--inner">暂无商品图片</div>
                     </div>
@@ -262,14 +268,38 @@
                     <div class="detail-subsection">
                       <h4>封禁凭证</h4>
                       <div v-if="detail.banImages?.length" class="image-grid">
-                        <a v-for="(image, index) in detail.banImages" :key="`ban-${index}`" class="image-card" :href="getBanImageSource(image, index)" target="_blank" rel="noreferrer">
+                        <button
+                          v-for="(image, index) in detail.banImages"
+                          :key="`ban-${index}`"
+                          type="button"
+                          class="image-card"
+                          @click="openMediaPreview({ type: 'image', src: getBanImageSource(image, index), title: `封禁图片${index + 1}` })"
+                        >
                           <img :src="getBanImageSource(image, index)" :alt="`封禁图片${index + 1}`">
-                        </a>
+                        </button>
                       </div>
                       <div v-else class="state-card state-card--inner">暂无封禁图片</div>
-                      <a v-if="detail.banVideo" class="video-link" :href="getBanVideoSource()" target="_blank" rel="noreferrer">
-                        查看封禁记录视频
-                      </a>
+                      <div v-if="detail.banVideo" class="video-preview-card">
+                        <video
+                          class="video-player"
+                          :src="getBanVideoSource()"
+                          controls
+                          preload="metadata"
+                          playsinline
+                        />
+                        <div class="video-actions">
+                          <button
+                            type="button"
+                            class="video-link video-link--button"
+                            @click="openMediaPreview({ type: 'video', src: getBanVideoSource(), title: '封禁记录视频' })"
+                          >
+                            放大预览
+                          </button>
+                          <a class="video-link" :href="getBanVideoSource()" target="_blank" rel="noreferrer">
+                            新标签打开
+                          </a>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -327,6 +357,40 @@
       @cancel="closeStepUpDialog"
       @confirm="closeStepUpDialog"
     />
+    <div
+      v-if="mediaPreview.open"
+      class="media-preview-mask"
+      @click.self="closeMediaPreview"
+    >
+      <div class="media-preview-dialog">
+        <div class="media-preview-head">
+          <strong>{{ mediaPreview.title || '媒体预览' }}</strong>
+          <button
+            type="button"
+            class="media-preview-close"
+            @click="closeMediaPreview"
+          >
+            关闭
+          </button>
+        </div>
+        <div class="media-preview-body">
+          <img
+            v-if="mediaPreview.type === 'image'"
+            class="media-preview-image"
+            :src="mediaPreview.src"
+            :alt="mediaPreview.title || '图片预览'"
+          >
+          <video
+            v-else-if="mediaPreview.type === 'video'"
+            class="media-preview-video"
+            :src="mediaPreview.src"
+            controls
+            autoplay
+            playsinline
+          />
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -403,6 +467,12 @@ export default {
         title: '请完成二次校验',
         message: ''
       },
+      mediaPreview: {
+        open: false,
+        type: 'image',
+        src: '',
+        title: ''
+      },
       statusOptions: [
         { value: 'pending', label: '待审核' },
         { value: 'rejected', label: '已驳回' },
@@ -433,6 +503,7 @@ export default {
     await this.loadList()
   },
   beforeUnmount() {
+    this.closeMediaPreview()
     this.revokeProtectedBanMedia()
   },
   methods: {
@@ -500,6 +571,7 @@ export default {
         if (this.selectedId) {
           const exists = this.list.some((item) => Number(item.id) === Number(this.selectedId))
           if (!exists) {
+            this.closeMediaPreview()
             this.revokeProtectedBanMedia()
             this.detail = null
             this.detailError = ''
@@ -538,6 +610,7 @@ export default {
       this.detailLoading = true
       this.detailError = ''
       this.message = ''
+      this.closeMediaPreview()
       try {
         const data = await apiFetch(`/api/admin/review/listings/${nextId}`)
         if (requestId !== this.detailRequestId) return
@@ -718,6 +791,24 @@ export default {
     },
     getBanVideoSource() {
       return this.protectedBanVideo || this.detail?.banVideo || ''
+    },
+    openMediaPreview(payload = {}) {
+      const src = String(payload.src || '').trim()
+      if (!src) return
+      this.mediaPreview = {
+        open: true,
+        type: String(payload.type || '').trim() === 'video' ? 'video' : 'image',
+        src,
+        title: String(payload.title || '').trim()
+      }
+    },
+    closeMediaPreview() {
+      this.mediaPreview = {
+        open: false,
+        type: 'image',
+        src: '',
+        title: ''
+      }
     }
   }
 }
@@ -1220,10 +1311,13 @@ export default {
 
 .image-card {
   display: block;
+  width: 100%;
+  padding: 0;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
   background: #fff;
+  cursor: zoom-in;
 }
 
 .image-card img {
@@ -1243,6 +1337,91 @@ export default {
   margin-top: 12px;
   color: #1d4ed8;
   text-decoration: none;
+}
+
+.video-link--button {
+  min-height: 38px;
+  padding: 0 14px;
+  margin-top: 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  font-weight: 600;
+}
+
+.video-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.video-player {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 16px;
+  background: #020617;
+}
+
+.video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.media-preview-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.media-preview-dialog {
+  width: min(1080px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
+}
+
+.media-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.media-preview-close {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+}
+
+.media-preview-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  overflow: auto;
+}
+
+.media-preview-image,
+.media-preview-video {
+  max-width: 100%;
+  max-height: calc(100vh - 180px);
+  border-radius: 16px;
+  background: #020617;
 }
 
 .audit-section {

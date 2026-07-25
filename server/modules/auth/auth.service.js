@@ -1183,6 +1183,10 @@ function isStepUpFresh(verifiedAt, maxAgeMinutes) {
   return (Date.now() - safeVerifiedAt) <= safeMaxAgeMinutes * 60 * 1000
 }
 
+function hasFreshPasskeyStepUp(auth = {}, maxAgeMinutes) {
+  return hasPasskeyStepUp(auth) && isStepUpFresh(auth.stepUpVerifiedAt, maxAgeMinutes)
+}
+
 function requireStepUpAuth(policy = {}) {
   if (!ADMIN_PASSKEY_ENABLED) {
     return (_req, _res, next) => {
@@ -1196,6 +1200,7 @@ function requireStepUpAuth(policy = {}) {
     maxAgeMinutes: Math.max(1, Number(policy.maxAgeMinutes || 15) || 15),
     requirePasskey: policy.requirePasskey !== false,
     requireTrustedDevice: Boolean(policy.requireTrustedDevice),
+    allowTrustedDeviceBypassPasskey: Boolean(policy.allowTrustedDeviceBypassPasskey),
     allowedRoles: Array.isArray(policy.allowedRoles) && policy.allowedRoles.length
       ? policy.allowedRoles.map((item) => String(item || '').trim()).filter(Boolean)
       : ['admin']
@@ -1209,11 +1214,14 @@ function requireStepUpAuth(policy = {}) {
       return res.status(403).json({ message: '当前角色无权执行该高危操作' })
     }
 
-    const passkeyVerified = mergedPolicy.requirePasskey ? hasPasskeyStepUp(req.auth) : true
-    const freshEnough = isStepUpFresh(req.auth.stepUpVerifiedAt, mergedPolicy.maxAgeMinutes)
-    const trustedDeviceSatisfied = !mergedPolicy.requireTrustedDevice || Boolean(req.auth.trustedDevice)
+    const trustedDeviceActive = Boolean(req.auth.trustedDevice)
+    const trustedDeviceSatisfied = !mergedPolicy.requireTrustedDevice || trustedDeviceActive
+    const passkeyBypassedByTrustedDevice = mergedPolicy.allowTrustedDeviceBypassPasskey && trustedDeviceActive
+    const passkeySatisfied = !mergedPolicy.requirePasskey
+      || passkeyBypassedByTrustedDevice
+      || hasFreshPasskeyStepUp(req.auth, mergedPolicy.maxAgeMinutes)
 
-    if (passkeyVerified && freshEnough && trustedDeviceSatisfied) {
+    if (passkeySatisfied && trustedDeviceSatisfied) {
       next()
       return
     }
@@ -1221,9 +1229,9 @@ function requireStepUpAuth(policy = {}) {
     let reason = 'step_up_required'
     if (!trustedDeviceSatisfied) {
       reason = 'trusted_device_required'
-    } else if (!passkeyVerified) {
+    } else if (!hasPasskeyStepUp(req.auth)) {
       reason = 'passkey_required'
-    } else if (!freshEnough) {
+    } else if (!isStepUpFresh(req.auth.stepUpVerifiedAt, mergedPolicy.maxAgeMinutes)) {
       reason = 'step_up_expired'
     }
 
@@ -1235,7 +1243,8 @@ function requireStepUpAuth(policy = {}) {
       policy: {
         maxAgeMinutes: mergedPolicy.maxAgeMinutes,
         requirePasskey: mergedPolicy.requirePasskey,
-        requireTrustedDevice: mergedPolicy.requireTrustedDevice
+        requireTrustedDevice: mergedPolicy.requireTrustedDevice,
+        allowTrustedDeviceBypassPasskey: mergedPolicy.allowTrustedDeviceBypassPasskey
       },
       stage: 'active'
     })

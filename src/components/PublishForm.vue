@@ -534,6 +534,7 @@ import {
   getCompensationPlanOption,
   getEnabledSaleItems,
   getKnifeSkinOptions,
+  getOperatorAppearanceOptions,
   getRecommendedDailyCost,
   getRecommendedRentDays,
   getRentDaysLimit,
@@ -560,7 +561,6 @@ import {
   MAX_LISTING_IMAGE_SIZE,
   MIN_DEPOSIT_YUAN,
   normalizeInsuranceLevel,
-  OPERATOR_APPEARANCE_OPTIONS,
   RANK_OPTIONS,
   splitLoginTimeRange,
   splitMultiText
@@ -595,7 +595,7 @@ export default {
       levelOptions: LEVEL_OPTIONS,
       diveLevelOptions: DIVE_LEVEL_OPTIONS,
       rankOptions: RANK_OPTIONS,
-      operatorAppearanceOptions: OPERATOR_APPEARANCE_OPTIONS,
+      operatorAppearanceOptions: getOperatorAppearanceOptions(getCachedBusinessSettings()),
       knifeSkinOptions: getKnifeSkinOptions(getCachedBusinessSettings()),
       weaponSkinOptions: getWeaponSkinOptions(getCachedBusinessSettings()),
       selectedOperatorAppearances: [],
@@ -782,6 +782,7 @@ export default {
       this.MIN_DEPOSIT_YUAN = Number(settings.listingRecommendations?.depositMinYuan || MIN_DEPOSIT_YUAN)
       this.MAX_DEPOSIT_YUAN = Number(settings.listingRecommendations?.depositMaxYuan || MAX_DEPOSIT_YUAN)
       this.compensationPlanOptions = mapCompensationPlanOptions(settings.compensationPlans)
+      this.operatorAppearanceOptions = getOperatorAppearanceOptions(settings)
       this.knifeSkinOptions = getKnifeSkinOptions(settings)
       this.weaponSkinOptions = getWeaponSkinOptions(settings)
       this.saleItems = buildSaleItems(getEnabledSaleItems(settings))

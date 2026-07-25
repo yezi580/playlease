@@ -49,7 +49,7 @@ const WECHAT_ID_REGEX = /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/
 const VALID_REGION_TEXTS = new Set(
   REGION_OPTIONS.flatMap((item) => item.cities.map((city) => buildRegionText(item.province, city)))
 )
-const ALLOWED_OPERATOR_APPEARANCES = new Set([
+const DEFAULT_OPERATOR_APPEARANCES = [
   '红狼-蚀金玫瑰',
   '威龙-凌霄戍卫',
   '骇爪-水墨云图',
@@ -58,7 +58,7 @@ const ALLOWED_OPERATOR_APPEARANCES = new Set([
   '佐娅-能天使',
   '威龙-吴彦祖联动',
   '威龙-蛟龙特战队'
-])
+]
 const DEFAULT_KNIFE_SKINS = ['赤枭', '怜悯', '影锋', '黑海', '北极星', '信条', '龙牙', '暗星', '坠星者', '挽歌']
 const DEFAULT_WEAPON_SKINS = [
   'M4A1-棱镜攻势',
@@ -88,6 +88,14 @@ function getAllowedKnifeSkinSet(businessSettings) {
   const list = normalizeAllowedOptionList(
     businessSettings?.listingAppearanceOptions?.knifeSkins,
     DEFAULT_KNIFE_SKINS
+  )
+  return new Set(list)
+}
+
+function getAllowedOperatorAppearanceSet(businessSettings) {
+  const list = normalizeAllowedOptionList(
+    businessSettings?.listingAppearanceOptions?.operatorAppearances,
+    DEFAULT_OPERATOR_APPEARANCES
   )
   return new Set(list)
 }
@@ -368,7 +376,7 @@ export function validateListingPayload(payload, options = {}) {
     return '所在地区不合法'
   }
 
-  const operatorAppearanceMessage = validateMultiSelectWhitelist(payload.operatorAppearance, ALLOWED_OPERATOR_APPEARANCES, '干员外观')
+  const operatorAppearanceMessage = validateMultiSelectWhitelist(payload.operatorAppearance, getAllowedOperatorAppearanceSet(businessSettings), '干员外观')
   if (operatorAppearanceMessage) {
     return operatorAppearanceMessage
   }

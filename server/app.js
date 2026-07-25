@@ -286,7 +286,7 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     message: '修改平台参数需要完成二次校验',
     maxAgeMinutes: 5,
     requirePasskey: true,
-    requireTrustedDevice: true
+    requireTrustedDevice: false
   },
   reviewWithdraw: {
     action: 'review_withdraw',

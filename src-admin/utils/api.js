@@ -11,6 +11,7 @@ const STEP_UP_ACTION_LABELS = Object.freeze({
   revoke_trusted_device: '移除受信任设备',
   revoke_all_trusted_devices: '清空受信任设备',
   update_security_settings: '安全设置修改',
+  update_business_settings: '平台参数修改',
   batch_operation: '批量操作',
   approve_listing: '商品审核通过',
   reject_listing: '商品驳回'

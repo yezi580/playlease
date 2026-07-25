@@ -304,6 +304,16 @@ const DEFAULT_ADMIN_BUSINESS_SETTINGS = Object.freeze({
     }
   },
   listingAppearanceOptions: {
+    operatorAppearances: [
+      '红狼-蚀金玫瑰',
+      '威龙-凌霄戍卫',
+      '骇爪-水墨云图',
+      '骇爪-维什戴尔',
+      '露娜-黑·天际线',
+      '佐娅-能天使',
+      '威龙-吴彦祖联动',
+      '威龙-蛟龙特战队'
+    ],
     knifeSkins: ['赤枭', '怜悯', '影锋', '黑海', '北极星', '信条', '龙牙', '暗星', '坠星者', '挽歌'],
     weaponSkins: [
       'M4A1-棱镜攻势',
@@ -468,6 +478,10 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
       }
     },
     listingAppearanceOptions: {
+      operatorAppearances: normalizeAdminStringList(
+        appearanceSource.operatorAppearances,
+        defaults.listingAppearanceOptions.operatorAppearances
+      ),
       knifeSkins: normalizeAdminStringList(
         appearanceSource.knifeSkins,
         defaults.listingAppearanceOptions.knifeSkins
