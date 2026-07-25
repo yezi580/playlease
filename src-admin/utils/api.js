@@ -292,11 +292,17 @@ export async function listAdminPasskeys() {
   return apiFetch('/api/admin/passkeys')
 }
 
-export async function registerAdminPasskey(deviceName = '') {
+export async function sendAdminPasskeyRegisterSmsCode() {
+  return apiFetch('/api/admin/passkeys/register/sms/send', {
+    method: 'POST'
+  })
+}
+
+export async function registerAdminPasskey(deviceName = '', smsCode = '') {
   ensureWebAuthnSupported()
   const optionsData = await apiFetch('/api/admin/passkeys/register/options', {
     method: 'POST',
-    body: JSON.stringify({ deviceName })
+    body: JSON.stringify({ deviceName, smsCode })
   })
   let credential = null
   try {

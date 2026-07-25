@@ -41,6 +41,33 @@
             {{ passkeySubmitting ? '绑定中...' : '添加 Passkey' }}
           </button>
         </div>
+        <div class="form-row">
+          <label class="field">
+            <span>验证手机号</span>
+            <input :value="maskedAdminPhone || '当前账号未绑定手机号'" type="text" disabled>
+          </label>
+          <label class="field">
+            <span>短信验证码</span>
+            <input
+              v-model.trim="passkeySmsCode"
+              type="text"
+              maxlength="8"
+              inputmode="numeric"
+              placeholder="请输入短信验证码"
+              :disabled="!passkeyEnabled || passkeySubmitting || passkeySmsSending"
+              @keydown.enter.prevent="handleRegisterPasskey"
+            >
+          </label>
+          <button
+            type="button"
+            class="panel-btn"
+            :disabled="!passkeyEnabled || passkeySubmitting || passkeySmsSending || passkeySmsCooldown > 0 || !maskedAdminPhone"
+            @click="handleSendPasskeySmsCode"
+          >
+            {{ passkeySmsSending ? '发送中...' : (passkeySmsCooldown > 0 ? `${passkeySmsCooldown}s 后重发` : '发送验证码') }}
+          </button>
+        </div>
+        <p class="form-hint">绑定新的 Passkey 前，需要先验证当前管理员手机号。</p>
         <p v-if="passkeyMessage" class="inline-message" :class="{ 'inline-message--error': passkeyMessageType === 'error' }">
           {{ passkeyMessage }}
         </p>
@@ -136,6 +163,7 @@
         <ul class="panel-list">
           <li v-if="passkeyEnabled">角色变更、封禁、关闭订单、下架商品已接入 Passkey 二次校验。</li>
           <li v-else>当前环境已关闭管理员 Passkey 校验，高风险操作不会再触发二次认证。</li>
+          <li>管理员绑定新 Passkey 前，需先完成当前账号手机号短信校验。</li>
           <li>受信任设备默认有效 30 天，仅代表“这台设备被管理员确认过”，不会替代 Passkey。</li>
           <li>安全设置本身属于高敏感区域，信任设备与删除凭证都会触发 Passkey 补认证。</li>
         </ul>
@@ -175,10 +203,13 @@ import {
   listTrustedDevices,
   performAdminStepUp,
   registerAdminPasskey,
+  sendAdminPasskeyRegisterSmsCode,
   revokeTrustedDevice,
   trustCurrentAdminDevice
 } from '../utils/api.js'
 import AdminConfirmDialog from './AdminConfirmDialog.vue'
+
+const PASSKEY_SMS_COUNTDOWN_STORAGE_KEY = 'admin_passkey_sms_countdown_expire_at'
 
 export default {
   name: 'AdminSecurityCenter',
@@ -199,6 +230,10 @@ export default {
       passkeyMessage: '',
       passkeyMessageType: 'success',
       passkeyDeviceName: '',
+      passkeySmsCode: '',
+      passkeySmsSending: false,
+      passkeySmsCooldown: 0,
+      passkeySmsTimer: null,
       passkeys: [],
       pendingDeletePasskey: null,
       deletingPasskeyId: 0,
@@ -217,6 +252,13 @@ export default {
     passkeyEnabled() {
       return this.currentUser?.adminSecurity?.passkeyEnabled !== false
     },
+    maskedAdminPhone() {
+      const phone = String(this.currentUser?.phone || '').trim()
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        return ''
+      }
+      return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+    },
     deletePasskeyConfirmMessage() {
       if (!this.pendingDeletePasskey) return ''
       return `确认删除 ${this.pendingDeletePasskey.deviceName || '该设备'} 对应的 Passkey 吗？`
@@ -230,10 +272,14 @@ export default {
     if (!this.passkeyEnabled) {
       return
     }
+    this.restorePasskeySmsCountdown()
     await Promise.all([
       this.loadPasskeys(),
       this.loadTrustedDevices()
     ])
+  },
+  beforeUnmount() {
+    this.clearPasskeySmsTimer()
   },
   methods: {
     async loadPasskeys() {
@@ -272,20 +318,48 @@ export default {
       if (!this.passkeyEnabled) {
         return
       }
+      if (!this.passkeySmsCode) {
+        this.passkeyMessageType = 'error'
+        this.passkeyMessage = '请先输入短信验证码'
+        return
+      }
       this.passkeySubmitting = true
       this.passkeyError = ''
       this.passkeyMessage = ''
       try {
-        const data = await registerAdminPasskey(this.passkeyDeviceName)
+        const data = await registerAdminPasskey(this.passkeyDeviceName, this.passkeySmsCode)
         this.passkeyMessageType = 'success'
         this.passkeyMessage = data.message || `Passkey 绑定成功：${data?.passkey?.deviceName || this.passkeyDeviceName || '未命名设备'}`
         this.passkeyDeviceName = ''
+        this.passkeySmsCode = ''
         await this.loadPasskeys()
       } catch (error) {
         this.passkeyMessageType = 'error'
-        this.passkeyMessage = error.message || 'Passkey 绑定失败'
+        this.passkeyMessage = this.buildSmsErrorMessage(error, error.message || 'Passkey 绑定失败')
       } finally {
         this.passkeySubmitting = false
+      }
+    },
+    async handleSendPasskeySmsCode() {
+      if (!this.passkeyEnabled || this.passkeySmsSending || this.passkeySmsCooldown > 0) {
+        return
+      }
+      this.passkeySmsSending = true
+      this.passkeyError = ''
+      this.passkeyMessage = ''
+      try {
+        const data = await sendAdminPasskeyRegisterSmsCode()
+        const retryAfterSeconds = Math.max(0, Number(data?.retry_after_seconds || 0) || 0)
+        this.passkeyMessageType = 'success'
+        this.passkeyMessage = data?.maskedPhone
+          ? `验证码已发送至 ${data.maskedPhone}，请注意查收。`
+          : '验证码已发送，请注意查收。'
+        this.startPasskeySmsCountdown(retryAfterSeconds)
+      } catch (error) {
+        this.passkeyMessageType = 'error'
+        this.passkeyMessage = this.buildSmsErrorMessage(error, '发送验证码失败')
+      } finally {
+        this.passkeySmsSending = false
       }
     },
     async handleTrustCurrentDevice() {
@@ -371,6 +445,67 @@ export default {
         await performAdminStepUp(action)
         return requester()
       }
+    },
+    formatDurationText(seconds) {
+      const totalSeconds = Math.max(0, Number(seconds || 0) || 0)
+      if (!totalSeconds) return ''
+      const minutes = Math.floor(totalSeconds / 60)
+      const remainSeconds = totalSeconds % 60
+      if (minutes > 0) {
+        return `${minutes} 分钟${remainSeconds > 0 ? ` ${remainSeconds} 秒` : ''}`
+      }
+      return `${remainSeconds} 秒`
+    },
+    buildSmsErrorMessage(error, fallbackMessage) {
+      const data = error?.data && typeof error.data === 'object' ? error.data : {}
+      const baseMessage = String(data.message || error?.message || fallbackMessage || '').trim() || fallbackMessage
+      const remainingAttempts = Math.max(0, Number(data.remaining_attempts || 0) || 0)
+      const retryAfterSeconds = Math.max(0, Number(data.retry_after_seconds || 0) || 0)
+      const durationText = this.formatDurationText(retryAfterSeconds)
+
+      if (remainingAttempts > 0) {
+        return `${baseMessage}，还可尝试 ${remainingAttempts} 次`
+      }
+      if (retryAfterSeconds > 0 && durationText) {
+        return `${baseMessage}，请 ${durationText} 后重试`
+      }
+      return baseMessage
+    },
+    clearPasskeySmsTimer() {
+      if (this.passkeySmsTimer) {
+        window.clearInterval(this.passkeySmsTimer)
+        this.passkeySmsTimer = null
+      }
+    },
+    startPasskeySmsCountdown(seconds) {
+      this.clearPasskeySmsTimer()
+      this.passkeySmsCooldown = Math.max(0, Number(seconds || 0) || 0)
+      if (this.passkeySmsCooldown <= 0) {
+        localStorage.removeItem(PASSKEY_SMS_COUNTDOWN_STORAGE_KEY)
+        return
+      }
+      localStorage.setItem(
+        PASSKEY_SMS_COUNTDOWN_STORAGE_KEY,
+        String(Date.now() + this.passkeySmsCooldown * 1000)
+      )
+      this.passkeySmsTimer = window.setInterval(() => {
+        if (this.passkeySmsCooldown <= 1) {
+          this.passkeySmsCooldown = 0
+          localStorage.removeItem(PASSKEY_SMS_COUNTDOWN_STORAGE_KEY)
+          this.clearPasskeySmsTimer()
+          return
+        }
+        this.passkeySmsCooldown -= 1
+      }, 1000)
+    },
+    restorePasskeySmsCountdown() {
+      const expireAt = Number(localStorage.getItem(PASSKEY_SMS_COUNTDOWN_STORAGE_KEY) || 0) || 0
+      if (!expireAt || expireAt <= Date.now()) {
+        localStorage.removeItem(PASSKEY_SMS_COUNTDOWN_STORAGE_KEY)
+        this.passkeySmsCooldown = 0
+        return
+      }
+      this.startPasskeySmsCountdown(Math.ceil((expireAt - Date.now()) / 1000))
     },
     formatTransports(value) {
       const list = Array.isArray(value) ? value.filter(Boolean) : []
@@ -500,6 +635,13 @@ export default {
   margin-bottom: 14px;
 }
 
+.form-hint {
+  margin: -2px 0 14px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .field {
   display: flex;
   flex: 1;
@@ -515,6 +657,11 @@ export default {
   border-radius: 12px;
   border: 1px solid #d1d5db;
   background: #fff;
+}
+
+.field input:disabled {
+  background: #f8fafc;
+  color: #64748b;
 }
 
 .panel-btn {

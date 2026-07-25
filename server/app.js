@@ -295,30 +295,6 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     requirePasskey: true,
     requireTrustedDevice: true
   },
-  supportFreezeFunds: {
-    action: 'support_freeze_funds',
-    message: '冻结订单资金前需要完成二次校验',
-    maxAgeMinutes: 5,
-    requirePasskey: true,
-    requireTrustedDevice: false,
-    allowedRoles: ['support']
-  },
-  supportReleaseFunds: {
-    action: 'support_release_funds',
-    message: '解除订单冻结前需要完成二次校验',
-    maxAgeMinutes: 5,
-    requirePasskey: true,
-    requireTrustedDevice: false,
-    allowedRoles: ['support']
-  },
-  supportExecuteSettlement: {
-    action: 'support_execute_settlement',
-    message: '执行订单分账前需要完成二次校验',
-    maxAgeMinutes: 5,
-    requirePasskey: true,
-    requireTrustedDevice: false,
-    allowedRoles: ['support']
-  },
   approveListing: {
     action: 'approve_listing',
     message: '审核通过商品需要完成二次校验',
@@ -2487,7 +2463,10 @@ registerAdminRoutes({
   buildListingDetailPayload,
   fetchListingBanImages,
   getListingImagesOrderSql,
-  invalidateListingDetailCache: invalidateListingCacheSafely
+  invalidateListingDetailCache: invalidateListingCacheSafely,
+  smsCodeService,
+  smsProvider,
+  loadBusinessSettings
 })
 
 

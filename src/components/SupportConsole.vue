@@ -33,14 +33,6 @@
         <button type="button" class="ghost-btn" :disabled="currentLoading" @click="applyFilters">
           刷新
         </button>
-        <button
-          type="button"
-          class="ghost-btn"
-          :disabled="passkeySubmitting"
-          @click="registerPasskey"
-        >
-          {{ passkeySubmitting ? '绑定中...' : '绑定 Passkey' }}
-        </button>
       </div>
     </div>
 
@@ -710,15 +702,7 @@
 
 <script>
 import { io } from 'socket.io-client'
-import {
-  apiFetch,
-  getStepUpRequirementMessage,
-  getStepUpRequirementReason,
-  isPasskeyNotRegisteredError,
-  isStepUpRequiredError,
-  performPasskeyStepUp,
-  registerCurrentUserPasskey
-} from '../utils/api.js'
+import { apiFetch } from '../utils/api.js'
 import { formatMoneyFixed } from '../utils/money'
 import { getSocketServerUrl } from '../utils/runtime.js'
 import { showErrorToast, showSuccessToast } from '../utils/toast.js'
@@ -754,7 +738,6 @@ export default {
       freezeReasonDraft: '',
       freezeDialogVisible: false,
       noteSaving: false,
-      passkeySubmitting: false,
       statusSubmitting: false,
       cancelSubmitting: false,
       settlementSubmitting: false,
@@ -1438,40 +1421,6 @@ export default {
       this.freezeDialogVisible = false
       this.freezeReasonDraft = this.activeOrder?.support_freeze_reason || ''
     },
-    async registerPasskey() {
-      if (this.passkeySubmitting) return
-      this.passkeySubmitting = true
-      try {
-        const deviceName = `客服工作台-${new Date().toISOString().slice(0, 10)}`
-        const data = await registerCurrentUserPasskey(deviceName)
-        showSuccessToast(data.message || 'Passkey 绑定成功')
-      } catch (error) {
-        showErrorToast(error.message || 'Passkey 绑定失败')
-      } finally {
-        this.passkeySubmitting = false
-      }
-    },
-    async runProtectedSupportAction(action, requester) {
-      try {
-        return await requester()
-      } catch (error) {
-        if (!isStepUpRequiredError(error)) {
-          throw error
-        }
-        if (getStepUpRequirementReason(error) === 'trusted_device_required') {
-          throw new Error(getStepUpRequirementMessage(error))
-        }
-        try {
-          await performPasskeyStepUp(action)
-        } catch (stepUpError) {
-          if (isPasskeyNotRegisteredError(stepUpError)) {
-            throw new Error('当前客服账号还没有绑定 Passkey，请先点击上方“绑定 Passkey”。')
-          }
-          throw stepUpError
-        }
-        return requester()
-      }
-    },
     async saveNote() {
       if (!this.activeOrder || !this.canSaveNote) return
       this.noteSaving = true
@@ -1554,12 +1503,12 @@ export default {
       if (!confirmed) return
       this.settlementSubmitting = true
       try {
-        await this.runProtectedSupportAction('support_execute_settlement', () => apiFetch(
+        await apiFetch(
           `/api/support/orders/${this.activeOrder.id}/execute-settlement`,
           {
             method: 'PUT'
           }
-        ))
+        )
         showSuccessToast('分账执行成功')
         await this.fetchOrders(this.activeStatus)
       } catch (error) {
@@ -1653,7 +1602,7 @@ export default {
 
       this.statusSubmitting = true
       try {
-        await this.runProtectedSupportAction('support_freeze_funds', () => apiFetch(
+        await apiFetch(
           `/api/support/orders/${this.activeOrder.id}/freeze-funds`,
           {
             method: 'PUT',
@@ -1661,7 +1610,7 @@ export default {
               freezeReason: this.freezeReasonDraft
             })
           }
-        ))
+        )
         this.freezeDialogVisible = false
         showSuccessToast('订单资金已冻结')
         await this.fetchOrders(this.activeStatus)
@@ -1684,7 +1633,7 @@ export default {
 
       this.statusSubmitting = true
       try {
-        await this.runProtectedSupportAction('support_release_funds', () => apiFetch(
+        await apiFetch(
           `/api/support/orders/${this.activeOrder.id}/release-funds`,
           {
             method: 'PUT',
@@ -1692,7 +1641,7 @@ export default {
               note: this.noteDraft
             })
           }
-        ))
+        )
         showSuccessToast('订单资金冻结已解除')
         await this.fetchOrders(this.activeStatus)
       } catch (error) {

@@ -2,6 +2,8 @@
  * 管理端 HTTP 路由，处理审核、通行密钥和运营操作。
  */
 
+import { getSmsSecurityThresholds } from '../modules/business-settings/runtime.js'
+
 export function registerAdminRoutes(deps) {
   const {
     app,
@@ -21,7 +23,10 @@ export function registerAdminRoutes(deps) {
     buildListingDetailPayload,
     fetchListingBanImages,
     getListingImagesOrderSql,
-    invalidateListingDetailCache
+    invalidateListingDetailCache,
+    smsCodeService,
+    smsProvider,
+    loadBusinessSettings
   } = deps
   const {
     authRequired,
@@ -58,7 +63,8 @@ export function registerAdminRoutes(deps) {
     markAdminStepUpChallengeConsumed,
     updateAdminPasskeyUsage
   } = authModule
-  const PASSKEY_SELF_SERVICE_ROLES = new Set(['admin', 'support'])
+  const PASSKEY_SELF_SERVICE_ROLES = new Set(['admin'])
+  const ADMIN_PASSKEY_REGISTER_SMS_SCENE = 'admin_passkey_register'
 
   function resolvePolicyAllowedRoles(policy = {}) {
     const roles = Array.isArray(policy.allowedRoles) && policy.allowedRoles.length
@@ -186,6 +192,91 @@ function getAdminTrendBucketSql(granularity, columnSql) {
 
 function sanitizeAdminRemark(value, maxLength = 500) {
   return String(value || '').trim().slice(0, maxLength)
+}
+
+function isValidAdminSmsCode(value = '') {
+  return /^\d{4,8}$/.test(String(value || '').trim())
+}
+
+function isValidAdminSmsPhone(value = '') {
+  return /^1[3-9]\d{9}$/.test(String(value || '').trim())
+}
+
+function maskAdminPhone(phone = '') {
+  const normalizedPhone = String(phone || '').trim()
+  if (!isValidAdminSmsPhone(normalizedPhone)) {
+    return ''
+  }
+  return normalizedPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+}
+
+function buildDefaultAdminSmsSecurityThresholds() {
+  const runtimeConfig = typeof smsCodeService?.getRuntimeConfig === 'function'
+    ? smsCodeService.getRuntimeConfig()
+    : {}
+  return {
+    smsCodeTtlSeconds: Math.max(60, Number(runtimeConfig?.ttlSeconds || 300) || 300),
+    smsSendIntervalSeconds: Math.max(30, Number(runtimeConfig?.sendIntervalSeconds || 60) || 60),
+    smsVerifyMaxAttempts: Math.max(3, Number(runtimeConfig?.verifyMaxAttempts || 5) || 5),
+    smsVerifyLockSeconds: Math.max(300, Number(runtimeConfig?.verifyLockSeconds || 900) || 900)
+  }
+}
+
+async function loadAdminSmsSecurityThresholds() {
+  const defaultThresholds = buildDefaultAdminSmsSecurityThresholds()
+  if (typeof loadBusinessSettings !== 'function') {
+    return defaultThresholds
+  }
+
+  try {
+    const businessSettings = await loadBusinessSettings(pool)
+    if (!businessSettings) {
+      return defaultThresholds
+    }
+    return {
+      ...defaultThresholds,
+      ...getSmsSecurityThresholds(businessSettings)
+    }
+  } catch (_error) {
+    return defaultThresholds
+  }
+}
+
+function buildAdminSmsVerifyErrorResponse(result, thresholds = buildDefaultAdminSmsSecurityThresholds()) {
+  if (result?.reason === 'verify_locked') {
+    return {
+      status: 429,
+      body: {
+        message: '验证码错误次数过多，请稍后重新获取验证码',
+        retry_after_seconds: Number(result.retryAfterSeconds || thresholds.smsVerifyLockSeconds || 900),
+        max_attempts: Number(result.maxAttempts || thresholds.smsVerifyMaxAttempts || 5),
+        remaining_attempts: 0
+      }
+    }
+  }
+
+  if (result?.reason === 'code_not_match') {
+    return {
+      status: 400,
+      body: {
+        message: '验证码错误',
+        max_attempts: Number(result.maxAttempts || thresholds.smsVerifyMaxAttempts || 5),
+        remaining_attempts: Math.max(0, Number(result.remainingAttempts || 0) || 0)
+      }
+    }
+  }
+
+  if (result?.reason === 'invalid_payload') {
+    return {
+      status: 400,
+      body: { message: '请输入正确的短信验证码' }
+    }
+  }
+
+  return {
+    status: 400,
+    body: { message: '验证码错误或已过期' }
+  }
 }
 
 function safeJsonStringify(value) {
@@ -613,13 +704,97 @@ app.delete(
   }
 )
 
+app.post('/api/admin/passkeys/register/sms/send', authRequired, adminOnly, async (req, res) => {
+  try {
+    const authUser = await fetchAuthUserById(req.auth.userId)
+    if (!authUser || String(authUser.role || '').trim() !== 'admin') {
+      return res.status(404).json({ message: '当前账号不支持管理员 Passkey 绑定' })
+    }
+    if (!isValidAdminSmsPhone(authUser.phone)) {
+      return res.status(400).json({ message: '当前管理员账号未绑定有效手机号，无法发送验证码' })
+    }
+
+    const smsSecurityThresholds = await loadAdminSmsSecurityThresholds()
+    const issueResult = await smsCodeService.issueCode({
+      phone: authUser.phone,
+      scene: ADMIN_PASSKEY_REGISTER_SMS_SCENE,
+      metadata: {
+        userId: req.auth.userId,
+        ip: req.ip,
+        userAgent: String(req.headers['user-agent'] || '').trim()
+      }
+    })
+
+    if (!issueResult?.ok) {
+      if (issueResult.reason === 'send_too_frequent') {
+        return res.status(429).json({
+          message: '验证码发送过于频繁，请稍后再试',
+          retry_after_seconds: Number(issueResult.retryAfterSeconds || smsSecurityThresholds.smsSendIntervalSeconds || 60)
+        })
+      }
+      return res.status(400).json({ message: '验证码发送失败' })
+    }
+
+    const providerResult = await smsProvider.sendVerificationCode({
+      scene: ADMIN_PASSKEY_REGISTER_SMS_SCENE,
+      phone: authUser.phone,
+      code: issueResult.code,
+      ttlSeconds: Number(smsSecurityThresholds.smsCodeTtlSeconds || 300)
+    })
+
+    if (!providerResult?.ok) {
+      if (typeof smsCodeService.clearIssuedCode === 'function') {
+        await smsCodeService.clearIssuedCode({
+          scene: ADMIN_PASSKEY_REGISTER_SMS_SCENE,
+          phone: authUser.phone
+        })
+      }
+      return res.status(
+        ['provider_not_configured', 'template_not_configured'].includes(String(providerResult.reason || '').trim())
+          ? 503
+          : 502
+      ).json({ message: providerResult?.message || '短信服务暂不可用' })
+    }
+
+    res.status(201).json({
+      success: true,
+      scene: ADMIN_PASSKEY_REGISTER_SMS_SCENE,
+      maskedPhone: maskAdminPhone(authUser.phone),
+      retry_after_seconds: Number(issueResult.retryAfterSeconds || smsSecurityThresholds.smsSendIntervalSeconds || 60)
+    })
+  } catch (error) {
+    console.error('[admin] send passkey register sms failed', error)
+    res.status(500).json({ message: '发送验证码失败' })
+  }
+})
+
 app.post('/api/admin/passkeys/register/options', authRequired, async (req, res) => {
   const deviceName = String(req.body?.deviceName || '').trim()
+  const smsCode = String(req.body?.smsCode || '').trim()
 
   try {
     const authUser = await fetchAuthUserById(req.auth.userId)
     if (!authUser || !PASSKEY_SELF_SERVICE_ROLES.has(String(authUser.role || '').trim())) {
       return res.status(404).json({ message: '当前账号不支持 Passkey 绑定' })
+    }
+    if (String(authUser.role || '').trim() === 'admin') {
+      if (!isValidAdminSmsPhone(authUser.phone)) {
+        return res.status(400).json({ message: '当前管理员账号未绑定有效手机号，无法完成短信校验' })
+      }
+      if (!isValidAdminSmsCode(smsCode)) {
+        return res.status(400).json({ message: '请输入正确的短信验证码' })
+      }
+      const smsSecurityThresholds = await loadAdminSmsSecurityThresholds()
+      const verifyResult = await smsCodeService.verifyCode({
+        phone: authUser.phone,
+        code: smsCode,
+        scene: ADMIN_PASSKEY_REGISTER_SMS_SCENE,
+        consume: true
+      })
+      if (!verifyResult?.ok) {
+        const errorResponse = buildAdminSmsVerifyErrorResponse(verifyResult, smsSecurityThresholds)
+        return res.status(errorResponse.status).json(errorResponse.body)
+      }
     }
 
     const passkeys = await listAdminPasskeysByUserId(req.auth.userId)
