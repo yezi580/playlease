@@ -91,6 +91,7 @@
                 :is="Component"
                 :key="route.name || activeSection"
                 v-bind="currentSectionProps"
+                @force-logout="handleLogout"
               />
             </KeepAlive>
           </Transition>

@@ -990,10 +990,13 @@ function buildAdminStepUpPublicKeyOptions(req, challengeRecord) {
 }
 
 async function refreshAdminStepUpSession(req, res, authUser, options = {}) {
+  const hasExplicitStepUpVerifiedAt = Object.prototype.hasOwnProperty.call(options, 'stepUpVerifiedAt')
   const nextSessionState = {
     sessionId: String(options.sessionId || req.auth?.sid || req.auth?.sessionId || '').trim(),
     authLevel: String(options.authLevel || req.auth?.authLevel || 'password').trim() || 'password',
-    stepUpVerifiedAt: Number(options.stepUpVerifiedAt || Date.now()) || Date.now(),
+    stepUpVerifiedAt: hasExplicitStepUpVerifiedAt
+      ? Math.max(0, Number(options.stepUpVerifiedAt || 0) || 0)
+      : (Number(req.auth?.stepUpVerifiedAt || Date.now()) || Date.now()),
     trustedDevice: Boolean(options.trustedDevice ?? req.auth?.trustedDevice),
     trustedDeviceId: String(options.trustedDeviceId || req.auth?.trustedDeviceId || '').trim(),
     amr: Array.isArray(options.amr) && options.amr.length

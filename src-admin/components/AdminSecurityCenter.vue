@@ -195,6 +195,7 @@
 
 <script>
 import {
+  clearAuth,
   deleteAdminPasskey,
   getStepUpRequirementMessage,
   getStepUpRequirementReason,
@@ -213,6 +214,7 @@ const PASSKEY_SMS_COUNTDOWN_STORAGE_KEY = 'admin_passkey_sms_countdown_expire_at
 
 export default {
   name: 'AdminSecurityCenter',
+  emits: ['force-logout'],
   components: {
     AdminConfirmDialog
   },
@@ -398,6 +400,11 @@ export default {
         const data = await this.runProtectedAction('delete_passkey', () => deleteAdminPasskey(item.id))
         this.passkeyMessageType = 'success'
         this.passkeyMessage = data.message || 'Passkey 已删除'
+        if (data?.forceRelogin) {
+          clearAuth()
+          this.$emit('force-logout')
+          return
+        }
         await this.loadPasskeys()
       } catch (error) {
         this.passkeyMessageType = 'error'

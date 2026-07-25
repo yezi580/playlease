@@ -51,6 +51,7 @@ export function registerAdminRoutes(deps) {
     setTrustedDeviceCookie,
     issueTrustedDeviceForCurrentSession,
     refreshAdminStepUpSession,
+    clearAuthCookie,
     revokeTrustedDeviceById,
     clearTrustedDeviceCookie,
     revokeAllTrustedDevicesByUserId,
@@ -677,8 +678,28 @@ app.delete(
         return res.status(404).json({ message: 'Passkey 不存在或已失效' })
       }
 
+      const remainingPasskeys = await listAdminPasskeysByUserId(req.auth.userId)
+      const forceRelogin = remainingPasskeys.length === 0
+
+      if (forceRelogin) {
+        if (typeof revokeAllLoginSessionsByUserId === 'function') {
+          await revokeAllLoginSessionsByUserId(req.auth.userId)
+        }
+        clearAuthCookie(req, res)
+      } else {
+        const authUser = await fetchAuthUserById(req.auth.userId)
+        if (authUser) {
+          await refreshAdminStepUpSession(req, res, authUser, {
+            authLevel: 'password',
+            stepUpVerifiedAt: 0,
+            amr: ['pwd']
+          })
+        }
+      }
+
       res.json({
-        message: 'Passkey 已删除',
+        message: forceRelogin ? 'Passkey 已删除，因当前账号已无可用 Passkey，请重新登录' : 'Passkey 已删除，当前会话的二次校验状态已清空',
+        forceRelogin,
         passkey: {
           id: Number(revokedPasskey.id || 0),
           deviceName: String(revokedPasskey.device_name || '').trim() || '未命名设备'
