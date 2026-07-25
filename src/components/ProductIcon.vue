@@ -90,10 +90,10 @@
       <path d="M2 18h4l3-3 5 6 5-6 3 3" />
     </template>
 
-    <!-- 洗消舱 (Character) -->
-    <template v-else-if="name === 'character'">
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
+    <!-- 洗消舱 (Cabin/House) -->
+    <template v-else-if="name === 'cabin'">
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
     </template>
 
     <!-- 人脸归属 (Face verification) -->
@@ -167,7 +167,7 @@ export default {
         'trophy': '#F59E0B',   // 金色
         'level': '#F59E0B',    // 金色
         'dive': '#0EA5E9',     // 亮蓝色
-        'character': '#8B5CF6',// 紫色
+        'cabin': '#8B5CF6',    // 紫色
         'face': '#10B981',     // 绿色认证
         'location': '#EF4444', // 红色定位
         'knife': '#64748B',    // 深灰色

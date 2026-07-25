@@ -67,7 +67,7 @@
         <!-- 紫色信息卡：潜水/洗消舱/人脸归属/地区 -->
         <div class="info-box purple">
           <p><span><ProductIcon name="dive"/>潜水等级：</span>{{ formatValue(item.dive_level, '级') }}</p>
-          <p><span><ProductIcon name="character"/>洗消舱：</span>{{ formatValue(item.decontamination_chamber_level, '级') }}</p>
+          <p><span><ProductIcon name="cabin"/>洗消舱：</span>{{ formatValue(item.decontamination_chamber_level, '级') }}</p>
           <p><span><ProductIcon name="face"/>人脸归属：</span>{{ formatFace(item.face_verified) }}</p>
           <p :title="formatText(item.region)"><span><ProductIcon name="location"/>所在地区：</span>{{ formatRegionText(item.region, 7) }}</p>
         </div>
