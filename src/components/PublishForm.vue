@@ -60,7 +60,7 @@
         <label>
           <span>潜水等级 <i class="required-star">*</i></span>
           <select v-model="publishForm.diveLevel" @change="handleFieldChange('diveLevel')">
-            <option v-for="item in diveLevelOptions" :key="item" :value="item">{{ item }}</option>
+            <option v-for="item in diveLevelOptions" :key="item" :value="item">{{ item }}级</option>
           </select>
           <small v-if="fieldErrors.diveLevel" class="field-hint error-field-hint">{{ fieldErrors.diveLevel }}</small>
         </label>
@@ -68,7 +68,7 @@
         <label>
           <span>洗消舱等级 <i class="required-star">*</i></span>
           <select v-model="publishForm.decontaminationChamberLevel" @change="handleFieldChange('decontaminationChamberLevel')">
-            <option v-for="item in decontaminationChamberLevelOptions" :key="`decontamination-${item}`" :value="item">{{ item }}</option>
+            <option v-for="item in decontaminationChamberLevelOptions" :key="`decontamination-${item}`" :value="item">{{ item }}级</option>
           </select>
           <small v-if="fieldErrors.decontaminationChamberLevel" class="field-hint error-field-hint">{{ fieldErrors.decontaminationChamberLevel }}</small>
         </label>
