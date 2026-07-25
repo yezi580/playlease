@@ -64,6 +64,14 @@
           </select>
           <small v-if="fieldErrors.diveLevel" class="field-hint error-field-hint">{{ fieldErrors.diveLevel }}</small>
         </label>
+
+        <label>
+          <span>洗消舱等级 <i class="required-star">*</i></span>
+          <select v-model="publishForm.decontaminationChamberLevel" @change="handleFieldChange('decontaminationChamberLevel')">
+            <option v-for="item in decontaminationChamberLevelOptions" :key="`decontamination-${item}`" :value="item">{{ item }}</option>
+          </select>
+          <small v-if="fieldErrors.decontaminationChamberLevel" class="field-hint error-field-hint">{{ fieldErrors.decontaminationChamberLevel }}</small>
+        </label>
       </div>
     </section>
 
@@ -546,6 +554,7 @@ import {
   createDefaultFieldErrors,
   createDefaultPublishForm,
   DEFAULT_COMPENSATION_PLAN,
+  DECONTAMINATION_CHAMBER_LEVEL_OPTIONS,
   DIVE_LEVEL_OPTIONS,
   getCurrentTimeText,
   INSURANCE_LEVEL_OPTIONS,
@@ -594,6 +603,7 @@ export default {
       compensationPlanOptions: mapCompensationPlanOptions(getCachedBusinessSettings().compensationPlans),
       levelOptions: LEVEL_OPTIONS,
       diveLevelOptions: DIVE_LEVEL_OPTIONS,
+      decontaminationChamberLevelOptions: DECONTAMINATION_CHAMBER_LEVEL_OPTIONS,
       rankOptions: RANK_OPTIONS,
       operatorAppearanceOptions: getOperatorAppearanceOptions(getCachedBusinessSettings()),
       knifeSkinOptions: getKnifeSkinOptions(getCachedBusinessSettings()),
@@ -936,6 +946,7 @@ export default {
         regionCity: regionSelection.city,
         faceVerified: Number(detail.face_verified) === 1 ? '是' : '否',
         diveLevel: String(detail.dive_level ?? '0'),
+        decontaminationChamberLevel: String(detail.decontamination_chamber_level ?? '0'),
         seyedUnlocked: Number(detail.seyed_unlocked) === 1 ? '是' : '否',
         publishedAt: String(detail.published_at || ''),
         remark: String(detail.remark || ''),
@@ -1028,6 +1039,8 @@ export default {
           return value ? '' : '负重等级为必填'
         case 'diveLevel':
           return value !== '' ? '' : '潜水等级为必填'
+        case 'decontaminationChamberLevel':
+          return value !== '' ? '' : '洗消舱等级为必填'
         case 'banRecord':
           return value ? '' : '封禁记录为必填'
         case 'banMedia':
@@ -1388,6 +1401,7 @@ export default {
         region: this.publishForm.region,
         faceVerified: this.publishForm.faceVerified,
         diveLevel: this.publishForm.diveLevel,
+        decontaminationChamberLevel: this.publishForm.decontaminationChamberLevel,
         seyedUnlocked: this.publishForm.seyedUnlocked,
         remark: this.publishForm.remark,
         banRecord: this.publishForm.banRecord,

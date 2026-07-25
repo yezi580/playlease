@@ -21,6 +21,7 @@ const requiredFields = [
   'region',
   'faceVerified',
   'diveLevel',
+  'decontaminationChamberLevel',
   'seyedUnlocked'
 ]
 
@@ -44,6 +45,7 @@ const ALLOWED_LOGIN_METHODS = new Set(['QQ账密', '微信扫码', 'steam国服'
 const ALLOWED_RANKS = new Set(['无', '青铜', '白银', '黄金', '铂金', '钻石', '黑鹰', '巅峰'])
 const ALLOWED_BOOLEAN_TEXT = new Set(['是', '否'])
 const ALLOWED_DIVE_LEVELS = new Set(['0', '1', '2', '3'])
+const ALLOWED_DECONTAMINATION_CHAMBER_LEVELS = new Set(['0', '1', '2', '3'])
 const LOGIN_TIME_RANGE_REGEX = /^([01]\d|2[0-3]):00-([01]\d|2[0-3]):00$/
 const WECHAT_ID_REGEX = /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/
 const VALID_REGION_TEXTS = new Set(
@@ -342,6 +344,11 @@ export function validateListingPayload(payload, options = {}) {
   const diveLevel = String(payload.diveLevel || '').trim()
   if (!ALLOWED_DIVE_LEVELS.has(diveLevel)) {
     return '潜水等级不合法'
+  }
+
+  const decontaminationChamberLevel = String(payload.decontaminationChamberLevel || '').trim()
+  if (!ALLOWED_DECONTAMINATION_CHAMBER_LEVELS.has(decontaminationChamberLevel)) {
+    return '洗消舱等级不合法'
   }
 
   if (!isNonNegativeIntegerValue(payload.deposit)) {

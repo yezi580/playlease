@@ -2332,7 +2332,7 @@ app.get('/api/admin/review/listings/:id', authRequired, adminOnly, async (req, r
          l.insurance_level, l.weight_level, l.deposit, l.base_ratio, l.login_method,
          l.energy_level, l.hafu_coin, l.rent_price, l.rent_days, l.login_time_range, l.daily_cost,
          l.secret_kd, l.character_level, l.operator_appearance, l.gold_skin, l.rank_name,
-         l.knife_skin, l.weapon_skin, l.region, l.face_verified, l.dive_level, l.seyed_unlocked,
+         l.knife_skin, l.weapon_skin, l.region, l.face_verified, l.dive_level, l.decontamination_chamber_level, l.seyed_unlocked,
          l.listing_status, l.review_status, l.review_reason, l.reviewed_by, l.reviewed_at,
          reviewer.username AS reviewer_name,
          l.remark, l.ban_record, l.ban_video_url, l.published_at, l.created_at

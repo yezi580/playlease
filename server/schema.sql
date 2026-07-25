@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS listings (
   energy_level VARCHAR(30) NOT NULL DEFAULT '' COMMENT '体力等级',
   weight_level VARCHAR(30) NOT NULL DEFAULT '' COMMENT '负重等级',
   dive_level TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '潜水等级（0-3）',
+  decontamination_chamber_level TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '洗消舱等级（0-3）',
   login_method VARCHAR(30) NOT NULL DEFAULT '' COMMENT '上号方式（QQ账密/微信扫码等）',
   login_time_range VARCHAR(60) NOT NULL DEFAULT '' COMMENT '上号时间范围（如"09:00-23:00"）',
   daily_cost BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '每日消耗哈夫币(M，整数)',

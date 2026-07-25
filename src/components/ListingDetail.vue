@@ -51,6 +51,10 @@
             <span>潜水等级</span>
             <input class="readonly-input" :value="withUnit(detail.dive_level, '级')" readonly />
           </label>
+          <label>
+            <span>洗消舱等级</span>
+            <input class="readonly-input" :value="withUnit(detail.decontamination_chamber_level, '级')" readonly />
+          </label>
         </div>
       </section>
 

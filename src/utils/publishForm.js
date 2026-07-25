@@ -18,6 +18,7 @@ export const LOGIN_METHOD_OPTIONS = Object.freeze(['QQ账密', '微信扫码', '
 export const INSURANCE_LEVEL_OPTIONS = Object.freeze(['2格', '4格', '6格', '9格'])
 export const LEVEL_OPTIONS = Object.freeze(['4级', '5级', '6级', '7级'])
 export const DIVE_LEVEL_OPTIONS = Object.freeze(['0', '1', '2', '3'])
+export const DECONTAMINATION_CHAMBER_LEVEL_OPTIONS = Object.freeze(['0', '1', '2', '3'])
 export const RANK_OPTIONS = Object.freeze(['无', '青铜', '白银', '黄金', '铂金', '钻石', '黑鹰', '巅峰'])
 export const OPERATOR_APPEARANCE_OPTIONS = Object.freeze([
   '红狼-蚀金玫瑰',
@@ -81,6 +82,7 @@ export function createDefaultPublishForm() {
     regionCity: '',
     faceVerified: '',
     diveLevel: '0',
+    decontaminationChamberLevel: '0',
     seyedUnlocked: '',
     publishedAt: '',
     remark: '',
@@ -136,6 +138,7 @@ export function createDefaultFieldErrors() {
     energyLevel: '',
     weightLevel: '',
     diveLevel: '',
+    decontaminationChamberLevel: '',
     banRecord: '',
     banMedia: '',
     faceVerified: '',

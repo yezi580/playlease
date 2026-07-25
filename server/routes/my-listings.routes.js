@@ -170,7 +170,7 @@ app.get('/api/my-listings/:id', authRequired, authenticatedReadLimiter, async (r
         id, listing_no, owner_user_id, owner_name, seller_contact_wechat, insurance_level, compensation_plan, weight_level, deposit, base_ratio, login_method,
         energy_level, hafu_coin, rent_price, rent_days, login_time_range, daily_cost,
         secret_kd, character_level, operator_appearance, gold_skin, rank_name,
-        knife_skin, weapon_skin, region, face_verified, dive_level, seyed_unlocked,
+        knife_skin, weapon_skin, region, face_verified, dive_level, decontamination_chamber_level, seyed_unlocked,
         listing_status, remark, ban_record, ban_video_url, published_at, created_at
       FROM listings
       WHERE id = ?
@@ -336,6 +336,7 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
       region: String(payload.region || '').trim(),
       faceVerified: payload.faceVerified === '是' ? 1 : 0,
       diveLevel: toUnsignedInteger(payload.diveLevel),
+      decontaminationChamberLevel: toUnsignedInteger(payload.decontaminationChamberLevel),
       seyedUnlocked: payload.seyedUnlocked === '是' ? 1 : 0,
       remark: payload.remark || '',
       banRecordFlag: toBanRecordFlag(payload.banRecord)
@@ -347,7 +348,7 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
         insurance_level = ?, compensation_plan = ?, weight_level = ?, deposit = ?, base_ratio = ?, login_method = ?,
         energy_level = ?, seller_contact_wechat = ?, hafu_coin = ?, rent_price = ?, rent_days = ?, login_time_range = ?, daily_cost = ?,
         secret_kd = ?, character_level = ?, operator_appearance = ?, gold_skin = ?, rank_name = ?,
-        knife_skin = ?, weapon_skin = ?, region = ?, face_verified = ?, dive_level = ?, seyed_unlocked = ?,
+        knife_skin = ?, weapon_skin = ?, region = ?, face_verified = ?, dive_level = ?, decontamination_chamber_level = ?, seyed_unlocked = ?,
         remark = ?, ban_record = ?
       WHERE id = ?`,
       [
@@ -377,6 +378,7 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
         listingValues.region,
         listingValues.faceVerified,
         listingValues.diveLevel,
+        listingValues.decontaminationChamberLevel,
         listingValues.seyedUnlocked,
         listingValues.remark,
         listingValues.banRecordFlag,

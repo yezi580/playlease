@@ -186,6 +186,14 @@
                       <input :value="detail.weight_level || '--'" readonly>
                     </label>
                     <label>
+                      <span>潜水等级</span>
+                      <input :value="`${formatPlain(detail.dive_level, '0')}级`" readonly>
+                    </label>
+                    <label>
+                      <span>洗消舱等级</span>
+                      <input :value="`${formatPlain(detail.decontamination_chamber_level, '0')}级`" readonly>
+                    </label>
+                    <label>
                       <span>哈夫币</span>
                       <input :value="formatPlain(detail.hafu_coin, '0')" readonly>
                     </label>
