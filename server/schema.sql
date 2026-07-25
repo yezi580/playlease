@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS listings (
 
   -- 验证状态
   face_verified TINYINT(1) NOT NULL DEFAULT 0 COMMENT '人脸归属本人（0否/1是）',
-  seyed_unlocked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '赛依德已解锁（0否/1是）',
   ban_record TINYINT(1) NOT NULL DEFAULT 0 COMMENT '封禁记录（0无/1有）',
   ban_video_url VARCHAR(500) DEFAULT NULL COMMENT '无封禁记录视频URL',
 

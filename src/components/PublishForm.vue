@@ -157,15 +157,6 @@
           <small v-if="fieldErrors.faceVerified" class="field-hint inline-field-hint error-field-hint">{{ fieldErrors.faceVerified }}</small>
         </div>
 
-        <div class="field-row inline-radio-row">
-          <span class="inline-row-title">解锁赛依德 <i class="required-star">*</i></span>
-          <div class="radio-group">
-            <label class="radio-label"><input type="radio" v-model="publishForm.seyedUnlocked" value="是" @change="handleFieldChange('seyedUnlocked')" /> 是</label>
-            <label class="radio-label"><input type="radio" v-model="publishForm.seyedUnlocked" value="否" @change="handleFieldChange('seyedUnlocked')" /> 否</label>
-          </div>
-          <small v-if="fieldErrors.seyedUnlocked" class="field-hint inline-field-hint error-field-hint">{{ fieldErrors.seyedUnlocked }}</small>
-        </div>
-
         <label>
           <span>账号等级 <i class="required-star">*</i><em class="inline-label-hint">要求60级</em></span>
           <input
@@ -947,7 +938,6 @@ export default {
         faceVerified: Number(detail.face_verified) === 1 ? '是' : '否',
         diveLevel: String(detail.dive_level ?? '0'),
         decontaminationChamberLevel: String(detail.decontamination_chamber_level ?? '0'),
-        seyedUnlocked: Number(detail.seyed_unlocked) === 1 ? '是' : '否',
         publishedAt: String(detail.published_at || ''),
         remark: String(detail.remark || ''),
         banRecord: String(detail.ban_record || ''),
@@ -1047,8 +1037,6 @@ export default {
           return ''
         case 'faceVerified':
           return value ? '' : '人脸归属本人为必填'
-        case 'seyedUnlocked':
-          return value ? '' : '解锁赛依德为必填'
         case 'characterLevel': {
           if (value === '' || value === null || value === undefined) return '账号等级为必填'
           const characterLevel = Number(value)
@@ -1402,7 +1390,6 @@ export default {
         faceVerified: this.publishForm.faceVerified,
         diveLevel: this.publishForm.diveLevel,
         decontaminationChamberLevel: this.publishForm.decontaminationChamberLevel,
-        seyedUnlocked: this.publishForm.seyedUnlocked,
         remark: this.publishForm.remark,
         banRecord: this.publishForm.banRecord,
         banImages: this.publishForm.banRecord === '有' ? (uploadedBanMedia.banImages || []) : [],

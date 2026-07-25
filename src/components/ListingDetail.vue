@@ -89,20 +89,6 @@
             </div>
           </div>
 
-          <div class="field-row inline-radio-row">
-            <span class="inline-row-title">解锁赛依德</span>
-            <div class="radio-group">
-              <label class="radio-label" :class="{ active: Number(detail.seyed_unlocked) === 1 }">
-                <input type="radio" :checked="Number(detail.seyed_unlocked) === 1" disabled />
-                是
-              </label>
-              <label class="radio-label" :class="{ active: Number(detail.seyed_unlocked) === 0 }">
-                <input type="radio" :checked="Number(detail.seyed_unlocked) === 0" disabled />
-                否
-              </label>
-            </div>
-          </div>
-
           <label>
             <span>账号等级</span>
             <input class="readonly-input" :value="formatText(detail.character_level, '0')" readonly />

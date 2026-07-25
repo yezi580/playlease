@@ -246,10 +246,6 @@
                       <span>人脸归属</span>
                       <input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly>
                     </label>
-                    <label>
-                      <span>赛依德</span>
-                      <input :value="Number(detail.seyed_unlocked) === 1 ? '已解锁' : '未解锁'" readonly>
-                    </label>
                     <label class="detail-grid__full">
                       <span>备注</span>
                       <textarea :value="detail.remark || '--'" rows="3" readonly />

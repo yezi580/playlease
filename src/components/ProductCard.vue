@@ -64,10 +64,10 @@
           <p><span><ProductIcon name="trophy"/>段位：</span>{{ formatText(item.rank_name) }}</p>
           <p><span><ProductIcon name="level"/>等级：</span>{{ formatText(item.character_level) }}</p>
         </div>
-        <!-- 紫色信息卡：潜水/赛依德/人脸归属/地区 -->
+        <!-- 紫色信息卡：潜水/洗消舱/人脸归属/地区 -->
         <div class="info-box purple">
           <p><span><ProductIcon name="dive"/>潜水等级：</span>{{ formatValue(item.dive_level, '级') }}</p>
-          <p><span><ProductIcon name="character"/>赛依德：</span>{{ formatUnlock(item.seyed_unlocked) }}</p>
+          <p><span><ProductIcon name="character"/>洗消舱：</span>{{ formatValue(item.decontamination_chamber_level, '级') }}</p>
           <p><span><ProductIcon name="face"/>人脸归属：</span>{{ formatFace(item.face_verified) }}</p>
           <p :title="formatText(item.region)"><span><ProductIcon name="location"/>所在地区：</span>{{ formatRegionText(item.region, 7) }}</p>
         </div>
@@ -294,12 +294,6 @@ export default {
       // 人脸归属字段格式化：将数据库的0/1转为中文"本人"/"非本人"
       if (value === 1 || value === '1' || value === true) return '本人'
       if (value === 0 || value === '0' || value === false) return '非本人'
-      return '-'
-    },
-    formatUnlock(value) {
-      // 赛依德解锁字段格式化：将数据库的0/1转为"已解锁"/"未解锁"
-      if (value === 1 || value === '1' || value === true) return '已解锁'
-      if (value === 0 || value === '0' || value === false) return '未解锁'
       return '-'
     },
     formatTime(value) {

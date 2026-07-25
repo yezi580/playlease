@@ -220,7 +220,6 @@ export function registerListingRoutes(deps) {
         faceVerified: payload.faceVerified === '是' ? 1 : 0,
         diveLevel: toUnsignedInteger(payload.diveLevel),
         decontaminationChamberLevel: toUnsignedInteger(payload.decontaminationChamberLevel),
-        seyedUnlocked: payload.seyedUnlocked === '是' ? 1 : 0,
         remark: payload.remark || '',
         banRecordFlag: toBanRecordFlag(payload.banRecord)
       }
@@ -231,9 +230,9 @@ export function registerListingRoutes(deps) {
           listing_no, owner_user_id, owner_name, listing_status, review_status, published_at, insurance_level, compensation_plan, weight_level, deposit, base_ratio, login_method,
           energy_level, seller_contact_wechat, hafu_coin, rent_price, rent_days, login_time_range, daily_cost,
           secret_kd, character_level, operator_appearance, gold_skin, rank_name,
-          knife_skin, weapon_skin, region, face_verified, dive_level, decontamination_chamber_level, seyed_unlocked,
+          knife_skin, weapon_skin, region, face_verified, dive_level, decontamination_chamber_level,
           remark, ban_record
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
         [
           listingValues.listingNo,
           listingValues.ownerUserId,
@@ -265,7 +264,6 @@ export function registerListingRoutes(deps) {
           listingValues.faceVerified,
           listingValues.diveLevel,
           listingValues.decontaminationChamberLevel,
-          listingValues.seyedUnlocked,
           listingValues.remark,
           listingValues.banRecordFlag
         ]
@@ -470,7 +468,7 @@ export function registerListingRoutes(deps) {
           l.id, l.listing_no, l.owner_name, l.insurance_level, l.weight_level, l.login_method, l.hafu_coin,
           l.rent_price, l.rent_days, l.rank_name, l.region, l.base_ratio, l.created_at,
           l.deposit, l.energy_level, l.secret_kd, l.character_level, l.daily_cost, l.login_time_range,
-          l.face_verified, l.dive_level, l.decontamination_chamber_level, l.seyed_unlocked,
+          l.face_verified, l.dive_level, l.decontamination_chamber_level,
           l.knife_skin, l.operator_appearance, l.gold_skin, l.weapon_skin,
           COALESCE(hot.recent_unique_click_7d, 0) AS recent_unique_click_7d,
           (
@@ -620,7 +618,7 @@ export function registerListingRoutes(deps) {
           id, listing_no, owner_name, insurance_level, compensation_plan, weight_level, deposit, base_ratio, login_method,
           energy_level, hafu_coin, rent_price, rent_days, login_time_range, daily_cost,
           secret_kd, character_level, operator_appearance, gold_skin, rank_name,
-          knife_skin, weapon_skin, region, face_verified, dive_level, decontamination_chamber_level, seyed_unlocked,
+          knife_skin, weapon_skin, region, face_verified, dive_level, decontamination_chamber_level,
           listing_status,
           remark, ban_record, ban_video_url, created_at
         FROM listings

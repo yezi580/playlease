@@ -90,7 +90,7 @@
       <path d="M2 18h4l3-3 5 6 5-6 3 3" />
     </template>
 
-    <!-- 赛依德 (Character) -->
+    <!-- 洗消舱 (Character) -->
     <template v-else-if="name === 'character'">
       <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />

@@ -21,8 +21,7 @@ const requiredFields = [
   'region',
   'faceVerified',
   'diveLevel',
-  'decontaminationChamberLevel',
-  'seyedUnlocked'
+  'decontaminationChamberLevel'
 ]
 
 const INSURANCE_LEVEL_MAP = Object.freeze({
@@ -329,11 +328,6 @@ export function validateListingPayload(payload, options = {}) {
   const faceVerified = String(payload.faceVerified || '').trim()
   if (!ALLOWED_BOOLEAN_TEXT.has(faceVerified)) {
     return '人脸归属本人字段不合法'
-  }
-
-  const seyedUnlocked = String(payload.seyedUnlocked || '').trim()
-  if (!ALLOWED_BOOLEAN_TEXT.has(seyedUnlocked)) {
-    return '解锁赛依德字段不合法'
   }
 
   const banRecord = String(payload.banRecord || '').trim()
