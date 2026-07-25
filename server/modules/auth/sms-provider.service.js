@@ -54,7 +54,10 @@ function normalizeSmsScene(scene = 'login') {
     reset_password: 'reset_password',
     resetpassword: 'reset_password',
     forgot_password: 'reset_password',
-    forgotpassword: 'reset_password'
+    forgotpassword: 'reset_password',
+    admin_passkey_register: 'admin_passkey_register',
+    passkey_register: 'admin_passkey_register',
+    adminpasskeyregister: 'admin_passkey_register'
   }
   return sceneAliasMap[normalizedScene] || 'login'
 }
@@ -72,6 +75,11 @@ function resolveTencentTemplateId(scene = 'login', config = {}) {
     reset_password: String(
       config.resetPasswordTemplateId ||
       process.env.TENCENT_SMS_TEMPLATE_ID_RESET_PASSWORD ||
+      defaultTemplateId
+    ).trim(),
+    admin_passkey_register: String(
+      config.adminPasskeyRegisterTemplateId ||
+      process.env.TENCENT_SMS_TEMPLATE_ID_ADMIN_PASSKEY_REGISTER ||
       defaultTemplateId
     ).trim()
   }
@@ -155,7 +163,8 @@ function createTencentSmsProvider(config = {}) {
         default: String(config.defaultTemplateId || process.env.TENCENT_SMS_TEMPLATE_ID_DEFAULT || '').trim(),
         login: String(config.loginTemplateId || process.env.TENCENT_SMS_TEMPLATE_ID_LOGIN || '').trim(),
         register: String(config.registerTemplateId || process.env.TENCENT_SMS_TEMPLATE_ID_REGISTER || '').trim(),
-        resetPassword: String(config.resetPasswordTemplateId || process.env.TENCENT_SMS_TEMPLATE_ID_RESET_PASSWORD || '').trim()
+        resetPassword: String(config.resetPasswordTemplateId || process.env.TENCENT_SMS_TEMPLATE_ID_RESET_PASSWORD || '').trim(),
+        adminPasskeyRegister: String(config.adminPasskeyRegisterTemplateId || process.env.TENCENT_SMS_TEMPLATE_ID_ADMIN_PASSKEY_REGISTER || '').trim()
       }
       const configIssues = []
       if (!secretId) configIssues.push('缺少 TENCENT_SMS_SECRET_ID')
@@ -165,6 +174,7 @@ function createTencentSmsProvider(config = {}) {
       if (!(templateIds.default || templateIds.login)) configIssues.push('缺少登录短信模板 ID')
       if (!(templateIds.default || templateIds.register)) configIssues.push('缺少注册短信模板 ID')
       if (!(templateIds.default || templateIds.resetPassword)) configIssues.push('缺少改密短信模板 ID')
+      if (!(templateIds.default || templateIds.adminPasskeyRegister)) configIssues.push('缺少管理员 Passkey 绑定短信模板 ID')
       return {
         enabled: isConfigured,
         provider: 'tencent',
