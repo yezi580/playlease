@@ -1,12 +1,14 @@
 <template>
   <ListingDetail
     :listing-id="listingId"
+    :is-logged-in="isLoggedIn"
     :back-text="backText"
     :read-only="isReadOnly"
     :use-seller-pricing-view="useSellerPricingView"
     :hide-compensation-plan="!shouldShowCompensationPlan"
     @back="handleBack"
     @goto-profile="handleGotoProfile"
+    @require-login="handleRequireLogin"
   />
 </template>
 
@@ -74,6 +76,9 @@ export default {
     }
   },
   methods: {
+    handleRequireLogin(payload = '请先登录') {
+      this.$emit('require-login', payload)
+    },
     handleBack() {
       if (this.source === 'profile') {
         this.$router.push({

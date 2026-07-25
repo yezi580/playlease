@@ -2,7 +2,7 @@ export const LISTING_DETAIL_LOGIN_TIP = '登录后可查看完整商品详情与
 
 export const ACCESS_POLICY = Object.freeze({
   listingDetail: Object.freeze({
-    resourceRequiresLogin: true
+    resourceRequiresLogin: false
   }),
   media: Object.freeze({
     listingImagesPublic: true,

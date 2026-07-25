@@ -427,11 +427,15 @@ export default {
     CopyTextButton,
     OrderModal
   },
-  emits: ['back', 'goto-profile'],
+  emits: ['back', 'goto-profile', 'require-login'],
   props: {
     listingId: {
       type: [Number, String],
       required: true
+    },
+    isLoggedIn: {
+      type: Boolean,
+      default: false
     },
     backText: {
       type: String,
@@ -785,6 +789,10 @@ export default {
     handleRentNow() {
       if (!this.detail) {
         showWarningToast('商品信息加载中，请稍后再试')
+        return
+      }
+      if (!this.isLoggedIn) {
+        this.$emit('require-login', '请先登录后再立即租用')
         return
       }
       if (!this.canSubmitOrder) {
