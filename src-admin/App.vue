@@ -1,114 +1,120 @@
 <template>
   <div class="admin-page">
-    <div v-if="booting" class="admin-state-card">
-      <div class="admin-state-mark">ADMIN</div>
-      <h1>平台管理控制台</h1>
-      <p>正在验证管理员身份与系统状态...</p>
-    </div>
+    <div class="admin-page-body">
+      <div v-if="booting" class="admin-state-card">
+        <div class="admin-state-mark">ADMIN</div>
+        <h1>平台管理控制台</h1>
+        <p>正在验证管理员身份与系统状态...</p>
+      </div>
 
-    <div v-else-if="!isAuthenticated" class="admin-auth-shell">
-      <section class="admin-auth-card">
-        <div class="admin-auth-badge">Game Hub Admin</div>
-        <div class="admin-auth-head">
-          <h1>平台管理控制台</h1>
-          <p>统一管理用户、商品、订单审核与平台运营数据。</p>
-        </div>
+      <div v-else-if="!isAuthenticated" class="admin-auth-shell">
+        <section class="admin-auth-card">
+          <div class="admin-auth-badge">Game Hub Admin</div>
+          <div class="admin-auth-head">
+            <h1>平台管理控制台</h1>
+            <p>统一管理用户、商品、订单审核与平台运营数据。</p>
+          </div>
 
-        <div class="admin-auth-status">
-          <span class="admin-auth-status-label">系统服务状态</span>
-          <strong :class="{ 'admin-status-ok': Boolean(healthStatus?.ok), 'admin-status-error': !healthStatus?.ok }">
-            {{ healthStatusText }}
-          </strong>
-        </div>
+          <div class="admin-auth-status">
+            <span class="admin-auth-status-label">系统服务状态</span>
+            <strong :class="{ 'admin-status-ok': Boolean(healthStatus?.ok), 'admin-status-error': !healthStatus?.ok }">
+              {{ healthStatusText }}
+            </strong>
+          </div>
 
-        <div class="admin-auth-tips">
-          <span>安全登录</span>
-          <span>操作留痕</span>
-          <span>统一治理</span>
-        </div>
+          <div class="admin-auth-tips">
+            <span>安全登录</span>
+            <span>操作留痕</span>
+            <span>统一治理</span>
+          </div>
 
-        <label class="admin-field">
-          <span>手机号</span>
-          <input
-            v-model.trim="loginForm.phone"
-            type="text"
-            maxlength="11"
-            autocomplete="username"
-            placeholder="请输入管理员手机号"
-            @keydown.enter.prevent="handleLogin"
+          <label class="admin-field">
+            <span>手机号</span>
+            <input
+              v-model.trim="loginForm.phone"
+              type="text"
+              maxlength="11"
+              autocomplete="username"
+              placeholder="请输入管理员手机号"
+              @keydown.enter.prevent="handleLogin"
+            >
+          </label>
+
+          <label class="admin-field">
+            <span>密码</span>
+            <input
+              v-model="loginForm.password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="请输入密码"
+              @keydown.enter.prevent="handleLogin"
+            >
+          </label>
+
+          <p v-if="loginError" class="admin-error-text">{{ loginError }}</p>
+
+          <button
+            type="button"
+            class="admin-primary-btn"
+            :disabled="loginSubmitting"
+            @click="handleLogin"
           >
-        </label>
+            {{ loginSubmitting ? '登录中...' : '进入管理控制台' }}
+          </button>
+        </section>
+      </div>
 
-        <label class="admin-field">
-          <span>密码</span>
-          <input
-            v-model="loginForm.password"
-            type="password"
-            autocomplete="current-password"
-            placeholder="请输入密码"
-            @keydown.enter.prevent="handleLogin"
+      <div v-else class="admin-shell">
+        <aside class="admin-sidebar">
+          <div class="admin-brand">
+            <div class="admin-brand-mark">tp</div>
+            <strong>Game Hub Admin</strong>
+            <span>平台运营管理中心</span>
+          </div>
+
+          <button
+            v-for="item in sections"
+            :key="item.key"
+            type="button"
+            class="admin-nav-btn"
+            :class="{ 'admin-nav-btn--active': activeSection === item.key }"
+            @click="selectSection(item)"
           >
-        </label>
+            {{ item.label }}
+          </button>
+        </aside>
 
-        <p v-if="loginError" class="admin-error-text">{{ loginError }}</p>
-
-        <button
-          type="button"
-          class="admin-primary-btn"
-          :disabled="loginSubmitting"
-          @click="handleLogin"
-        >
-          {{ loginSubmitting ? '登录中...' : '进入管理控制台' }}
-        </button>
-      </section>
+        <main class="admin-main">
+          <RouterView v-slot="{ Component, route }">
+            <Transition name="admin-section-fade" mode="out-in">
+              <KeepAlive>
+                <component
+                  :is="Component"
+                  :key="route.name || activeSection"
+                  v-bind="currentSectionProps"
+                  @force-logout="handleLogout"
+                />
+              </KeepAlive>
+            </Transition>
+          </RouterView>
+        </main>
+      </div>
     </div>
 
-    <div v-else class="admin-shell">
-      <aside class="admin-sidebar">
-        <div class="admin-brand">
-          <div class="admin-brand-mark">tp</div>
-          <strong>Game Hub Admin</strong>
-          <span>平台运营管理中心</span>
-        </div>
-
-        <button
-          v-for="item in sections"
-          :key="item.key"
-          type="button"
-          class="admin-nav-btn"
-          :class="{ 'admin-nav-btn--active': activeSection === item.key }"
-          @click="selectSection(item)"
-        >
-          {{ item.label }}
-        </button>
-      </aside>
-
-      <main class="admin-main">
-        <RouterView v-slot="{ Component, route }">
-          <Transition name="admin-section-fade" mode="out-in">
-            <KeepAlive>
-              <component
-                :is="Component"
-                :key="route.name || activeSection"
-                v-bind="currentSectionProps"
-                @force-logout="handleLogout"
-              />
-            </KeepAlive>
-          </Transition>
-        </RouterView>
-      </main>
-    </div>
+    <AppFooter class="admin-footer" :class="{ 'admin-footer--with-sidebar': isAuthenticated }" />
   </div>
 </template>
 
 <script>
 import { RouterView } from 'vue-router'
+import AppFooter from '../src/components/AppFooter.vue'
 import { apiFetch, clearAuth, setAuth } from './utils/api.js'
 import { adminSections } from './router'
 
 export default {
   name: 'AdminApp',
   components: {
+    AppFooter,
     RouterView
   },
   data() {
@@ -249,12 +255,20 @@ export default {
 <style scoped>
 .admin-page {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(180deg, #f4f7fb 0%, #eef3f9 100%);
+}
+
+.admin-page-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .admin-auth-shell,
 .admin-state-card {
-  min-height: 100vh;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -444,8 +458,18 @@ export default {
 }
 
 .admin-shell {
-  min-height: 100vh;
+  flex: 1;
   display: block;
+}
+
+.admin-footer {
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.admin-footer--with-sidebar {
+  margin-left: 240px;
 }
 
 .admin-sidebar {
@@ -836,6 +860,10 @@ export default {
   .admin-main {
     margin-left: 0;
     padding: 20px 16px 28px;
+  }
+
+  .admin-footer--with-sidebar {
+    margin-left: 0;
   }
 
   .admin-search-bar,

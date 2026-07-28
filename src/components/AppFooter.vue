@@ -10,6 +10,18 @@
           陕ICP备2026014619号-1
         </a>
       </div>
+      <span class="divider">|</span>
+      <div class="footer-police">
+        <a
+          href="https://beian.mps.gov.cn/#/query/webSearch?code=61070202000645"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="公安联网备案号：陕公网安备61070202000645号"
+        >
+          <img src="/police-badge.ico" alt="" aria-hidden="true">
+          <span>陕公网安备61070202000645号</span>
+        </a>
+      </div>
     </div>
   </footer>
 </template>
@@ -50,7 +62,28 @@
   transition: color 0.2s;
 }
 
+.footer-police a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-police img {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  object-fit: contain;
+}
+
 .footer-icp a:hover {
+  color: #64748b;
+  text-decoration: underline;
+}
+
+.footer-police a:hover {
   color: #64748b;
   text-decoration: underline;
 }
@@ -62,6 +95,10 @@
     font-size: 12px;
   }
   
+  .footer-content {
+    gap: 8px 12px;
+  }
+
   .divider {
     display: none;
   }
