@@ -99,6 +99,7 @@
                 class="order-card"
                 :class="{ 'order-card--active': Number(order.id) === Number(activeOrderId) }"
                 @click="selectOrder(order.id)"
+                @dblclick="handleOrderCardDoubleClick(order.id)"
               >
                 <div class="order-card-top">
                   <div class="order-card-title">
@@ -143,6 +144,7 @@
                 class="order-card"
                 :class="{ 'order-card--active': Number(consultation.id) === Number(activePresaleId) }"
                 @click="selectPresaleConsultation(consultation.id)"
+                @dblclick="handlePresaleCardDoubleClick(consultation.id)"
               >
                 <div class="order-card-top">
                   <div class="order-card-title">
@@ -1375,8 +1377,14 @@ export default {
     selectOrder(orderId) {
       this.activeOrderId = Number(orderId || 0)
     },
+    handleOrderCardDoubleClick(orderId) {
+      this.openConversation(orderId, 'order')
+    },
     selectPresaleConsultation(consultationId) {
       this.activePresaleId = Number(consultationId || 0)
+    },
+    handlePresaleCardDoubleClick(consultationId) {
+      this.openConversation(consultationId, 'presale')
     },
     openConversation(targetId, type = 'order') {
       const conversationType = String(type || '').trim().toLowerCase() === 'presale' ? 'presale' : 'order'
