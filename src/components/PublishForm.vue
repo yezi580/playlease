@@ -11,65 +11,81 @@
       <div class="form-grid">
         <label>
           <span>上号方式 <i class="required-star">*</i><em class="inline-label-hint">配合租客登录账号的方式</em></span>
-          <select v-model="publishForm.loginMethod" @change="handleFieldChange('loginMethod')">
-            <option v-for="item in loginMethodOptions" :key="item" :value="item">{{ item }}</option>
-          </select>
+          <AnimatedSelect
+            v-model="publishForm.loginMethod"
+            :options="loginMethodOptions"
+            @change="handleFieldChange('loginMethod')"
+          />
           <small v-if="fieldErrors.loginMethod" class="field-hint error-field-hint">{{ fieldErrors.loginMethod }}</small>
         </label>
 
         <label>
           <span>上号时间 <i class="required-star">*</i></span>
           <div class="time-range-input">
-            <select v-model="publishForm.loginStartTime" @change="handleFieldChange('loginTimeRange')">
-              <option value="">最早时间</option>
-              <option v-for="hour in loginHourOptions" :key="`start-${hour}`" :value="hour">{{ hour }}</option>
-            </select>
+            <AnimatedSelect
+              v-model="publishForm.loginStartTime"
+              :options="loginHourOptions"
+              placeholder="最早时间"
+              @change="handleFieldChange('loginTimeRange')"
+            />
             <span class="time-sep">-</span>
-            <select v-model="publishForm.loginEndTime" @change="handleFieldChange('loginTimeRange')">
-              <option value="">最晚时间</option>
-              <option v-for="hour in loginHourOptions" :key="`end-${hour}`" :value="hour">{{ hour }}</option>
-            </select>
+            <AnimatedSelect
+              v-model="publishForm.loginEndTime"
+              :options="loginHourOptions"
+              placeholder="最晚时间"
+              @change="handleFieldChange('loginTimeRange')"
+            />
           </div>
           <small v-if="fieldErrors.loginTimeRange" class="field-hint error-field-hint">{{ fieldErrors.loginTimeRange }}</small>
         </label>
 
         <label>
           <span>保险等级 <i class="required-star">*</i><em class="inline-label-hint">指赛季永久保险箱容量</em></span>
-          <select v-model="publishForm.insuranceLevel" @change="handleFieldChange('insuranceLevel')">
-            <option v-for="item in insuranceLevelOptions" :key="item" :value="item">{{ item }}</option>
-          </select>
+          <AnimatedSelect
+            v-model="publishForm.insuranceLevel"
+            :options="insuranceLevelOptions"
+            @change="handleFieldChange('insuranceLevel')"
+          />
           <small v-if="fieldErrors.insuranceLevel" class="field-hint error-field-hint">{{ fieldErrors.insuranceLevel }}</small>
         </label>
 
         <label>
           <span>体力等级 <i class="required-star">*</i></span>
-          <select v-model="publishForm.energyLevel" @change="handleFieldChange('energyLevel')">
-            <option v-for="item in levelOptions" :key="`energy-${item}`" :value="item">{{ item }}</option>
-          </select>
+          <AnimatedSelect
+            v-model="publishForm.energyLevel"
+            :options="levelOptions"
+            @change="handleFieldChange('energyLevel')"
+          />
           <small v-if="fieldErrors.energyLevel" class="field-hint error-field-hint">{{ fieldErrors.energyLevel }}</small>
         </label>
 
         <label>
           <span>负重等级 <i class="required-star">*</i></span>
-          <select v-model="publishForm.weightLevel" @change="handleFieldChange('weightLevel')">
-            <option v-for="item in levelOptions" :key="`weight-${item}`" :value="item">{{ item }}</option>
-          </select>
+          <AnimatedSelect
+            v-model="publishForm.weightLevel"
+            :options="levelOptions"
+            @change="handleFieldChange('weightLevel')"
+          />
           <small v-if="fieldErrors.weightLevel" class="field-hint error-field-hint">{{ fieldErrors.weightLevel }}</small>
         </label>
 
         <label>
           <span>潜水等级 <i class="required-star">*</i></span>
-          <select v-model="publishForm.diveLevel" @change="handleFieldChange('diveLevel')">
-            <option v-for="item in diveLevelOptions" :key="item" :value="item">{{ item }}级</option>
-          </select>
+          <AnimatedSelect
+            v-model="publishForm.diveLevel"
+            :options="diveLevelSelectOptions"
+            @change="handleFieldChange('diveLevel')"
+          />
           <small v-if="fieldErrors.diveLevel" class="field-hint error-field-hint">{{ fieldErrors.diveLevel }}</small>
         </label>
 
         <label>
           <span>洗消舱等级 <i class="required-star">*</i></span>
-          <select v-model="publishForm.decontaminationChamberLevel" @change="handleFieldChange('decontaminationChamberLevel')">
-            <option v-for="item in decontaminationChamberLevelOptions" :key="`decontamination-${item}`" :value="item">{{ item }}级</option>
-          </select>
+          <AnimatedSelect
+            v-model="publishForm.decontaminationChamberLevel"
+            :options="decontaminationChamberLevelSelectOptions"
+            @change="handleFieldChange('decontaminationChamberLevel')"
+          />
           <small v-if="fieldErrors.decontaminationChamberLevel" class="field-hint error-field-hint">{{ fieldErrors.decontaminationChamberLevel }}</small>
         </label>
       </div>
@@ -174,9 +190,11 @@
 
         <label>
           <span>账号段位 <i class="required-star">*</i><em class="inline-label-hint">当前赛季段位</em></span>
-          <select v-model="publishForm.rank" @change="handleFieldChange('rank')">
-            <option v-for="item in rankOptions" :key="item" :value="item">{{ item }}</option>
-          </select>
+          <AnimatedSelect
+            v-model="publishForm.rank"
+            :options="rankOptions"
+            @change="handleFieldChange('rank')"
+          />
           <small v-if="fieldErrors.rank" class="field-hint error-field-hint">{{ fieldErrors.rank }}</small>
         </label>
 
@@ -189,18 +207,19 @@
         <div class="field-group">
           <span>所在地区 <i class="required-star">*</i></span>
           <div class="region-select-row">
-            <select v-model="publishForm.regionProvince" @change="handleRegionProvinceChange">
-              <option value="">选择省份</option>
-              <option v-for="province in provinceOptions" :key="province" :value="province">{{ province }}</option>
-            </select>
-            <select
+            <AnimatedSelect
+              v-model="publishForm.regionProvince"
+              :options="provinceOptions"
+              placeholder="选择省份"
+              @change="handleRegionProvinceChange"
+            />
+            <AnimatedSelect
               v-model="publishForm.regionCity"
+              :options="availableRegionCities"
+              :placeholder="requiresRegionCity ? '选择城市' : (publishForm.regionProvince ? '/' : '请先选择省份')"
               :disabled="!publishForm.regionProvince || !requiresRegionCity"
               @change="handleRegionCityChange"
-            >
-              <option value="">{{ requiresRegionCity ? '选择城市' : (publishForm.regionProvince ? '/' : '请先选择省份') }}</option>
-              <option v-for="city in availableRegionCities" :key="city" :value="city">{{ city }}</option>
-            </select>
+            />
           </div>
           <small v-if="fieldErrors.region" class="field-hint error-field-hint">{{ fieldErrors.region }}</small>
         </div>
@@ -311,15 +330,11 @@
           <template v-for="item in saleItems" :key="item.key">
             <div class="item-name">{{ item.name }}</div>
             <div class="item-col">
-              <select v-model="publishForm.items[item.key].mode" class="item-mode-select">
-                <option
-                  v-for="option in itemModeOptions"
-                  :key="`${item.key}-${option.value}`"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
+              <AnimatedSelect
+                v-model="publishForm.items[item.key].mode"
+                :options="itemModeOptions"
+                class="item-mode-select"
+              />
             </div>
             <div class="item-col">
               <input
@@ -351,15 +366,11 @@
             <div class="item-mobile-row">
               <div class="item-mobile-field">
                 <span class="item-mobile-label">方式</span>
-                <select v-model="publishForm.items[item.key].mode" class="item-mode-select">
-                  <option
-                    v-for="option in itemModeOptions"
-                    :key="`mobile-${item.key}-${option.value}`"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </option>
-                </select>
+                <AnimatedSelect
+                  v-model="publishForm.items[item.key].mode"
+                  :options="itemModeOptions"
+                  class="item-mode-select"
+                />
               </div>
               <div class="item-mobile-field">
                 <span class="item-mobile-label">数量</span>
@@ -522,6 +533,7 @@
 </template>
 
 <script>
+import AnimatedSelect from './AnimatedSelect.vue'
 import { apiFetch, clearAuth, createAuthorizedObjectUrl } from '../utils/api.js'
 import { REGION_OPTIONS, getCitiesByProvince, buildRegionText, isProvinceWithoutCityRequired, resolveRegionSelection } from '../constants/regionData.js'
 import { VIRTUAL_ASSET_AGREEMENT, OWNER_AGREEMENT } from '../constants/agreements.js'
@@ -570,6 +582,7 @@ import { showConfirm } from '../utils/confirm.js'
 
 export default {
   name: 'PublishForm',
+  components: { AnimatedSelect },
   props: {
     ownerName: {
       type: String,
@@ -749,6 +762,12 @@ export default {
     },
     loginHourOptions() {
       return Array.from({ length: 24 }, (_, index) => `${String(index).padStart(2, '0')}:00`)
+    },
+    diveLevelSelectOptions() {
+      return this.diveLevelOptions.map(item => ({ label: `${item}级`, value: item }))
+    },
+    decontaminationChamberLevelSelectOptions() {
+      return this.decontaminationChamberLevelOptions.map(item => ({ label: `${item}级`, value: item }))
     }
   },
   watch: {
@@ -1518,11 +1537,16 @@ export default {
 }
 
 .form-grid input,
-.form-grid select,
+.form-grid .animated-select,
 .form-grid textarea,
 .auto-calc-grid input {
   width: 80%;
   max-width: 560px;
+}
+
+.form-grid input,
+.form-grid textarea,
+.auto-calc-grid input {
   border: 1px solid #d1d5db;
   border-radius: 8px;
   padding: 9px 10px;
@@ -1626,7 +1650,7 @@ export default {
   gap: 8px;
 }
 
-.time-range-input select {
+.time-range-input .animated-select {
   width: 100%;
 }
 
@@ -1872,6 +1896,9 @@ export default {
 .item-mode-select {
   width: 100%;
   min-width: 86px;
+}
+
+.item-mode-select :deep(.select-trigger) {
   min-height: 36px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -1880,6 +1907,7 @@ export default {
   color: #111827;
   font-weight: 600;
   text-align: center;
+  justify-content: center;
 }
 
 .auto-total {
@@ -2357,7 +2385,7 @@ export default {
   }
 
   .form-grid input,
-  .form-grid select,
+  .form-grid .animated-select,
   .form-grid textarea,
   .auto-calc-grid input,
   .time-range-input,
@@ -2402,6 +2430,7 @@ export default {
   }
 
   .item-mode-select,
+  .item-mode-select :deep(.select-trigger),
   .item-qty-input,
   .item-mobile-total .auto-total,
   .item-mobile-summary .auto-total {
