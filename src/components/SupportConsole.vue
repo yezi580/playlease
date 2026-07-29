@@ -85,7 +85,6 @@
             ref="ordersPanel"
             class="panel-body panel-body--orders"
             :style="{ opacity: currentLoading ? 0.6 : 1, pointerEvents: currentLoading ? 'none' : 'auto', transition: 'opacity 0.2s' }"
-            @wheel.stop
             @scroll="handlePanelScroll('orders')"
           >
             <div v-if="currentLoading && !currentList.length" class="state">{{ isAfterSaleDesk ? '正在加载订单...' : '正在加载售前咨询...' }}</div>
@@ -196,7 +195,6 @@
             <div
               ref="detailPanel"
               class="panel-body panel-body--detail"
-              @wheel.stop
               @scroll="handlePanelScroll('detail')"
             >
               <div class="detail-grid">
@@ -263,7 +261,6 @@
             <div
               ref="detailPanel"
               class="panel-body panel-body--detail"
-              @wheel.stop
               @scroll="handlePanelScroll('detail')"
             >
               <div class="detail-grid">
@@ -413,7 +410,6 @@
           <div
             ref="detailPanel"
             class="panel-body panel-body--detail panel-body--empty"
-            @wheel.stop
             @scroll="handlePanelScroll('detail')"
           >
             <div class="state">{{ isAfterSaleDesk ? '请选择一条订单查看详情。' : '请选择一条售前咨询查看详情。' }}</div>
@@ -540,7 +536,6 @@
               ref="ordersPanel"
               class="panel-body panel-body--orders"
               :style="{ opacity: withdrawLoading ? 0.6 : 1, pointerEvents: withdrawLoading ? 'none' : 'auto', transition: 'opacity 0.2s' }"
-              @wheel.stop
               @scroll="handlePanelScroll('orders')"
             >
               <div v-if="withdrawLoading && !filteredWithdrawRequests.length" class="state">正在加载提现申请...</div>
@@ -598,7 +593,6 @@
               <div
                 ref="detailPanel"
                 class="panel-body panel-body--detail"
-                @wheel.stop
                 @scroll="handlePanelScroll('detail')"
               >
                 <div class="detail-grid">
@@ -678,7 +672,6 @@
             <div
               ref="detailPanel"
               class="panel-body panel-body--detail panel-body--empty"
-              @wheel.stop
               @scroll="handlePanelScroll('detail')"
             >
               <div class="state">请选择一条提现申请查看详情。</div>
@@ -1978,7 +1971,7 @@ export default {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.88) transparent;
