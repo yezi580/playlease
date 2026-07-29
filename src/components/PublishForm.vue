@@ -1472,7 +1472,7 @@ export default {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: #fff;
-  padding: 16px 20px 110px;
+  padding: 16px 20px 84px;
   max-width: 900px;
   margin: 20px auto;
 }
@@ -2376,7 +2376,7 @@ export default {
   .publish-wrap {
     margin: 12px auto;
     padding: 12px;
-    padding-bottom: 140px;
+    padding-bottom: 12px;
     max-width: 100%;
   }
 
