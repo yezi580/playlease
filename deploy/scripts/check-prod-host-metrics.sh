@@ -1,3 +1,5 @@
+// 查看生产环境主机的 CPU、内存、磁盘和网络指标
+
 #!/usr/bin/env bash
 set -euo pipefail
 

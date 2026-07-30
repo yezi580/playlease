@@ -143,18 +143,12 @@ docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.p
 
 8. 查看 MySQL 慢查询、连接数与服务器监控:
 
-```powershell
-# 以下 .ps1 脚本在本地 Windows PowerShell 执行，会通过 SSH 连接服务器采集数据
-powershell -ExecutionPolicy Bypass -File deploy\scripts\check-prod-mysql.ps1
-powershell -ExecutionPolicy Bypass -File deploy\scripts\tail-prod-mysql-slowlog.ps1
-powershell -ExecutionPolicy Bypass -File deploy\scripts\check-prod-host-metrics.ps1
-```
-
-如果已经 SSH 登录到 Linux 服务器，可直接执行:
-
 ```bash
+bash /opt/my-app/deploy/scripts/check-prod-mysql.sh
+bash /opt/my-app/deploy/scripts/tail-prod-mysql-slowlog.sh
 bash /opt/my-app/deploy/scripts/check-prod-host-metrics.sh
 # 或指定采样秒数，让 CPU / 网络速率更平滑
+bash /opt/my-app/deploy/scripts/tail-prod-mysql-slowlog.sh 200
 bash /opt/my-app/deploy/scripts/check-prod-host-metrics.sh 3
 ```
 

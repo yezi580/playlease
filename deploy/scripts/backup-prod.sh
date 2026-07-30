@@ -1,3 +1,5 @@
+// 备份生产环境 MySQL 数据库和上传文件
+
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
