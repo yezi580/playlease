@@ -116,10 +116,8 @@ function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function buildMaskedWord(value) {
-  return Array.from(String(value || '')).map((char) => (
-    /\s/u.test(char) ? char : '*'
-  )).join('')
+function buildBannedWordReplacement() {
+  return '祝你生活愉快'
 }
 
 function maskConversationBannedWords(content) {
@@ -127,7 +125,7 @@ function maskConversationBannedWords(content) {
 
   return normalizedChatBannedWords.reduce((result, word) => {
     const pattern = new RegExp(escapeRegExp(word), 'giu')
-    return result.replace(pattern, (matched) => buildMaskedWord(matched))
+    return result.replace(pattern, buildBannedWordReplacement())
   }, String(content || ''))
 }
 
