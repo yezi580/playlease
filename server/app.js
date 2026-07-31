@@ -148,6 +148,27 @@ function parseCommaSeparatedEnv(value) {
   ))
 }
 
+function loadChatBannedWordsFromFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return []
+    }
+
+    return Array.from(new Set(
+      fs.readFileSync(filePath, 'utf8')
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter((item) => item && !item.startsWith('#'))
+    ))
+  } catch (error) {
+    console.warn('[chat] failed to load banned words file', {
+      filePath,
+      message: error?.message || error
+    })
+    return []
+  }
+}
+
 function createCorsOriginValidator(allowedOrigins = []) {
   const allowlist = new Set(allowedOrigins)
   const hasExplicitAllowlist = allowlist.size > 0
@@ -181,9 +202,11 @@ const LISTING_IMAGES_UPLOAD_DIR = path.join(UPLOAD_ROOT_DIR, 'listing-images')
 const BAN_IMAGES_UPLOAD_DIR = path.join(UPLOAD_ROOT_DIR, 'ban-images')
 const BAN_VIDEOS_UPLOAD_DIR = path.join(UPLOAD_ROOT_DIR, 'ban-videos')
 const CHAT_IMAGES_UPLOAD_DIR = path.join(UPLOAD_ROOT_DIR, 'chat-images')
+const CHAT_BANNED_WORDS_FILE_PATH = path.join(__dirname, 'config', 'chat-banned-words.txt')
 let HAS_LISTING_IMAGE_SORT_ORDER = false
 let HAS_BAN_IMAGE_SORT_ORDER = false
 const CHAT_SLOW_QUERY_MS = Math.max(50, Number(process.env.CHAT_SLOW_QUERY_MS || 200))
+const CHAT_BANNED_WORDS = loadChatBannedWordsFromFile(CHAT_BANNED_WORDS_FILE_PATH)
 const SOCKET_MESSAGE_RATE_LIMIT_WINDOW_MS = 10 * 1000
 const SOCKET_MESSAGE_RATE_LIMIT_MAX = Math.max(50, Number(process.env.SOCKET_MESSAGE_RATE_LIMIT_MAX || 50))
 const CHAT_IMAGE_UPLOAD_RATE_LIMIT_WINDOW_MS = 60 * 1000
@@ -604,7 +627,8 @@ const chatModule = createChatModule({
   SOCKET_MESSAGE_RATE_LIMIT_MAX,
   socketMessageRateStore,
   getUsersOnlineStatus,
-  CHAT_IMAGE_UPLOAD_URL_REGEX: /^\/api\/uploads\/files\/chat-images\/[A-Za-z0-9._-]+$/i
+  CHAT_IMAGE_UPLOAD_URL_REGEX: /^\/api\/uploads\/files\/chat-images\/[A-Za-z0-9._-]+$/i,
+  chatBannedWords: CHAT_BANNED_WORDS
 })
 const {
   getConversationRoomName,

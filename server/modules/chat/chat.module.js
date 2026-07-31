@@ -10,8 +10,15 @@ export function createChatModule(config) {
     SOCKET_MESSAGE_RATE_LIMIT_WINDOW_MS,
     SOCKET_MESSAGE_RATE_LIMIT_MAX,
     socketMessageRateStore,
-    CHAT_IMAGE_UPLOAD_URL_REGEX
+    CHAT_IMAGE_UPLOAD_URL_REGEX,
+    chatBannedWords = []
   } = config
+
+const normalizedChatBannedWords = Array.from(new Set(
+  (Array.isArray(chatBannedWords) ? chatBannedWords : [])
+    .map((word) => String(word || '').trim())
+    .filter(Boolean)
+)).sort((left, right) => right.length - left.length)
 
 function getConversationRoomName(conversationId) {
   return `conversation:${conversationId}`
@@ -103,6 +110,25 @@ function sanitizeConversationMessageContent(content) {
     .join('\n')
     .trim()
   return normalized.slice(0, 2000)
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function buildMaskedWord(value) {
+  return Array.from(String(value || '')).map((char) => (
+    /\s/u.test(char) ? char : '*'
+  )).join('')
+}
+
+function maskConversationBannedWords(content) {
+  if (!normalizedChatBannedWords.length) return String(content || '')
+
+  return normalizedChatBannedWords.reduce((result, word) => {
+    const pattern = new RegExp(escapeRegExp(word), 'giu')
+    return result.replace(pattern, (matched) => buildMaskedWord(matched))
+  }, String(content || ''))
 }
 
 function buildConversationPreview(content) {
@@ -1743,9 +1769,12 @@ async function createConversationMessage({
   mediaSize = 0
 }) {
   const normalizedMessageType = normalizeConversationMessageType(messageType)
-  const sanitizedContent = normalizedMessageType === 'image'
+  const rawSanitizedContent = normalizedMessageType === 'image'
     ? ''
     : sanitizeConversationMessageContent(content)
+  const sanitizedContent = normalizedMessageType === 'text'
+    ? maskConversationBannedWords(rawSanitizedContent)
+    : rawSanitizedContent
   const sanitizedMediaUrl = sanitizeConversationMediaUrl(mediaUrl)
   const sanitizedMediaName = sanitizeConversationMediaName(mediaName)
   const sanitizedMediaSize = sanitizeConversationMediaSize(mediaSize)
