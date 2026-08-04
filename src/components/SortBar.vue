@@ -1,24 +1,54 @@
 <template>
   <div class="sort-wrap">
-    <div class="sort-line">
-      <button
-        v-for="sort in sorts"
-        :key="sort.key"
-        type="button"
-        class="sort-trigger"
-        :class="{ active: isSortActive(sort.key) }"
-        :style="sortTriggerGlassStyle"
-        :title="sort.label"
-        @click="$emit('change-sort', sort.key)"
-      >
-        <span class="sort-label">{{ getSortLabel(sort) }}</span>
-        <span v-if="showSortArrows(sort.key)" class="sort-arrows">
-          <svg width="12" height="14" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2.5 5.5L6 2L9.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="sort-arrow sort-arrow-up" :class="{ strong: isUpStrong(sort) }" />
-            <path d="M2.5 8.5L6 12L9.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="sort-arrow sort-arrow-down" :class="{ strong: isDownStrong(sort) }" />
-          </svg>
-        </span>
-      </button>
+    <div class="sort-layout">
+      <div class="sort-line">
+        <button
+          v-for="sort in sorts"
+          :key="sort.key"
+          type="button"
+          class="sort-trigger"
+          :class="{ active: isSortActive(sort.key) }"
+          :style="sortTriggerGlassStyle"
+          :title="sort.label"
+          @click="$emit('change-sort', sort.key)"
+        >
+          <span class="sort-label">{{ getSortLabel(sort) }}</span>
+          <span v-if="showSortArrows(sort.key)" class="sort-arrows">
+            <svg width="12" height="14" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2.5 5.5L6 2L9.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="sort-arrow sort-arrow-up" :class="{ strong: isUpStrong(sort) }" />
+              <path d="M2.5 8.5L6 12L9.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="sort-arrow sort-arrow-down" :class="{ strong: isDownStrong(sort) }" />
+            </svg>
+          </span>
+        </button>
+      </div>
+
+      <div class="search-container">
+        <form class="listing-search" @submit.prevent="handleListingSearch">
+          <input
+            v-model.trim="searchInput"
+            type="search"
+            class="listing-search-input"
+            inputmode="numeric"
+            placeholder="搜编号"
+            aria-label="完整编号搜索"
+            @search="handleListingSearch"
+          />
+          <button
+            type="submit"
+            class="listing-search-btn"
+            :disabled="listingSearchLoading"
+            :title="listingSearchLoading ? '搜索中' : '搜索'"
+          >
+            <svg v-if="listingSearchLoading" class="icon-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="16 16"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 </template>
@@ -42,9 +72,17 @@ export default {
     highRatioOnly: {
       type: Boolean,
       default: false
+    },
+    listingSearchValue: {
+      type: String,
+      default: ''
+    },
+    listingSearchLoading: {
+      type: Boolean,
+      default: false
     }
   },
-  emits: ['change-sort'],
+  emits: ['change-sort', 'search-listing-no'],
   data() {
     return {
       sorts: [
@@ -57,12 +95,18 @@ export default {
         { key: 'awm', label: 'AWM', compactLabel: 'AWM' },
         { key: 'helmet', label: '六头', compactLabel: '六头' },
         { key: 'armor', label: '六甲', compactLabel: '六甲' }
-      ]
+      ],
+      searchInput: String(this.listingSearchValue || '')
     }
   },
   computed: {
     sortTriggerGlassStyle() {
       return {}
+    }
+  },
+  watch: {
+    listingSearchValue(value) {
+      this.searchInput = String(value || '')
     }
   },
   methods: {
@@ -85,6 +129,9 @@ export default {
     },
     isDownStrong(sort) {
       return this.currentSortKey === sort.key && this.currentSortOrder === 'desc'
+    },
+    handleListingSearch() {
+      this.$emit('search-listing-no', this.searchInput)
     }
   }
 }
@@ -101,9 +148,17 @@ export default {
   margin-bottom: 0;
 }
 
-.sort-line {
+.sort-layout {
   max-width: 1400px;
   margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sort-line {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -193,6 +248,82 @@ export default {
   stroke: var(--brand-primary-dark); /* 选中且高亮时的箭头深绿 */
 }
 
+.search-container {
+  margin-left: auto;
+  margin-top: 10px;
+  flex: 0 0 auto;
+}
+
+.listing-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 180px;
+}
+
+.listing-search-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 36px 0 16px;
+  border-radius: 21px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: var(--text-main);
+  outline: none;
+  font-size: 13px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.listing-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.listing-search-input:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12);
+}
+
+.listing-search-btn {
+  position: absolute;
+  right: 4px;
+  height: 34px;
+  width: 34px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.listing-search-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.listing-search-btn:hover:not(:disabled) {
+  color: var(--brand-primary);
+  transform: scale(1.05);
+}
+
+.icon-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 960px) {
   .sort-wrap {
     padding: 2px 12px 10px;
@@ -207,6 +338,14 @@ export default {
     padding: 0 14px;
     font-size: 14px;
     margin-top: 0;
+  }
+
+  .search-container {
+    margin-top: 0;
+  }
+
+  .listing-search {
+    width: 140px;
   }
 }
 

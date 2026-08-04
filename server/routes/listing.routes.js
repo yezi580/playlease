@@ -508,6 +508,33 @@ export function registerListingRoutes(deps) {
       }
     }
 
+    if (req.query.items) {
+      const searchItems = String(req.query.items)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      
+      if (searchItems.length > 0) {
+        const compatibleItems = []
+        for (const item of searchItems) {
+          compatibleItems.push(item)
+          if (['7.62×54R', '7.62×51', '6.8×51'].includes(item)) {
+            compatibleItems.push(`6级${item}`)
+          } else if (['6级7.62×54R', '6级7.62×51', '6级6.8×51'].includes(item)) {
+            compatibleItems.push(item.replace('6级', ''))
+          }
+        }
+        
+        for (const item of compatibleItems) {
+          where.push(`EXISTS (
+            SELECT 1 FROM listing_items li 
+            WHERE li.listing_id = l.id AND li.item_name LIKE ?
+          )`)
+          values.push(`%${item}%`)
+        }
+      }
+    }
+
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const orderMap = {
       hot: `CASE

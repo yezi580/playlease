@@ -7,7 +7,10 @@
         :current-sort-order="currentSortOrder"
         :small-amount-only="smallAmountOnly"
         :high-ratio-only="highRatioOnly"
+        :listing-search-value="listingNoSearch"
+        :listing-search-loading="listLoading"
         @change-sort="handleSortChange"
+        @search-listing-no="handleListingNoSearch"
       />
     </div>
 
@@ -51,6 +54,21 @@ function createDefaultResourceFilters() {
     insuranceLevel: '9格',
     energyLevel: '7级',
     weightLevel: '7级',
+    knifeSkin: '',
+    operatorAppearance: [],
+    loginMethod: '',
+    rentPrice: '',
+    hafuCoin: '',
+    deposit: ''
+  }
+}
+
+function createEmptyResourceFilters() {
+  return {
+    loginTimeRange: '',
+    insuranceLevel: '',
+    energyLevel: '',
+    weightLevel: '',
     knifeSkin: '',
     operatorAppearance: [],
     loginMethod: '',
@@ -110,6 +128,13 @@ export default {
     routeListingNo(value) {
       if (value === this.listingNoSearch) return
       this.listingNoSearch = value
+      
+      if (value) {
+        this.resourceFilters = createEmptyResourceFilters()
+      } else {
+        this.resourceFilters = createDefaultResourceFilters()
+      }
+
       this.currentListPage = 1
       this.fetchListings({ page: 1, append: false })
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -117,6 +142,9 @@ export default {
   },
   mounted() {
     this.listingNoSearch = this.routeListingNo
+    if (this.listingNoSearch) {
+      this.resourceFilters = createEmptyResourceFilters()
+    }
     this.fetchListings({ page: 1, append: false })
     this.setupLoadMoreObserver()
   },
@@ -344,6 +372,26 @@ export default {
       this.fetchListings({ page: 1, append: false })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
+    handleListingNoSearch(listingNo) {
+      const query = listingNo ? { listingNo } : {}
+      
+      if (listingNo) {
+        this.resourceFilters = createEmptyResourceFilters()
+      } else {
+        this.resourceFilters = createDefaultResourceFilters()
+      }
+
+      if (listingNo === this.routeListingNo) {
+        this.currentListPage = 1
+        this.fetchListings({ page: 1, append: false })
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
+      this.$router.push({
+        name: 'home',
+        query
+      })
+    },
     handleViewDetail(listingNo) {
       if (listingNo === undefined || listingNo === null || listingNo === '') {
         return
@@ -415,7 +463,7 @@ export default {
 <style scoped>
 .resource-toolbar {
   position: sticky;
-  top: 68px;
+  top: 0;
   z-index: 120;
   isolation: isolate;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);

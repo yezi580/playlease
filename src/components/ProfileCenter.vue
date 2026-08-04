@@ -1985,7 +1985,7 @@ export default {
   padding: 24px 20px 32px;
   box-sizing: border-box;
   align-items: flex-start;
-  min-height: calc(100vh - 92px);
+  min-height: 100vh;
 }
 
 .profile-sidebar {
@@ -1996,7 +1996,7 @@ export default {
   gap: 16px;
   position: -webkit-sticky;
   position: sticky;
-  top: 92px;
+  top: 24px;
   align-self: flex-start;
   z-index: 10;
 }

@@ -716,7 +716,7 @@ export default {
 
 <style scoped>
 .auth-wrap {
-  min-height: calc(100vh - 68px);
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
