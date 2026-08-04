@@ -1,12 +1,5 @@
 <template>
   <div class="publish-wrap">
-    <div v-if="publishErrors.length" class="error-box">
-      <p>请先处理以下问题：</p>
-      <ul>
-        <li v-for="error in publishErrors" :key="error">{{ error }}</li>
-      </ul>
-    </div>
-
     <section class="publish-section">
       <div class="form-grid">
         <label>
@@ -159,17 +152,10 @@
         </div>
 
         <div class="field-row inline-radio-row">
-          <span class="inline-row-title">人脸归属本人 <i class="required-star">*</i><em class="inline-label-hint">请在腾讯健康系统查询</em></span>
+          <span class="inline-row-title">人脸归属本人 <i class="required-star">*</i><em class="inline-label-hint">请在腾讯健康系统查询，人脸<span class="inline-emphasis-danger">非本人不予结单</span></em></span>
           <div class="radio-group">
             <label class="radio-label"><input type="radio" v-model="publishForm.faceVerified" value="是" @change="handleFieldChange('faceVerified')" /> 是</label>
-            <label class="radio-label"><input type="radio" v-model="publishForm.faceVerified" value="否" @change="handleFieldChange('faceVerified')" /> 否</label>
           </div>
-          <small
-            v-if="publishForm.faceVerified === '否'"
-            class="field-hint inline-field-hint warning-field-hint"
-          >
-            请在腾讯健康系统查询。非本人人脸可能影响租客体验，建议确认后填写。
-          </small>
           <small v-if="fieldErrors.faceVerified" class="field-hint inline-field-hint error-field-hint">{{ fieldErrors.faceVerified }}</small>
         </div>
 
@@ -954,7 +940,7 @@ export default {
         region: String(detail.region || ''),
         regionProvince: regionSelection.province,
         regionCity: regionSelection.city,
-        faceVerified: Number(detail.face_verified) === 1 ? '是' : '否',
+        faceVerified: Number(detail.face_verified) === 1 ? '是' : '',
         diveLevel: String(detail.dive_level ?? '0'),
         decontaminationChamberLevel: String(detail.decontamination_chamber_level ?? '0'),
         publishedAt: String(detail.published_at || ''),
@@ -1475,24 +1461,6 @@ export default {
   padding: 16px 20px 84px;
   max-width: 900px;
   margin: 20px auto;
-}
-
-.error-box {
-  margin-bottom: 12px;
-  border: 1px solid #fecaca;
-  background: #fff1f2;
-  color: #b91c1c;
-  border-radius: 8px;
-  padding: 12px 14px;
-}
-
-.error-box p {
-  margin: 0 0 8px;
-}
-
-.error-box ul {
-  margin: 0;
-  padding-left: 18px;
 }
 
 .publish-section {
