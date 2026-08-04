@@ -10,14 +10,14 @@
           >
             <button
               class="filter-trigger"
-              :class="{ active: activeDropdown === key, selected: !!selectedValues[key] }"
+              :class="{ active: activeDropdown === key, selected: isFilterSelected(key) }"
               :style="filterTriggerGlassStyle"
               :aria-expanded="activeDropdown === key ? 'true' : 'false'"
-              :title="selectedValues[key] ? `${getTriggerLabel(key)}：${getDisplayText(key)}` : getTriggerLabel(key)"
+              :title="isFilterSelected(key) ? `${getTriggerLabel(key)}：${getDisplayText(key)}` : getTriggerLabel(key)"
               @click.stop="toggleDropdown(key)"
             >
               <span class="trigger-label">{{ getTriggerLabel(key) }}</span>
-              <span v-if="selectedValues[key] && !isCompactView" class="selected-text">
+              <span v-if="isFilterSelected(key) && !isCompactView" class="selected-text">
                 {{ getDisplayText(key) }}
               </span>
               <span class="arrow">▼</span>
@@ -71,7 +71,7 @@
                       :key="opt.value"
                       class="dropdown-item"
                       :class="{
-                        selected: selectedValues[key] === opt.value,
+                        selected: isOptionSelected(key, opt.value),
                         disabled: isCustomInputActive(key) && opt.value !== ''
                       }"
                       @click="selectOption(key, opt.value)"
@@ -176,7 +176,7 @@
                 :key="opt.value"
                 class="dropdown-item"
                 :class="{
-                  selected: selectedValues[key] === opt.value,
+                  selected: isOptionSelected(key, opt.value),
                   disabled: isCustomInputActive(key) && opt.value !== ''
                 }"
                 @click="selectOption(key, opt.value)"
@@ -239,7 +239,7 @@ const DEFAULT_FILTER_VALUES = Object.freeze({
   weightLevel: '7级',
   loginMethod: '',
   knifeSkin: '',
-  operatorAppearance: '',
+  operatorAppearance: [],
   rentPrice: '',
   hafuCoin: '',
   deposit: ''
@@ -247,7 +247,16 @@ const DEFAULT_FILTER_VALUES = Object.freeze({
 
 function createSelectedValues(overrides = {}) {
   return {
-    ...DEFAULT_FILTER_VALUES,
+    loginTimeRange: '',
+    insuranceLevel: '9格',
+    energyLevel: '7级',
+    weightLevel: '7级',
+    loginMethod: '',
+    knifeSkin: '',
+    operatorAppearance: [],
+    rentPrice: '',
+    hafuCoin: '',
+    deposit: '',
     ...overrides
   }
 }
@@ -390,8 +399,8 @@ export default {
         operatorAppearance: {
           label: '干员皮肤',
           compactLabel: '干员皮肤',
+          multiSelect: true,
           options: [
-            { value: '', label: '全部' },
             ...this.operatorAppearanceOptions.map((item) => ({
               value: item,
               label: item
@@ -480,6 +489,18 @@ export default {
       }
       return config.label
     },
+    isFilterSelected(key) {
+      const val = this.selectedValues[key]
+      if (Array.isArray(val)) return val.length > 0
+      return !!val
+    },
+    isOptionSelected(key, value) {
+      const val = this.selectedValues[key]
+      if (Array.isArray(val)) {
+        return val.includes(value)
+      }
+      return val === value
+    },
     toggleDropdown(key) {
       this.activeDropdown = this.activeDropdown === key ? null : key
     },
@@ -489,6 +510,23 @@ export default {
     selectOption(key, value) {
       if (this.isCustomInputActive(key) && value !== '') return
 
+      const config = this.filterConfigs[key]
+      if (config && config.multiSelect) {
+        let current = this.selectedValues[key] || []
+        if (!Array.isArray(current)) {
+          current = current ? [current] : []
+        }
+        
+        if (current.includes(value)) {
+          this.selectedValues[key] = current.filter(v => v !== value)
+        } else {
+          this.selectedValues[key] = [...current, value]
+        }
+        
+        // Multi-select does not close dropdown immediately
+        return
+      }
+
       this.selectedValues[key] = value
       if (this.filterConfigs[key]?.customRange) {
         this.customInputs[key] = { min: '', max: '' }
@@ -497,8 +535,8 @@ export default {
     },
     isCustomInputActive(key) {
       const val = this.selectedValues[key]
-      if (!val) return false
-      return val.startsWith('custom:')
+      if (!val || Array.isArray(val)) return false
+      return typeof val === 'string' && val.startsWith('custom:')
     },
     onCustomFocus() {},
     onCustomInput() {},
@@ -526,14 +564,25 @@ export default {
     },
     getDisplayText(key) {
       const val = this.selectedValues[key]
-      if (!val) return ''
+      if (!val || (Array.isArray(val) && val.length === 0)) return ''
 
-      if (val.startsWith('custom:')) {
+      if (typeof val === 'string' && val.startsWith('custom:')) {
         return val.replace('custom:', '')
       }
 
       const config = this.filterConfigs[key]
-      if (!config) return val
+      if (!config) {
+        return Array.isArray(val) ? val.join(',') : val
+      }
+      
+      if (Array.isArray(val)) {
+        const labels = val.map(v => {
+          const found = config.options.find((o) => o.value === v)
+          return found ? found.label : v
+        })
+        return labels.join('，')
+      }
+
       const found = config.options.find((o) => o.value === val)
       return found ? found.label : val
     },

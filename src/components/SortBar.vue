@@ -152,11 +152,11 @@ export default {
 }
 
 .sort-trigger.active {
-  border-color: rgba(15, 23, 42, 0.72);
-  background: linear-gradient(180deg, #374151 0%, #111827 100%);
-  color: #ffffff;
+  border-color: var(--brand-primary);
+  background: rgba(16, 185, 129, 0.05);
+  color: var(--brand-primary-dark);
   font-weight: 600;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
   transform: translateY(-1px);
 }
 
@@ -178,7 +178,7 @@ export default {
 }
 
 .sort-trigger.active .sort-arrows {
-  color: rgba(255, 255, 255, 0.25); /* 选中状态下的默认暗色（非强高亮状态） */
+  color: rgba(16, 185, 129, 0.4); /* 选中状态下的默认浅绿（非强高亮状态） */
 }
 
 .sort-arrow {
@@ -190,7 +190,7 @@ export default {
 }
 
 .sort-trigger.active .sort-arrow.strong {
-  stroke: #ffffff; /* 选中且高亮时的箭头纯白 */
+  stroke: var(--brand-primary-dark); /* 选中且高亮时的箭头深绿 */
 }
 
 @media (max-width: 960px) {

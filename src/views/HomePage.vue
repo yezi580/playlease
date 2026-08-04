@@ -52,7 +52,7 @@ function createDefaultResourceFilters() {
     energyLevel: '7级',
     weightLevel: '7级',
     knifeSkin: '',
-    operatorAppearance: '',
+    operatorAppearance: [],
     loginMethod: '',
     rentPrice: '',
     hafuCoin: '',
@@ -264,7 +264,11 @@ export default {
         }
 
         Object.entries(this.resourceFilters).forEach(([key, value]) => {
-          if (value) params.set(key, value)
+          if (Array.isArray(value)) {
+            if (value.length > 0) params.set(key, value.join(','))
+          } else if (value) {
+            params.set(key, value)
+          }
         })
 
         if (this.listingNoSearch) {
