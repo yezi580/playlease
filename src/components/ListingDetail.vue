@@ -200,7 +200,10 @@
           <div class="col-label">总价</div>
 
           <template v-for="item in saleItems" :key="item.key">
-            <div class="item-name">{{ item.name }}</div>
+            <div class="item-name">
+              {{ item.name }}
+              <div v-if="item.remark" class="item-remark">{{ item.remark }}</div>
+            </div>
             <div class="item-col">
               <div class="auto-total">{{ getItemModeLabel(item.key) }}</div>
             </div>
@@ -223,11 +226,14 @@
         </div>
 
         <div class="items-table-mobile" v-else>
-          <div v-for="item in saleItems" :key="`mobile-${item.key}`" class="item-card-mobile">
-            <div class="item-card-header">
-              <span class="item-name-mobile">{{ item.name }}</span>
-              <span class="item-price-mobile">{{ getItemTotal(item.key) }}</span>
-            </div>
+            <div v-for="item in saleItems" :key="`mobile-${item.key}`" class="item-card-mobile">
+              <div class="item-card-header">
+                <span class="item-name-mobile">
+                  {{ item.name }}
+                  <span v-if="item.remark" class="item-remark-mobile">({{ item.remark }})</span>
+                </span>
+                <span class="item-price-mobile">{{ getItemTotal(item.key) }}</span>
+              </div>
             <div class="item-card-body">
               <span class="item-mode-mobile">方式: {{ getItemModeLabel(item.key) }}</span>
               <div class="item-qty-mobile">
@@ -456,7 +462,7 @@ export default {
       showOrderModal: false,
       isMobile: window.innerWidth <= 1200,
       businessSettings: getCachedBusinessSettings(),
-      saleItems: getEnabledSaleItems().map((item) => ({ key: item.key, name: item.itemName })),
+      saleItems: getEnabledSaleItems().map((item) => ({ key: item.key, name: item.itemName, remark: item.remark })),
       protectedBanImages: [],
       protectedBanVideo: '',
       protectedMediaRequestId: 0,
@@ -566,7 +572,8 @@ export default {
     this.businessSettings = await fetchBusinessSettings()
     this.saleItems = getEnabledSaleItems(this.businessSettings).map((item) => ({
       key: item.key,
-      name: item.itemName
+      name: item.itemName,
+      remark: item.remark
     }))
   },
   beforeUnmount() {
@@ -1067,6 +1074,16 @@ export default {
 .item-name {
   font-size: 14px;
   color: #111827;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.item-remark {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 400;
+  margin-top: 2px;
 }
 
 .item-qty-input {
@@ -1136,6 +1153,13 @@ export default {
   font-size: 15px;
   font-weight: 600;
   color: #0f172a;
+}
+
+.item-remark-mobile {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 400;
+  margin-left: 4px;
 }
 
 .item-price-mobile {

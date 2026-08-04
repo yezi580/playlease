@@ -405,8 +405,15 @@ export function registerListingRoutes(deps) {
       }
     }
     if (req.query.operatorAppearance) {
-      where.push('COALESCE(l.operator_appearance, \'\') LIKE ?')
-      values.push(`%${String(req.query.operatorAppearance).trim()}%`)
+      const appearances = String(req.query.operatorAppearance)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (appearances.length > 0) {
+        const appearanceConditions = appearances.map(() => 'COALESCE(l.operator_appearance, \'\') LIKE ?')
+        where.push(`(${appearanceConditions.join(' OR ')})`)
+        appearances.forEach((app) => values.push(`%${app}%`))
+      }
     }
     if (req.query.listingNo) {
       where.push('l.listing_no = ?')
@@ -551,6 +558,9 @@ export function registerListingRoutes(deps) {
               AND (
                 li_item.item_key IN ('bulletLv6', 'bullet_lv6_qty', 'bulletLv6Qty', 'bullet762x54R', 'bullet762x51', 'bullet68x51')
                 OR li_item.item_name LIKE '6级子弹%'
+                OR li_item.item_name LIKE '6级7.62×54R%'
+                OR li_item.item_name LIKE '6级7.62×51%'
+                OR li_item.item_name LIKE '6级6.8×51%'
                 OR li_item.item_name LIKE '7.62×54R%'
                 OR li_item.item_name LIKE '7.62×51%'
                 OR li_item.item_name LIKE '6.8×51%'

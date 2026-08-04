@@ -111,7 +111,10 @@
           <div class="usage-form">
             <div v-for="item in saleItems" :key="`usage-${item.item_key}`" class="usage-row">
               <div>
-                <strong>{{ item.item_name }}</strong>
+                <strong>
+                  {{ item.item_name }}
+                  <span v-if="item.item_remark" style="font-size: 11px; color: #9ca3af; font-weight: 400; margin-left: 4px;">({{ item.item_remark }})</span>
+                </strong>
                 <p>最多可填 {{ item.quantity }}，单价 ￥{{ formatMoney(item.unit_price) }}</p>
               </div>
               <input
@@ -141,7 +144,10 @@
               <span>总价</span>
             </div>
             <div v-for="item in reportedUsageItems" :key="`reported-${item.item_key}`" class="table-row">
-              <span>{{ item.item_name }}</span>
+              <span>
+                {{ item.item_name }}
+                <div v-if="item.item_remark" style="font-size: 11px; color: #9ca3af; margin-top: 2px;">{{ item.item_remark }}</div>
+              </span>
               <span>{{ item.reported_quantity }}</span>
               <span>￥{{ formatMoney(item.unit_price) }}</span>
               <span>￥{{ formatMoney(item.reported_total_price) }}</span>

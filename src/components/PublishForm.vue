@@ -314,7 +314,10 @@
           <div class="col-label">数量</div>
           <div class="col-label">总价</div>
           <template v-for="item in saleItems" :key="item.key">
-            <div class="item-name">{{ item.name }}</div>
+            <div class="item-name">
+              {{ item.name }}
+              <div v-if="item.remark" class="item-remark">{{ item.remark }}</div>
+            </div>
             <div class="item-col">
               <AnimatedSelect
                 v-model="publishForm.items[item.key].mode"
@@ -348,7 +351,10 @@
 
         <div v-else class="items-mobile-list">
           <div v-for="item in saleItems" :key="`mobile-${item.key}`" class="item-mobile-card">
-            <div class="item-mobile-name">{{ item.name }}</div>
+            <div class="item-mobile-name">
+              {{ item.name }}
+              <span v-if="item.remark" class="item-remark-mobile">({{ item.remark }})</span>
+            </div>
             <div class="item-mobile-row">
               <div class="item-mobile-field">
                 <span class="item-mobile-label">方式</span>
@@ -1855,6 +1861,16 @@ export default {
   font-size: 13px;
   color: #4b5563;
   font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.item-remark {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 400;
+  margin-top: 2px;
 }
 
 .item-qty-input {
@@ -1930,6 +1946,13 @@ export default {
   font-weight: 700;
   color: #111827;
   margin-bottom: 8px;
+}
+
+.item-remark-mobile {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 400;
+  margin-left: 4px;
 }
 
 .item-mobile-row {

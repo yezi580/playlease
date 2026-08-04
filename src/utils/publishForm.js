@@ -51,11 +51,11 @@ export function createDefaultItems() {
   return {
     topCard: { quantity: '', mode: 'sale' },
     awmBullet: { quantity: '', mode: 'sale' },
+    barrettBullet: { quantity: '', mode: 'sale' },
     bulletLv6: { quantity: '', mode: 'sale' },
     bullet762x54R: { quantity: '', mode: 'sale' },
     bullet762x51: { quantity: '', mode: 'sale' },
     bullet68x51: { quantity: '', mode: 'sale' },
-    barrettBullet: { quantity: '', mode: 'sale' },
     helmetLv6: { quantity: '', mode: 'sale' },
     armorLv6: { quantity: '', mode: 'sale' },
     coffeeBean: { quantity: '', mode: 'sale' },
@@ -167,6 +167,7 @@ export function buildSaleItems(enabledSaleItems = []) {
   return enabledSaleItems.map((item) => ({
     key: item.key,
     name: item.itemName,
+    remark: item.remark,
     priceInYuan: Number(item.unitPriceInCent || 0) / 100
   }))
 }
