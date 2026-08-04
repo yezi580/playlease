@@ -329,6 +329,10 @@ export default {
     padding: 2px 12px 10px;
   }
 
+  .sort-layout {
+    display: block;
+  }
+
   .sort-line {
     gap: 8px;
   }
@@ -341,11 +345,7 @@ export default {
   }
 
   .search-container {
-    margin-top: 0;
-  }
-
-  .listing-search {
-    width: 140px;
+    display: none;
   }
 }
 

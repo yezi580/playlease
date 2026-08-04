@@ -48,6 +48,12 @@ export function useRouteShellUi({
     return ['listing-detail', 'publish-create', 'publish-edit', 'order-detail'].includes(routeName.value)
   })
 
+  const showTopBarListingSearch = computed(() => {
+    return routeName.value === 'home' && !unref(showAuth)
+  })
+
+  const listingSearchValue = computed(() => String(route.query.listingNo || '').trim())
+
   const hasBottomActionBar = computed(() => {
     return ['listing-detail', 'publish-create', 'publish-edit'].includes(routeName.value)
   })
@@ -68,6 +74,8 @@ export function useRouteShellUi({
     showTopBarBackAction,
     topBarBackActionText,
     highlightTopBarBackAction,
+    showTopBarListingSearch,
+    listingSearchValue,
     hasBottomActionBar,
     hasRegularUnreadMessages,
     hasSupportUnreadMessages,

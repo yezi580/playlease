@@ -912,6 +912,8 @@ export default {
   }
 
   .filter-scroll-area {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-x: auto;
     scrollbar-width: none; /* 隐藏滚动条 (Firefox) */
     -webkit-overflow-scrolling: touch;
@@ -923,7 +925,9 @@ export default {
 
   .filter-line {
     display: flex;
+    flex-wrap: nowrap;
     align-items: center;
+    min-width: max-content;
     overflow-x: visible;
     gap: 6px;
     padding: 2px 0 6px;
@@ -931,6 +935,7 @@ export default {
 
   .filter-dropdown-wrapper {
     flex: 0 0 auto;
+    min-width: auto;
     position: static; /* Let dropdown escape on mobile */
   }
 

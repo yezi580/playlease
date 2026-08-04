@@ -317,55 +317,6 @@ export default {
 
 @media (max-width: 960px) {
   .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: auto;
-    width: 100%;
-    height: 60px;
-    flex-direction: row;
-    padding: 10px 12px;
-    border-right: none;
-    border-bottom: 1px solid #334155;
-    overflow-y: visible;
-    background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
-  }
-
-  .logo-wrap {
-    margin-bottom: 0;
-    margin-right: auto;
-  }
-
-  .logo-mark {
-    width: 36px;
-    height: 36px;
-    font-size: 16px;
-  }
-  
-  .logo-text strong {
-    font-size: 16px;
-  }
-
-  .quick-actions, .menu {
-    display: none;
-  }
-
-  .bottom-actions {
-    margin-top: 0;
-    flex-direction: row;
-    gap: 8px;
-  }
-
-  .bottom-btn, .publish {
-    display: none;
-  }
-
-  .nav-back {
-    padding: 8px 12px;
-  }
-
-  .nav-back-text {
     display: none;
   }
 }
