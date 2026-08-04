@@ -1675,7 +1675,14 @@ app.get('/api/admin/users', authRequired, adminOnly, async (req, res) => {
       `SELECT id, username, phone, role, banned_until, created_at, updated_at
        FROM users
        ${whereSql}
-       ORDER BY id DESC
+       ORDER BY
+         CASE role
+           WHEN 'admin' THEN 1
+           WHEN 'support' THEN 2
+           WHEN 'user' THEN 3
+           ELSE 4
+         END ASC,
+         id DESC
        LIMIT ${pageSize} OFFSET ${offset}`,
       params
     )

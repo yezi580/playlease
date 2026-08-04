@@ -141,7 +141,20 @@ docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.p
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml logs -f api
 ```
 
-8. 查看 MySQL 慢查询、连接数与服务器监控:
+8. 如需维护生产管理员账号，可在服务器执行:
+
+```bash
+bash /opt/my-app/deploy/scripts/reset-prod-admin.sh <旧手机号> <新手机号> <新密码>
+```
+
+说明:
+
+- 该脚本会把指定旧手机号对应的用户改成新的管理员手机号和密码
+- 会同步更新后台显示用户名为脱敏手机号，例如 `176****1608`
+- 会清理该管理员已绑定的 Passkey、受信任设备，并尽量注销现有登录会话
+- 运行前请先确认 `api`、`mysql`、`redis` 容器已正常启动
+
+9. 查看 MySQL 慢查询、连接数与服务器监控:
 
 ```bash
 bash /opt/my-app/deploy/scripts/check-prod-mysql.sh

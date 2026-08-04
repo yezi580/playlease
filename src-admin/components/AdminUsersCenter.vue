@@ -149,10 +149,16 @@ import {
 import AdminConfirmDialog from './AdminConfirmDialog.vue'
 
 const ROLE_OPTIONS = Object.freeze([
-  { value: 'user', label: '普通用户' },
+  { value: 'admin', label: '管理员' },
   { value: 'support', label: '客服' },
-  { value: 'admin', label: '管理员' }
+  { value: 'user', label: '普通用户' }
 ])
+
+const ROLE_SORT_WEIGHT = Object.freeze({
+  admin: 1,
+  support: 2,
+  user: 3
+})
 
 export default {
   name: 'AdminUsersCenter',
@@ -211,7 +217,7 @@ export default {
           keyword: this.keyword
         })
         const data = await apiFetch(`/api/admin/users?${params.toString()}`)
-        this.users = Array.isArray(data.list) ? data.list : []
+        this.users = this.sortUsers(Array.isArray(data.list) ? data.list : [])
         this.roleDrafts = this.users.reduce((acc, item) => {
           acc[item.id] = item.role
           return acc
@@ -352,11 +358,11 @@ export default {
     },
     applyUpdatedUser(updatedUser) {
       if (!updatedUser?.id) return
-      this.users = this.users.map((user) => (
+      this.users = this.sortUsers(this.users.map((user) => (
         Number(user.id) === Number(updatedUser.id)
           ? { ...user, ...updatedUser }
           : user
-      ))
+      )))
       this.roleDrafts = {
         ...this.roleDrafts,
         [updatedUser.id]: updatedUser.role || this.roleDrafts[updatedUser.id]
@@ -365,6 +371,16 @@ export default {
         ...this.banDaysDrafts,
         [updatedUser.id]: this.banDaysDrafts[updatedUser.id] || 1
       }
+    },
+    sortUsers(list) {
+      return [...list].sort((left, right) => {
+        const leftWeight = ROLE_SORT_WEIGHT[String(left?.role || '').trim()] || 99
+        const rightWeight = ROLE_SORT_WEIGHT[String(right?.role || '').trim()] || 99
+        if (leftWeight !== rightWeight) {
+          return leftWeight - rightWeight
+        }
+        return Number(right?.id || 0) - Number(left?.id || 0)
+      })
     },
     getRoleLabel(role) {
       return this.roleOptions.find((item) => item.value === role)?.label || String(role || '--')
