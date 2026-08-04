@@ -227,11 +227,38 @@
 
 <script>
 import {
-  REGION_OPTIONS,
-  getCitiesByProvince,
-  buildRegionText,
-  isProvinceWithoutCityRequired
-} from '../constants/regionData'
+  fetchBusinessSettings,
+  getCachedBusinessSettings,
+  getOperatorAppearanceOptions
+} from '../utils/businessSettings'
+
+const DEFAULT_FILTER_VALUES = Object.freeze({
+  loginTimeRange: '',
+  insuranceLevel: '9格',
+  energyLevel: '7级',
+  weightLevel: '7级',
+  loginMethod: '',
+  knifeSkin: '',
+  operatorAppearance: '',
+  rentPrice: '',
+  hafuCoin: '',
+  deposit: ''
+})
+
+function createSelectedValues(overrides = {}) {
+  return {
+    ...DEFAULT_FILTER_VALUES,
+    ...overrides
+  }
+}
+
+function createCustomInputs() {
+  return {
+    rentPrice: { min: '', max: '' },
+    hafuCoin: { min: '', max: '' },
+    deposit: { min: '', max: '' }
+  }
+}
 
 export default {
   name: 'FilterBar',
@@ -247,50 +274,41 @@ export default {
       activeDropdown: null,
       selectedValues: {},
       customInputs: {},
-      selectedRegionProvince: '',
-      selectedRegionCity: '',
+      operatorAppearanceOptions: getOperatorAppearanceOptions(getCachedBusinessSettings()),
       viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1440
     }
   },
   created() {
     const initial = this.modelValue || {}
 
-    this.selectedValues = {
-      insuranceLevel: initial.insuranceLevel || '',
-      energyLevel: initial.energyLevel || '',
-      weightLevel: initial.weightLevel || '',
-      hafuCoin: initial.hafuCoin || '',
-      rentPrice: initial.rentPrice || '',
-      deposit: initial.deposit || '',
-      totalAmount: initial.totalAmount || '',
-      rank: initial.rank || '',
-      loginMethod: initial.loginMethod || '',
-      region: initial.region || buildRegionText(initial.regionProvince, initial.regionCity)
-    }
+    this.selectedValues = createSelectedValues({
+      loginTimeRange: initial.loginTimeRange ?? DEFAULT_FILTER_VALUES.loginTimeRange,
+      insuranceLevel: initial.insuranceLevel ?? DEFAULT_FILTER_VALUES.insuranceLevel,
+      energyLevel: initial.energyLevel ?? DEFAULT_FILTER_VALUES.energyLevel,
+      weightLevel: initial.weightLevel ?? DEFAULT_FILTER_VALUES.weightLevel,
+      loginMethod: initial.loginMethod ?? DEFAULT_FILTER_VALUES.loginMethod,
+      knifeSkin: initial.knifeSkin ?? DEFAULT_FILTER_VALUES.knifeSkin,
+      operatorAppearance: initial.operatorAppearance ?? DEFAULT_FILTER_VALUES.operatorAppearance,
+      rentPrice: initial.rentPrice ?? DEFAULT_FILTER_VALUES.rentPrice,
+      hafuCoin: initial.hafuCoin ?? DEFAULT_FILTER_VALUES.hafuCoin,
+      deposit: initial.deposit ?? DEFAULT_FILTER_VALUES.deposit
+    })
 
-    this.selectedRegionProvince = initial.regionProvince || ''
-    this.selectedRegionCity = initial.regionCity || ''
-
-    this.customInputs = {
-      hafuCoin: { min: '', max: '' },
-      rentPrice: { min: '', max: '' },
-      deposit: { min: '', max: '' },
-      totalAmount: { min: '', max: '' }
-    }
+    this.customInputs = createCustomInputs()
   },
   computed: {
     allFilterKeys() {
       return [
+        'loginTimeRange',
         'insuranceLevel',
         'energyLevel',
         'weightLevel',
+        'loginMethod',
+        'knifeSkin',
+        'operatorAppearance',
         'rentPrice',
         'hafuCoin',
-        'deposit',
-        'totalAmount',
-        'rank',
-        'loginMethod',
-        'region'
+        'deposit'
       ]
     },
     isCompactView() {
@@ -307,6 +325,15 @@ export default {
     },
     filterConfigs() {
       return {
+        loginTimeRange: {
+          label: '上号时间',
+          compactLabel: '上号时间',
+          options: [
+            { value: '', label: '全部' },
+            { value: 'day', label: '白天 6:00-18:00' },
+            { value: 'night', label: '晚上 18:00-6:00' }
+          ]
+        },
         insuranceLevel: {
           label: '保险',
           compactLabel: '保险',
@@ -338,6 +365,37 @@ export default {
             { value: '5级', label: '5级' },
             { value: '6级', label: '6级' },
             { value: '7级', label: '7级' }
+          ]
+        },
+        loginMethod: {
+          label: '登录方式',
+          compactLabel: '登录方式',
+          options: [
+            { value: '', label: '全部' },
+            { value: 'QQ账密', label: 'QQ账密' },
+            { value: '微信扫码', label: '微信扫码' },
+            { value: 'steam国服', label: 'steam国服' },
+            { value: 'steam国际服', label: 'steam国际服' }
+          ]
+        },
+        knifeSkin: {
+          label: '刀皮',
+          compactLabel: '刀皮',
+          options: [
+            { value: '', label: '全部' },
+            { value: 'has', label: '有' },
+            { value: 'none', label: '无' }
+          ]
+        },
+        operatorAppearance: {
+          label: '干员皮肤',
+          compactLabel: '干员皮肤',
+          options: [
+            { value: '', label: '全部' },
+            ...this.operatorAppearanceOptions.map((item) => ({
+              value: item,
+              label: item
+            }))
           ]
         },
         hafuCoin: {
@@ -373,79 +431,26 @@ export default {
             { value: '1000-2000', label: '1000-2000' }
           ],
           customRange: { min: 0, max: Infinity }
-        },
-        totalAmount: {
-          label: '合计金额',
-          compactLabel: '合计',
-          options: [
-            { value: '', label: '全部区间' },
-            { value: '0-500', label: '0-500' },
-            { value: '500-1000', label: '500-1000' },
-            { value: '1000-2000', label: '1000-2000' },
-            { value: '2000-5000', label: '2000-5000' }
-          ]
-        },
-        rank: {
-          label: '段位',
-          compactLabel: '段位',
-          options: [
-            { value: '', label: '全部' },
-            { value: '青铜', label: '青铜' },
-            { value: '白银', label: '白银' },
-            { value: '黄金', label: '黄金' },
-            { value: '铂金', label: '铂金' },
-            { value: '钻石', label: '钻石' },
-            { value: '黑鹰', label: '黑鹰' },
-            { value: '巅峰', label: '巅峰' }
-          ]
-        },
-        loginMethod: {
-          label: '登录方式',
-          compactLabel: '登录方式',
-          options: [
-            { value: '', label: '全部' },
-            { value: 'QQ账密', label: 'QQ账密' },
-            { value: '微信扫码', label: '微信扫码' },
-            { value: 'steam国服', label: 'steam国服' },
-            { value: 'steam国际服', label: 'steam国际服' }
-          ]
-        },
-        region: {
-          label: '地区',
-          compactLabel: '地区',
-          options: [],
-          regionPicker: true
         }
       }
-    },
-    provinceOptions() {
-      return REGION_OPTIONS.map((item) => item.province)
-    },
-    availableRegionCities() {
-      return getCitiesByProvince(this.selectedRegionProvince)
-    },
-    requiresRegionCity() {
-      return !isProvinceWithoutCityRequired(this.selectedRegionProvince)
     }
   },
   watch: {
     modelValue: {
       handler(value) {
         if (!value) return
-        this.selectedValues = {
-          insuranceLevel: value.insuranceLevel || '',
-          energyLevel: value.energyLevel || '',
-          weightLevel: value.weightLevel || '',
-          hafuCoin: value.hafuCoin || '',
-          rentPrice: value.rentPrice || '',
-          deposit: value.deposit || '',
-          totalAmount: value.totalAmount || '',
-          rank: value.rank || '',
-          loginMethod: value.loginMethod || '',
-          region: value.region || buildRegionText(value.regionProvince, value.regionCity)
-        }
-        this.selectedRegionProvince = value.regionProvince || ''
-        this.selectedRegionCity = value.regionCity || ''
+        this.selectedValues = createSelectedValues({
+          loginTimeRange: value.loginTimeRange ?? DEFAULT_FILTER_VALUES.loginTimeRange,
+          insuranceLevel: value.insuranceLevel ?? DEFAULT_FILTER_VALUES.insuranceLevel,
+          energyLevel: value.energyLevel ?? DEFAULT_FILTER_VALUES.energyLevel,
+          weightLevel: value.weightLevel ?? DEFAULT_FILTER_VALUES.weightLevel,
+          loginMethod: value.loginMethod ?? DEFAULT_FILTER_VALUES.loginMethod,
+          knifeSkin: value.knifeSkin ?? DEFAULT_FILTER_VALUES.knifeSkin,
+          operatorAppearance: value.operatorAppearance ?? DEFAULT_FILTER_VALUES.operatorAppearance,
+          rentPrice: value.rentPrice ?? DEFAULT_FILTER_VALUES.rentPrice,
+          hafuCoin: value.hafuCoin ?? DEFAULT_FILTER_VALUES.hafuCoin,
+          deposit: value.deposit ?? DEFAULT_FILTER_VALUES.deposit
+        })
       },
       deep: true
     }
@@ -453,12 +458,17 @@ export default {
   mounted() {
     document.addEventListener('click', this.closeAllDropdowns)
     window.addEventListener('resize', this.handleResize)
+    this.loadFilterOptions()
   },
   beforeUnmount() {
     document.removeEventListener('click', this.closeAllDropdowns)
     window.removeEventListener('resize', this.handleResize)
   },
   methods: {
+    async loadFilterOptions() {
+      const settings = await fetchBusinessSettings()
+      this.operatorAppearanceOptions = getOperatorAppearanceOptions(settings)
+    },
     handleResize() {
       this.viewportWidth = window.innerWidth
     },
@@ -484,28 +494,6 @@ export default {
         this.customInputs[key] = { min: '', max: '' }
       }
       this.activeDropdown = null
-    },
-    handleRegionProvinceChange() {
-      if (!this.selectedRegionProvince) {
-        this.selectedRegionCity = ''
-        this.selectedValues.region = ''
-        return
-      }
-      this.selectedRegionCity = ''
-      this.selectedValues.region = this.requiresRegionCity
-        ? this.selectedRegionProvince
-        : buildRegionText(this.selectedRegionProvince, '')
-    },
-    handleRegionCityChange() {
-      this.selectedValues.region = buildRegionText(
-        this.selectedRegionProvince,
-        this.selectedRegionCity
-      )
-    },
-    clearRegionSelection() {
-      this.selectedRegionProvince = ''
-      this.selectedRegionCity = ''
-      this.selectedValues.region = ''
     },
     isCustomInputActive(key) {
       const val = this.selectedValues[key]
@@ -551,9 +539,7 @@ export default {
     },
     emitChange() {
       const payload = {
-        ...this.selectedValues,
-        regionProvince: this.selectedRegionProvince,
-        regionCity: this.selectedRegionCity
+        ...this.selectedValues
       }
 
       this.$emit('update:modelValue', payload)
@@ -561,26 +547,8 @@ export default {
       this.activeDropdown = null
     },
     resetFilter() {
-      this.selectedValues = {
-        insuranceLevel: '',
-        energyLevel: '',
-        weightLevel: '',
-        hafuCoin: '',
-        rentPrice: '',
-        deposit: '',
-        totalAmount: '',
-        rank: '',
-        loginMethod: '',
-        region: ''
-      }
-      this.selectedRegionProvince = ''
-      this.selectedRegionCity = ''
-      this.customInputs = {
-        hafuCoin: { min: '', max: '' },
-        rentPrice: { min: '', max: '' },
-        deposit: { min: '', max: '' },
-        totalAmount: { min: '', max: '' }
-      }
+      this.selectedValues = createSelectedValues()
+      this.customInputs = createCustomInputs()
       this.emitChange()
     }
   }
@@ -604,7 +572,7 @@ export default {
   max-width: 1400px;
   margin: 0 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -614,16 +582,16 @@ export default {
 }
 
 .filter-line {
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  overflow: visible;
 }
 
 .filter-dropdown-wrapper {
   position: relative;
-  min-width: 0;
+  flex: 1 1 calc(10% - 8px);
+  min-width: 110px;
 }
 
 
@@ -683,11 +651,11 @@ export default {
 
 .filter-trigger.active,
 .filter-trigger.selected {
-  border-color: rgba(15, 23, 42, 0.72);
-  background: linear-gradient(180deg, #374151 0%, #111827 100%);
-  color: #ffffff;
+  border-color: var(--brand-primary);
+  background: rgba(16, 185, 129, 0.05);
+  color: var(--brand-primary-dark);
   font-weight: 600;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
   transform: translateY(-1px);
 }
 
@@ -695,7 +663,7 @@ export default {
 .filter-trigger.selected .arrow,
 .filter-trigger.active .selected-text,
 .filter-trigger.selected .selected-text {
-  color: #ffffff;
+  color: var(--brand-primary-dark);
 }
 
 .trigger-label {

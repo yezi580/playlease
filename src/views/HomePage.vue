@@ -47,18 +47,16 @@ const HOME_VIEW_STATE_KEY = 'home_listing_view_state'
 
 function createDefaultResourceFilters() {
   return {
-    insuranceLevel: '',
-    energyLevel: '',
-    weightLevel: '',
-    hafuCoin: '',
-    rentPrice: '',
-    deposit: '',
-    totalAmount: '',
-    rank: '',
+    loginTimeRange: '',
+    insuranceLevel: '9格',
+    energyLevel: '7级',
+    weightLevel: '7级',
+    knifeSkin: '',
+    operatorAppearance: '',
     loginMethod: '',
-    region: '',
-    regionProvince: '',
-    regionCity: ''
+    rentPrice: '',
+    hafuCoin: '',
+    deposit: ''
   }
 }
 

@@ -25,6 +25,53 @@ function parseRangeFilter(value) {
   return { min, max }
 }
 
+function buildIntervalOverlapSql(startExpr, endExpr, targetStart, targetEnd) {
+  return `((${startExpr}) < ${targetEnd} AND (${endExpr}) > ${targetStart})`
+}
+
+function buildLoginTimeRangeWhereSql(alias, filterValue) {
+  const normalizedValue = String(filterValue || '').trim()
+  if (!normalizedValue) return ''
+
+  const rangeExpr = `COALESCE(NULLIF(TRIM(${alias}.login_time_range), ''), '')`
+  const startMinuteExpr = `(
+    CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(${rangeExpr}, '-', 1), ':', 1) AS UNSIGNED) * 60
+    + CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(${rangeExpr}, '-', 1), ':', -1) AS UNSIGNED)
+  )`
+  const endMinuteExpr = `(
+    CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(${rangeExpr}, '-', -1), ':', 1) AS UNSIGNED) * 60
+    + CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(${rangeExpr}, '-', -1), ':', -1) AS UNSIGNED)
+  )`
+  const adjustedEndMinuteExpr = `(
+    CASE
+      WHEN ${endMinuteExpr} <= ${startMinuteExpr} THEN ${endMinuteExpr} + 1440
+      ELSE ${endMinuteExpr}
+    END
+  )`
+
+  if (normalizedValue === 'day') {
+    return `(
+      ${rangeExpr} <> ''
+      AND (
+        ${buildIntervalOverlapSql(startMinuteExpr, adjustedEndMinuteExpr, 360, 1080)}
+        OR ${buildIntervalOverlapSql(startMinuteExpr, adjustedEndMinuteExpr, 1800, 2520)}
+      )
+    )`
+  }
+
+  if (normalizedValue === 'night') {
+    return `(
+      ${rangeExpr} <> ''
+      AND (
+        ${buildIntervalOverlapSql(startMinuteExpr, adjustedEndMinuteExpr, -360, 360)}
+        OR ${buildIntervalOverlapSql(startMinuteExpr, adjustedEndMinuteExpr, 1080, 1800)}
+      )
+    )`
+  }
+
+  return ''
+}
+
 async function resolveListingIdByIdentifier(pool, identifier) {
   const normalizedIdentifier = String(identifier || '').trim()
   if (!normalizedIdentifier) return null
@@ -335,6 +382,12 @@ export function registerListingRoutes(deps) {
       where.push('l.weight_level = ?')
       values.push(req.query.weightLevel)
     }
+    if (req.query.loginTimeRange) {
+      const loginTimeRangeWhereSql = buildLoginTimeRangeWhereSql('l', req.query.loginTimeRange)
+      if (loginTimeRangeWhereSql) {
+        where.push(loginTimeRangeWhereSql)
+      }
+    }
     if (req.query.rank) {
       where.push('l.rank_name = ?')
       values.push(req.query.rank)
@@ -342,6 +395,18 @@ export function registerListingRoutes(deps) {
     if (req.query.loginMethod) {
       where.push('l.login_method = ?')
       values.push(req.query.loginMethod)
+    }
+    if (req.query.knifeSkin) {
+      const knifeSkinFilter = String(req.query.knifeSkin).trim()
+      if (knifeSkinFilter === 'has') {
+        where.push("COALESCE(NULLIF(TRIM(l.knife_skin), ''), '') <> ''")
+      } else if (knifeSkinFilter === 'none') {
+        where.push("COALESCE(NULLIF(TRIM(l.knife_skin), ''), '') = ''")
+      }
+    }
+    if (req.query.operatorAppearance) {
+      where.push('COALESCE(l.operator_appearance, \'\') LIKE ?')
+      values.push(`%${String(req.query.operatorAppearance).trim()}%`)
     }
     if (req.query.listingNo) {
       where.push('l.listing_no = ?')
