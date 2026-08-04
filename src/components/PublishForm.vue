@@ -90,7 +90,7 @@
           <span class="inline-row-title">
             封禁记录 <i class="required-star">*</i>
             <em class="inline-label-hint">
-              请在腾讯安全中心处罚查询，<span class="inline-emphasis-danger">封三天及以上不收</span>（任何原因都不收），如近期封过请冷号 3-5 天再出
+              请在腾讯安全中心处罚查询，<span class="inline-emphasis-danger">封三天及以上不收</span>（任何原因都不收），如近期封过请冷号7个自然日
             </em>
           </span>
           <div class="radio-group">
@@ -1370,6 +1370,16 @@ export default {
           totalPrice: String(this.calcTotal(item.key))
         }
       })
+      const legacyBulletLv6Quantity = Number(this.publishForm.items.bulletLv6?.quantity || 0)
+      if (legacyBulletLv6Quantity > 0) {
+        itemsPayload.bulletLv6 = {
+          itemName: '6级子弹（组）',
+          quantity: legacyBulletLv6Quantity,
+          itemMode: this.publishForm.items.bulletLv6?.mode === 'gift' ? 'gift' : 'sale',
+          unitPrice: '6',
+          totalPrice: String(legacyBulletLv6Quantity * 6)
+        }
+      }
 
       return {
         ownerName: this.ownerName || '匿名用户',

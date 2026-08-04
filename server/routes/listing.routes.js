@@ -481,13 +481,15 @@ export function registerListingRoutes(deps) {
             ORDER BY li_item.id DESC LIMIT 1
           ) AS awm_bullet_qty,
           (
-            SELECT quantity FROM listing_items li_item
+            SELECT COALESCE(SUM(quantity), 0) FROM listing_items li_item
             WHERE li_item.listing_id = l.id
               AND (
-                li_item.item_key IN ('bulletLv6', 'bullet_lv6_qty', 'bulletLv6Qty')
+                li_item.item_key IN ('bulletLv6', 'bullet_lv6_qty', 'bulletLv6Qty', 'bullet762x54R', 'bullet762x51', 'bullet68x51')
                 OR li_item.item_name LIKE '6级子弹%'
+                OR li_item.item_name LIKE '7.62×54R%'
+                OR li_item.item_name LIKE '7.62×51%'
+                OR li_item.item_name LIKE '6.8×51%'
               )
-            ORDER BY li_item.id DESC LIMIT 1
           ) AS bullet_lv6_qty,
           (
             SELECT quantity FROM listing_items li_item

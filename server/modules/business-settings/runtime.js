@@ -66,7 +66,9 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   saleItems: [
     { key: 'topCard', itemName: '顶级保险卡', unitPriceInCent: 200, enabled: true },
     { key: 'awmBullet', itemName: 'AWM子弹（发）', unitPriceInCent: 60, enabled: true },
-    { key: 'bulletLv6', itemName: '6级子弹（组）', unitPriceInCent: 600, enabled: true },
+    { key: 'bullet762x54R', itemName: '7.62×54R（组）', unitPriceInCent: 600, enabled: true },
+    { key: 'bullet762x51', itemName: '7.62×51（组）', unitPriceInCent: 600, enabled: true },
+    { key: 'bullet68x51', itemName: '6.8×51（组）', unitPriceInCent: 600, enabled: true },
     { key: 'barrettBullet', itemName: '巴雷特子弹（发）', unitPriceInCent: 30, enabled: true },
     { key: 'helmetLv6', itemName: '6级头盔', unitPriceInCent: 200, enabled: true },
     { key: 'armorLv6', itemName: '6级护甲', unitPriceInCent: 200, enabled: true },
@@ -134,6 +136,11 @@ function normalizeStringList(value, fallback = []) {
   if (!Array.isArray(value)) return [...fallback]
   const list = value.map((item) => normalizeString(item, '', 40)).filter(Boolean)
   return list.length ? Array.from(new Set(list)) : [...fallback]
+}
+
+function getLegacyBulletLv6Item(saleItems = []) {
+  if (!Array.isArray(saleItems)) return null
+  return saleItems.find((item) => String(item?.key || '') === 'bulletLv6') || null
 }
 
 export function normalizeBusinessSettings(rawValue = {}) {
@@ -209,11 +216,16 @@ export function normalizeBusinessSettings(rawValue = {}) {
       const matched = Array.isArray(source.saleItems)
         ? source.saleItems.find((item) => String(item?.key || '') === defaultItem.key)
         : null
+      const legacyBulletLv6Item = ['bullet762x54R', 'bullet762x51', 'bullet68x51'].includes(defaultItem.key)
+        ? getLegacyBulletLv6Item(source.saleItems)
+        : null
+      const priceSource = matched || legacyBulletLv6Item
+      const enabledSource = matched || legacyBulletLv6Item
       return {
         key: defaultItem.key,
         itemName: normalizeString(matched?.itemName, defaultItem.itemName, 40),
-        unitPriceInCent: normalizeNumber(matched?.unitPriceInCent, defaultItem.unitPriceInCent, { min: 0, max: 99999999, integer: true }),
-        enabled: matched?.enabled === undefined ? defaultItem.enabled : Boolean(matched?.enabled)
+        unitPriceInCent: normalizeNumber(priceSource?.unitPriceInCent, defaultItem.unitPriceInCent, { min: 0, max: 99999999, integer: true }),
+        enabled: enabledSource?.enabled === undefined ? defaultItem.enabled : Boolean(enabledSource?.enabled)
       }
     }),
     compensationPlans: defaults.compensationPlans.map((defaultPlan) => {
