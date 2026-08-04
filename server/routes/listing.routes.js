@@ -497,6 +497,7 @@ export function registerListingRoutes(deps) {
               AND (
                 li_item.item_key IN ('barrettBullet', 'barrett_bullet_qty', 'barrettBulletQty')
                 OR li_item.item_name LIKE '巴雷特子弹%'
+                OR li_item.item_name LIKE '巴雷特穿甲弹%'
               )
             ORDER BY li_item.id DESC LIMIT 1
           ) AS barrett_bullet_qty,

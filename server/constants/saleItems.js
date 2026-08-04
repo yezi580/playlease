@@ -9,7 +9,7 @@ export const SALE_ITEM_CONFIG = {
   bullet762x54R: { itemName: '7.62×54R（组）', unitPriceInCent: 600 },
   bullet762x51: { itemName: '7.62×51（组）', unitPriceInCent: 600 },
   bullet68x51: { itemName: '6.8×51（组）', unitPriceInCent: 600 },
-  barrettBullet: { itemName: '巴雷特子弹（发）', unitPriceInCent: 30 },
+  barrettBullet: { itemName: '巴雷特穿甲弹（发，别的不值钱）', unitPriceInCent: 30 },
   helmetLv6: { itemName: '6级头盔', unitPriceInCent: 200 },
   armorLv6: { itemName: '6级护甲', unitPriceInCent: 200 },
   coffeeBean: { itemName: '高级咖啡豆', unitPriceInCent: 300 },

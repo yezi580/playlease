@@ -427,7 +427,7 @@ const REVIEW_SALE_ITEMS = Object.freeze([
   { key: 'topCard', name: '顶级保险卡' },
   { key: 'awmBullet', name: 'AWM子弹（发）' },
   { key: 'bulletLv6', name: '6级子弹（组）' },
-  { key: 'barrettBullet', name: '巴雷特子弹（发）' },
+  { key: 'barrettBullet', name: '巴雷特穿甲弹（发，别的不值钱）' },
   { key: 'helmetLv6', name: '6级头盔' },
   { key: 'armorLv6', name: '6级护甲' },
   { key: 'coffeeBean', name: '高级咖啡豆' },
