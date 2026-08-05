@@ -219,23 +219,27 @@ function updateForm(field, value) {
 <style scoped src="./profile-panel-shared.css"></style>
 <style scoped>
 .wallet-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  display: flex;
+  align-items: center;
   margin-bottom: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
 }
 
 .wallet-summary-grid > div {
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  flex: 1;
+  padding: 24px;
+  border-right: 1px solid #e5e7eb;
+  transition: background-color 0.2s ease;
+}
+
+.wallet-summary-grid > div:last-child {
+  border-right: none;
 }
 
 .wallet-summary-grid > div:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  background-color: #f9fafb;
 }
 
 .wallet-summary-caption {
@@ -319,10 +323,6 @@ function updateForm(field, value) {
 }
 
 .wallet-action-card {
-  padding: 18px;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #fff;
   margin-bottom: 24px;
 }
 
@@ -348,10 +348,7 @@ function updateForm(field, value) {
 
 /* Tabs Section */
 .wallet-tab-section {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 18px;
+  margin-top: 18px;
 }
 
 .wallet-tabs {

@@ -52,17 +52,6 @@
 
     <div class="bottom-actions">
       <button
-        v-if="showBackAction"
-        class="nav-back"
-        :class="{ 'nav-back--highlight': highlightBackAction }"
-        :title="backActionText"
-        :aria-label="backActionText"
-        @click="$emit('back')"
-      >
-        <span class="nav-back-icon">←</span>
-        <span class="nav-back-text">{{ backActionText }}</span>
-      </button>
-      <button
         v-if="isLoggedIn && showSupportConsoleEntry"
         class="bottom-btn"
         :class="{ active: currentPage === 'support-console' }"
@@ -244,8 +233,7 @@ export default {
   gap: 10px;
 }
 
-.bottom-btn,
-.nav-back {
+.bottom-btn {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 12px 16px;
@@ -258,19 +246,6 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.nav-back {
-  gap: 8px;
-}
-
-.nav-back--highlight {
-  background: var(--brand-primary);
-  border: none;
-}
-
-.nav-back:hover {
-  background: rgba(255, 255, 255, 0.25);
 }
 
 .bottom-btn:hover {

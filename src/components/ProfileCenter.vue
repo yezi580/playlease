@@ -1762,28 +1762,20 @@ export default {
     getOrderActions(order) {
       if (order.status === 'pending_payment') {
         return [
-          { key: 'detail', label: '查看订单', tone: 'ghost' },
           { key: 'pay', label: '立即支付', tone: 'primary' }
         ]
       }
-      return [{ key: 'detail', label: '查看订单', tone: 'ghost' }]
+      return []
     },
     getPublishedOrderActions(order) {
-      if (order.status === 'pending_payment') {
-        return [{ key: 'detail', label: '查看订单', tone: 'ghost' }]
-      }
-      return [{ key: 'detail', label: '查看订单', tone: 'ghost' }]
+      return []
     },
     getMyListingActions(item) {
       if (item.listing_status === 'active') {
         return [
-          { key: 'detail', label: '查看详情', tone: 'ghost' },
           { key: 'edit', label: '编辑商品', tone: 'ghost' },
           { key: 'off_shelf', label: '下架商品', tone: 'danger' }
         ]
-      }
-      if (item.listing_status === 'rented') {
-        return [{ key: 'detail', label: '查看详情', tone: 'ghost' }]
       }
       if (item.listing_status === 'inactive') {
         return [
@@ -1804,11 +1796,11 @@ export default {
       return Boolean(target && target.closest('button, a, input, select, textarea, label'))
     },
     handleOrderCardClick(event, order) {
-      if (!this.isMobileProfileViewport() || this.shouldIgnoreCardClick(event)) return
+      if (this.shouldIgnoreCardClick(event)) return
       this.handleOrderAction({ key: 'detail' }, order)
     },
     handlePublishedRecordClick(event, item) {
-      if (!this.isMobileProfileViewport() || this.shouldIgnoreCardClick(event)) return
+      if (this.shouldIgnoreCardClick(event)) return
       if (item.record_type === 'seller_order') {
         this.handlePublishedOrderAction({ key: 'detail' }, item)
         return
@@ -2120,7 +2112,6 @@ export default {
   border-color: #1d4ed8;
   background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
   color: #1d4ed8;
-  box-shadow: 0 10px 30px rgba(29, 78, 216, 0.08);
 }
 
 .profile-nav-label-wrap {
@@ -2271,8 +2262,8 @@ export default {
   border: 1px solid #d1d5db;
   background: #fff;
   color: #374151;
-  border-radius: 10px;
-  padding: 8px 14px;
+  border-radius: 8px;
+  padding: 6px 12px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -2290,9 +2281,8 @@ export default {
 .order-filter-tab.active,
 .order-page-btn.active {
   border-color: #1d4ed8;
-  background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
+  background: #eff6ff;
   color: #1d4ed8;
-  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.08);
 }
 
 .order-filter-count {
@@ -2603,13 +2593,22 @@ export default {
 .order-item,
 .listing-item {
   display: flex;
-  gap: 18px;
+  gap: 20px;
   align-items: stretch;
-  padding: 18px;
-  border: 1px solid #e8eaed;
+  padding: 20px;
+  border: 1px solid #f3f4f6;
   border-radius: 16px;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.order-item:hover,
+.listing-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: #e5e7eb;
 }
 
 .order-cover,
@@ -2762,17 +2761,14 @@ export default {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 20px;
-  padding: 12px 14px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #f1f5f9;
+  padding: 8px 0;
 }
 
 .order-meta-grid p,
 .listing-meta-grid p {
   margin: 0;
   color: #374151;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .order-meta-grid p.copy-inline,
@@ -2802,12 +2798,12 @@ export default {
 
 .order-action-btn {
   border: 1px solid #d1d5db;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fff;
   color: #374151;
-  padding: 10px 14px;
+  padding: 8px 12px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
   transition: all 0.2s ease;
 }
@@ -2838,14 +2834,14 @@ export default {
 }
 
 .order-action-btn.danger {
-  border-color: #fecaca;
-  background: #fff1f2;
-  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #fff;
+  color: #ef4444;
 }
 
 .order-action-btn.danger:hover {
-  background: #ffe4e6;
-  border-color: #fca5a5;
+  background: #fef2f2;
+  border-color: #ef4444;
 }
 
 .order-action-btn.danger:active {
@@ -2853,7 +2849,7 @@ export default {
 }
 
 .order-action-btn.ghost {
-  background: #f8fafc;
+  background: #fff;
   border-color: #e5e7eb;
 }
 
@@ -3294,17 +3290,6 @@ export default {
 
   .order-action-btn {
     width: 100%;
-  }
-
-  .profile-panel--orders .order-item,
-  .profile-panel--published .order-item,
-  .profile-panel--published .listing-item {
-    cursor: pointer;
-  }
-
-  .profile-panel--orders .order-action-btn--detail,
-  .profile-panel--published .listing-actions-col .order-action-btn--detail {
-    display: none;
   }
 
   .invite-bind-row,

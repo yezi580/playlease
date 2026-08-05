@@ -32,7 +32,10 @@
     />
     <AppToast />
     <AppConfirm />
-    <main class="main-content">
+    <main
+      class="main-content"
+      :class="{ 'has-floating-back': showTopBarBackAction && topBarBackActionText }"
+    >
       <AuthPanel
         v-if="showAuth"
         :mode="authMode"
@@ -40,25 +43,8 @@
         @auth-success="handleAuthSuccess"
       />
       <RouterView v-else v-slot="{ Component, route: currentRoute }">
-        <Transition name="app-page" mode="out-in">
-          <template v-if="currentRoute.name === 'home'">
-            <KeepAlive include="HomePage">
-              <component
-                :is="Component"
-                :key="currentRoute.fullPath"
-                class="page-stage"
-                :is-logged-in="isLoggedIn"
-                :current-user="currentUser"
-                :current-user-role="currentUserRole"
-                :unread-message-count="regularUnreadMessageCount"
-                @require-login="handleRequireLogin"
-                @auth-expired="handleAuthExpired"
-                @logout="handleLogout"
-                @unread-change="handleUnreadChange"
-              />
-            </KeepAlive>
-          </template>
-          <template v-else>
+        <template v-if="currentRoute.name === 'home'">
+          <KeepAlive include="HomePage">
             <component
               :is="Component"
               :key="currentRoute.fullPath"
@@ -72,8 +58,23 @@
               @logout="handleLogout"
               @unread-change="handleUnreadChange"
             />
-          </template>
-        </Transition>
+          </KeepAlive>
+        </template>
+        <template v-else>
+          <component
+            :is="Component"
+            :key="currentRoute.fullPath"
+            class="page-stage"
+            :is-logged-in="isLoggedIn"
+            :current-user="currentUser"
+            :current-user-role="currentUserRole"
+            :unread-message-count="regularUnreadMessageCount"
+            @require-login="handleRequireLogin"
+            @auth-expired="handleAuthExpired"
+            @logout="handleLogout"
+            @unread-change="handleUnreadChange"
+          />
+        </template>
       </RouterView>
     </main>
 
@@ -97,21 +98,18 @@
       }"
     >
       <div
-        class="quick-action-wrapper scroll-top-wrapper"
-        :class="{
-          'is-home': routeName === 'home',
-          'is-hidden': !showScrollTopBtn
-        }"
+        v-if="showTopBarBackAction && topBarBackActionText"
+        class="quick-action-wrapper global-back-wrapper"
       >
         <button
-          class="scroll-top-btn"
-          aria-label="返回顶部"
-          @click="scrollToTop"
+          class="global-floating-back-btn"
+          @click="handleTopBarBack"
         >
-          <span class="scroll-top-icon">↑</span>
+          <span class="back-icon">←</span>
+          {{ topBarBackActionText }}
         </button>
-        <span v-if="routeName === 'home'" class="action-label scroll-top-label">返回顶部</span>
       </div>
+
       <template v-if="showHomeQuickActions">
         <div class="quick-action-wrapper invite-action">
           <button
@@ -171,7 +169,6 @@ import { showWarningToast } from '../utils/toast.js'
 import { useSessionShell } from '../composables/useSessionShell.js'
 import { useUnreadSocket } from '../composables/useUnreadSocket.js'
 import { useRouteShellUi } from '../composables/useRouteShellUi.js'
-import { useScrollTop } from '../composables/useScrollTop.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -209,7 +206,6 @@ const {
 
 const unread = useUnreadSocket({ isLoggedIn })
 const { regularUnreadMessageCount } = unread
-const { showScrollTopBtn, handleScroll, scrollToTop } = useScrollTop()
 const {
   routeName,
   currentPageKey,
@@ -240,9 +236,7 @@ const showHomeQuickActions = computed(() => {
 watch(
   () => route.fullPath,
   () => {
-    nextTick(() => {
-      handleScroll()
-    })
+    // 路由变化时可以处理其他逻辑
   }
 )
 
@@ -253,7 +247,6 @@ watch(
       nextTick(() => {
         requestAnimationFrame(() => {
           window.scrollTo({ top: 0, behavior: 'auto' })
-          handleScroll()
         })
       })
     }
@@ -327,7 +320,7 @@ function handleListingNoSearch(value = '') {
   closeAuth()
 
   if (routeName.value === 'home' && listingNo === listingSearchValue.value) {
-    scrollToTop()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     return
   }
 
@@ -512,28 +505,11 @@ function handleLogout() {
 
 .main-content {
   flex: 1;
+  box-sizing: border-box;
 }
 
 .page-stage {
   min-height: 100%;
-}
-
-.app-page-enter-active,
-.app-page-leave-active {
-  transition: opacity 0.18s ease, transform 0.18s ease, filter 0.18s ease;
-  will-change: opacity, transform, filter;
-}
-
-.app-page-enter-from {
-  opacity: 0;
-  transform: translateY(6px) scale(0.996);
-  filter: blur(1px);
-}
-
-.app-page-leave-to {
-  opacity: 0;
-  transform: translateY(-4px) scale(0.998);
-  filter: blur(0.6px);
 }
 
 .global-floating-actions {
@@ -547,48 +523,35 @@ function handleLogout() {
   gap: 12px;
 }
 
-.scroll-top-wrapper {
+.global-floating-back-btn {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  opacity: 1;
-  transition: opacity 0.3s ease;
-}
-
-.scroll-top-wrapper.is-hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.scroll-top-btn {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: 1px solid #e2e8f0;
+  gap: 8px;
+  padding: 14px 24px;
   background: #ffffff;
-  color: #64748b;
+  border: 1px solid #e5e7eb;
+  border-radius: 100px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  color: #4b5563;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transition: all 0.2s ease;
-  padding: 0;
+  white-space: nowrap;
 }
 
-.scroll-top-btn:hover,
+.global-floating-back-btn:hover {
+  color: var(--brand-primary, #06b6d4);
+  border-color: var(--brand-primary, #06b6d4);
+  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.15);
+  transform: translateX(-4px);
+}
+
 .home-quick-action-btn:hover {
   color: var(--brand-primary);
   border-color: var(--brand-primary);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.18);
-}
-
-.scroll-top-icon {
-  font-size: 24px;
-  line-height: 1;
-  font-weight: bold;
+  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.15);
 }
 
 .quick-action-wrapper {
@@ -599,9 +562,11 @@ function handleLogout() {
 }
 
 .action-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
-  font-weight: 500;
+  font-weight: 600;
+  text-align: center;
+  transition: color 0.2s ease;
 }
 
 .home-quick-action-btn {
@@ -624,6 +589,12 @@ function handleLogout() {
 .action-icon {
   width: 22px;
   height: 22px;
+}
+
+@media (min-width: 961px) and (max-width: 1920px) {
+  .main-content.has-floating-back {
+    padding-right: 220px;
+  }
 }
 
 @media (min-width: 961px) {
@@ -651,26 +622,17 @@ function handleLogout() {
     gap: 8px;
   }
 
-  .scroll-top-wrapper.is-home {
-    display: none;
-  }
-
-  .scroll-top-btn {
-    width: 46px;
-    height: 46px;
-  }
-
-  .invite-action {
-    display: none;
-  }
-
-  .action-label {
+  .global-back-wrapper {
     display: none;
   }
 
   .home-quick-action-btn {
     width: 46px;
     height: 46px;
+  }
+
+  .action-label {
+    display: none;
   }
 
   .action-icon {
