@@ -96,6 +96,20 @@
         'is-home': routeName === 'home'
       }"
     >
+      <div
+        v-if="showTopBarBackAction && topBarBackActionText"
+        class="quick-action-wrapper global-back-wrapper"
+      >
+        <button
+          type="button"
+          class="global-floating-back-btn"
+          :aria-label="topBarBackActionText"
+          @click="handleTopBarBack"
+        >
+          <span class="back-icon">←</span>
+          <span>{{ topBarBackActionText }}</span>
+        </button>
+      </div>
       <template v-if="showHomeQuickActions">
         <div class="quick-action-wrapper invite-action">
           <button
@@ -519,6 +533,37 @@ function handleLogout() {
   gap: 12px;
 }
 
+.global-floating-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.global-floating-back-btn:hover {
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+  transform: translateX(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.18);
+}
+
+.back-icon {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 700;
+}
+
 .home-quick-action-btn:hover {
   color: var(--brand-primary);
   border-color: var(--brand-primary);
@@ -584,6 +629,10 @@ function handleLogout() {
     bottom: 132px;
     transform: none;
     gap: 8px;
+  }
+
+  .global-back-wrapper {
+    display: none;
   }
 
   .invite-action {
