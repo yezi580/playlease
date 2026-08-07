@@ -278,8 +278,8 @@
           </label>
 
           <label>
-            <span>押金（元）<i class="required-star">*</i><em class="inline-label-hint">{{ MIN_DEPOSIT_YUAN }} - {{ MAX_DEPOSIT_YUAN }} 元，且为100整数倍</em></span>
-            <input v-model.trim="publishForm.deposit" type="number" :min="MIN_DEPOSIT_YUAN" :max="MAX_DEPOSIT_YUAN" step="100" :placeholder="`推荐值：${recommendedDeposit}`" @input="handleNonNegativeIntegerInput('deposit')" @blur="handleFieldBlur('deposit')" />
+            <span>押金（元）<i class="required-star">*</i><em class="inline-label-hint">{{ MIN_DEPOSIT_YUAN }} - {{ MAX_DEPOSIT_YUAN }} 元</em></span>
+            <input v-model.trim="publishForm.deposit" type="number" :min="MIN_DEPOSIT_YUAN" :max="MAX_DEPOSIT_YUAN" :placeholder="`推荐值：${recommendedDeposit}`" @input="handleNonNegativeIntegerInput('deposit')" @blur="handleFieldBlur('deposit')" />
             <small v-if="fieldErrors.deposit" class="field-hint error-field-hint">{{ fieldErrors.deposit }}</small>
           </label>
 
@@ -737,7 +737,7 @@ export default {
       const depositMax = Number(this.MAX_DEPOSIT_YUAN || MAX_DEPOSIT_YUAN)
       const rentBasedRecommend = this.computedRentPrice * Number(this.businessSettings.listingRecommendations?.recommendDepositRatioPercent || 100) / 100
       const itemsCoverageAmount = this.totalItemsPrice * Number(this.businessSettings.listingRecommendations?.itemsDepositCoveragePercent || 100) / 100
-      const rounded = Math.ceil(Math.max(rentBasedRecommend, itemsCoverageAmount, depositMin) / 100) * 100
+      const rounded = Math.ceil(Math.max(rentBasedRecommend, itemsCoverageAmount, depositMin))
       return Math.min(depositMax, rounded)
     },
     summaryTotal() {
@@ -1073,7 +1073,6 @@ export default {
           const deposit = Number(value)
           if (!Number.isInteger(deposit) || deposit < 0) return '押金请输入有效的非负整数'
           if (deposit < this.MIN_DEPOSIT_YUAN || deposit > this.MAX_DEPOSIT_YUAN) return `押金范围为 ${this.MIN_DEPOSIT_YUAN} - ${this.MAX_DEPOSIT_YUAN} 元`
-          if (deposit % 100 !== 0) return '押金必须为 100 的整数倍'
           const minimumItemsCoverageAmount = this.totalItemsPrice * Number(this.businessSettings.listingRecommendations?.itemsDepositCoveragePercent || 100) / 100
           if (deposit < minimumItemsCoverageAmount) {
             return `押金（¥${deposit}）不能低于额外物品覆盖金额（¥${this.formatMoneyValue(minimumItemsCoverageAmount)}）`
