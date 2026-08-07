@@ -57,7 +57,9 @@ export function createOrderLifecycleService({
   createConversationMessage,
   emitConversationMessage,
   emitSupportEvent,
-  emitSupportDeskUpdate
+  emitSupportDeskUpdate,
+  createOrderRefund,
+  createSettlementPayout
 }) {
   const createOrderNo = typeof generateOrderNo === 'function' ? generateOrderNo : buildDefaultOrderNo
 
@@ -473,6 +475,91 @@ export function createOrderLifecycleService({
     }
 
     return fetchOrderById(executor, orderId)
+  }
+
+  function isFundsSuccessStatus(status) {
+    return String(status || '').trim() === 'success'
+  }
+
+  function isFundsProcessingStatus(status) {
+    return ['pending', 'processing'].includes(String(status || '').trim())
+  }
+
+  async function fetchLatestRefundByReason(executor, orderId, reason) {
+    const [rows] = await executor.execute(
+      `SELECT
+          id,
+          refund_no,
+          status,
+          amount,
+          reason,
+          failure_reason,
+          created_at,
+          updated_at
+       FROM payment_refunds
+       WHERE order_id = ?
+         AND reason = ?
+       ORDER BY id DESC
+       LIMIT 1`,
+      [orderId, reason]
+    )
+    return rows[0] || null
+  }
+
+  async function fetchLatestPayoutByRemark(executor, orderId, remark) {
+    const [rows] = await executor.execute(
+      `SELECT
+          id,
+          payout_no,
+          status,
+          amount,
+          remark,
+          failure_reason,
+          created_at,
+          updated_at
+       FROM settlement_payouts
+       WHERE order_id = ?
+         AND remark = ?
+       ORDER BY id DESC
+       LIMIT 1`,
+      [orderId, remark]
+    )
+    return rows[0] || null
+  }
+
+  async function markOrderFundsProcessing({
+    orderId,
+    supportUserId,
+    supportScene = 'funds_processing',
+    supportNote = null,
+    settlementStatus = null
+  }) {
+    const updates = [
+      `status = 'support_handling'`,
+      `support_scene = ?`,
+      `support_status = 'handling'`,
+      `support_assignee_id = COALESCE(support_assignee_id, ?)`,
+      `support_handling_at = COALESCE(support_handling_at, NOW())`,
+      `support_resolved_at = NULL`
+    ]
+    const params = [supportScene, Number(supportUserId || 0)]
+
+    if (supportNote !== undefined) {
+      updates.push('support_note = ?')
+      params.push(supportNote || null)
+    }
+    if (settlementStatus) {
+      updates.push('settlement_status = ?')
+      params.push(settlementStatus)
+    }
+
+    params.push(orderId)
+    await pool.execute(
+      `UPDATE orders
+       SET ${updates.join(', ')}
+       WHERE id = ?`,
+      params
+    )
   }
 
   async function createOrder({ listingId, userId, buyerContactWechat }) {
@@ -1095,6 +1182,10 @@ export function createOrderLifecycleService({
       typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
       '当前订单正在执行分账，请稍后再试',
       async () => {
+        let order = null
+        let preview = null
+        let isFrozenSettlement = false
+        let isRegularSettlement = false
         const conn = await pool.getConnection()
         try {
           await conn.beginTransaction()
@@ -1107,15 +1198,17 @@ export function createOrderLifecycleService({
             [orderId]
           )
           if (!orders.length) fail(404, { message: '订单不存在' })
-          const order = orders[0]
+          order = orders[0]
           if (Number(order.support_assignee_id || 0) !== Number(supportUserId)) {
             fail(403, { message: '只有当前负责客服可以执行分账' })
           }
 
           const orderStatus = String(order.status || '').trim()
           const supportScene = String(order.support_scene || '').trim()
-          const isFrozenSettlement = orderStatus === 'support_handling' && supportScene === 'fund_frozen'
-          const isRegularSettlement = orderStatus === 'settlement_pending'
+          isFrozenSettlement = orderStatus === 'support_handling'
+            && ['fund_frozen', 'frozen_funds_processing'].includes(supportScene)
+          isRegularSettlement = orderStatus === 'settlement_pending'
+            || (orderStatus === 'support_handling' && supportScene === 'settlement_funds_processing')
 
           if (!isRegularSettlement && !isFrozenSettlement) {
             fail(400, { message: '当前状态不允许执行分账' })
@@ -1124,18 +1217,116 @@ export function createOrderLifecycleService({
             fail(400, { message: '卖家确认额外物品后，才可执行分账' })
           }
 
-          const preview = isFrozenSettlement
+          preview = isFrozenSettlement
             ? buildFrozenFundsSettlementPreview(order)
             : await buildSettlementPreview(conn, orderId)
-          await upsertSettlement(conn, orderId, preview, 'executed', supportUserId)
-          await creditWallet(conn, order.buyer_id, preview.buyerRefundAmount, orderId, '订单押金退回')
-          if (Number(order.seller_id || 0) > 0) {
-            await creditWallet(conn, Number(order.seller_id), preview.sellerIncomeAmount, orderId, '订单结算入账')
-          }
-          if (!isFrozenSettlement) {
-            await awardInviteRewardForSettlement(conn, order, preview)
-          }
+          await upsertSettlement(conn, orderId, preview, 'draft', supportUserId)
           await conn.execute(
+            `UPDATE orders
+             SET status = 'support_handling',
+                 settlement_status = CASE
+                   WHEN ? = 1 THEN 'seller_confirmed'
+                   ELSE settlement_status
+                 END,
+                 support_scene = ?,
+                 support_status = 'handling',
+                 support_note = '客服已发起资金处理，等待支付通道确认。',
+                 support_resolved_at = NULL,
+                 settlement_executed_at = NULL
+             WHERE id = ?`,
+            [isRegularSettlement ? 1 : 0, isFrozenSettlement ? 'frozen_funds_processing' : 'settlement_funds_processing', orderId]
+          )
+          await conn.commit()
+        } catch (error) {
+          await conn.rollback()
+          throw error
+        } finally {
+          conn.release()
+        }
+
+        const buyerRefundReason = isFrozenSettlement
+          ? '客服执行冻结资金结算-押金原路退回'
+          : '客服执行结算-押金原路退回'
+        const sellerPayoutRemark = '客服执行结算-卖家余额支付'
+        const needsRefund = Number(preview?.buyerRefundAmount || 0) > 0
+        const needsPayout = !isFrozenSettlement && Number(order?.seller_id || 0) > 0 && Number(preview?.sellerIncomeAmount || 0) > 0
+
+        let refundResult = needsRefund ? await fetchLatestRefundByReason(pool, orderId, buyerRefundReason) : null
+        let payoutResult = needsPayout ? await fetchLatestPayoutByRemark(pool, orderId, sellerPayoutRemark) : null
+
+        try {
+          if (needsRefund && !(isFundsSuccessStatus(refundResult?.status) || isFundsProcessingStatus(refundResult?.status))) {
+            if (typeof createOrderRefund !== 'function') {
+              fail(500, { message: '退款服务尚未就绪，请稍后重试' })
+            }
+            refundResult = await createOrderRefund({
+              orderId,
+              userId: Number(order?.buyer_id || 0),
+              amount: Number(preview?.buyerRefundAmount || 0),
+              refundType: 'partial',
+              reason: buyerRefundReason
+            })
+          }
+
+          if (needsPayout && !(isFundsSuccessStatus(payoutResult?.status) || isFundsProcessingStatus(payoutResult?.status))) {
+            if (typeof createSettlementPayout !== 'function') {
+              fail(500, { message: '余额支付服务尚未就绪，请稍后重试' })
+            }
+            payoutResult = await createSettlementPayout({
+              orderId,
+              payeeUserId: Number(order?.seller_id || 0),
+              amount: Number(preview?.sellerIncomeAmount || 0),
+              remark: sellerPayoutRemark
+            })
+          }
+        } catch (error) {
+          await markOrderFundsProcessing({
+            orderId,
+            supportUserId,
+            supportScene: isFrozenSettlement ? 'frozen_funds_processing' : 'settlement_funds_processing',
+            supportNote: `资金处理发起失败：${error?.body?.message || error?.message || '请稍后重试'}`
+          })
+          throw error
+        }
+
+        const refundSuccess = !needsRefund || isFundsSuccessStatus(refundResult?.status)
+        const payoutSuccess = !needsPayout || isFundsSuccessStatus(payoutResult?.status)
+
+        if (!refundSuccess || !payoutSuccess) {
+          const processingNotes = []
+          if (needsRefund) {
+            processingNotes.push(refundSuccess ? '买家退款已完成' : '买家退款处理中')
+          }
+          if (needsPayout) {
+            processingNotes.push(payoutSuccess ? '卖家打款已完成' : '卖家打款处理中')
+          }
+          await markOrderFundsProcessing({
+            orderId,
+            supportUserId,
+            supportScene: isFrozenSettlement ? 'frozen_funds_processing' : 'settlement_funds_processing',
+            supportNote: `客服已发起资金处理，等待支付通道确认。${processingNotes.join('，')}。`
+          })
+          const updated = await fetchOrderById(pool, orderId)
+          const orderConversation = await getOrderConversationAccess(orderId, supportUserId, 'support')
+          await emitOrderSystemMessage({
+            order: orderConversation,
+            actorUserId: supportUserId,
+            actorRole: 'support',
+            content: isFrozenSettlement
+              ? '客服已按冻结资金规则发起资金处理：押金将原路退回买家，租金归平台，等待支付通道确认结果。'
+              : '客服已发起订单资金处理：买家将原路收到退款，卖家将收到平台余额支付打款，当前等待支付通道确认结果。'
+          })
+          return updated
+        }
+
+        const finalizeConn = await pool.getConnection()
+        try {
+          await finalizeConn.beginTransaction()
+          await upsertSettlement(finalizeConn, orderId, preview, 'executed', supportUserId)
+          if (!isFrozenSettlement) {
+            await awardInviteRewardForSettlement(finalizeConn, order, preview)
+          }
+          await finalizeConn.execute(
             `UPDATE orders
              SET status = 'completed',
                  settlement_status = 'executed',
@@ -1144,6 +1335,7 @@ export function createOrderLifecycleService({
                    ELSE 'none'
                  END,
                  support_status = 'resolved',
+                 support_note = NULL,
                  support_origin_status = NULL,
                  support_resolved_at = NOW(),
                  settlement_executed_at = NOW(),
@@ -1152,34 +1344,35 @@ export function createOrderLifecycleService({
             [isFrozenSettlement ? 1 : 0, orderId]
           )
           if (Number(order.listing_id || 0) > 0) {
-            await conn.execute(
+            await finalizeConn.execute(
               `UPDATE listings
                SET listing_status = 'active'
                WHERE id = ? AND listing_status = 'rented'`,
               [order.listing_id]
             )
           }
-          await conn.commit()
-          if (Number(order.listing_id || 0) > 0 && typeof invalidateListingDetailCache === 'function') {
-            await invalidateListingDetailCache(order.listing_id)
-          }
-          const updated = await fetchOrderById(pool, orderId)
-          const orderConversation = await getOrderConversationAccess(orderId, supportUserId, 'support')
-          await emitOrderSystemMessage({
-            order: orderConversation,
-            actorUserId: supportUserId,
-            actorRole: 'support',
-            content: isFrozenSettlement
-              ? '客服已按冻结资金规则执行分账：押金已全额退回买家，买家支付租金计入平台收益，卖家无收益。'
-              : '客服已执行分账，订单已完成，资金已分别计入买家和卖家钱包。'
-          })
-          return updated
+          await finalizeConn.commit()
         } catch (error) {
-          await conn.rollback()
+          await finalizeConn.rollback()
           throw error
         } finally {
-          conn.release()
+          finalizeConn.release()
         }
+
+        if (Number(order.listing_id || 0) > 0 && typeof invalidateListingDetailCache === 'function') {
+          await invalidateListingDetailCache(order.listing_id)
+        }
+        const updated = await fetchOrderById(pool, orderId)
+        const orderConversation = await getOrderConversationAccess(orderId, supportUserId, 'support')
+        await emitOrderSystemMessage({
+          order: orderConversation,
+          actorUserId: supportUserId,
+          actorRole: 'support',
+          content: isFrozenSettlement
+            ? '客服已按冻结资金规则完成结算：押金已原路退回买家，买家支付租金计入平台收益，卖家无收益。'
+            : '客服已完成结算：买家退款已原路退回，卖家结算款已通过余额支付发起/到账。'
+        })
+        return updated
       }
     )
   }
@@ -1189,6 +1382,8 @@ export function createOrderLifecycleService({
       typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
       '当前订单正在处理取消，请稍后再试',
       async () => {
+        let order = null
+        let settlementPreview = null
         const conn = await pool.getConnection()
         try {
           await conn.beginTransaction()
@@ -1201,31 +1396,67 @@ export function createOrderLifecycleService({
             [orderId]
           )
           if (!orders.length) fail(404, { message: '订单不存在' })
-          const order = orders[0]
-          if (String(order.status || '').trim() !== 'support_handling' || String(order.support_scene || '').trim() !== 'cancel_request') {
+          order = orders[0]
+          const cancelScene = String(order.support_scene || '').trim()
+          if (String(order.status || '').trim() !== 'support_handling' || !['cancel_request', 'cancel_refund_processing'].includes(cancelScene)) {
             fail(400, { message: '当前订单不在客服可取消的取消处理中状态' })
           }
           if (Number(order.support_assignee_id || 0) !== Number(supportUserId)) {
             fail(403, { message: '只有当前负责客服可以取消该订单' })
           }
 
-          const settlementPreview = buildFullRefundSettlementPreview(order)
-          await upsertSettlement(conn, orderId, settlementPreview, 'executed', supportUserId)
-          await creditWallet(conn, Number(order.buyer_id || 0), settlementPreview.buyerRefundAmount, orderId, '订单取消全额退款')
+          settlementPreview = buildFullRefundSettlementPreview(order)
+          await upsertSettlement(conn, orderId, settlementPreview, 'draft', supportUserId)
           await conn.execute(
             `UPDATE orders
              SET support_note = ?,
+                 support_scene = 'cancel_refund_processing',
+                 support_status = 'handling',
                  cancel_reason = COALESCE(NULLIF(cancel_reason, ''), '客服确认取消订单')
              WHERE id = ?`,
-            [note || null, orderId]
+            [note || '客服已发起原路退款，等待支付通道确认。', orderId]
           )
-
-          const cancelledOrder = await transitionToCancelled(conn, orderId, { markSettlementExecuted: true })
           await conn.commit()
-          if (Number(cancelledOrder?.listing_id || 0) > 0 && typeof invalidateListingDetailCache === 'function') {
-            await invalidateListingDetailCache(cancelledOrder.listing_id)
-          }
+        } catch (error) {
+          await conn.rollback()
+          throw error
+        } finally {
+          conn.release()
+        }
 
+        const refundReason = '客服取消订单-原路退款'
+        let refundResult = await fetchLatestRefundByReason(pool, orderId, refundReason)
+
+        try {
+          if (!(isFundsSuccessStatus(refundResult?.status) || isFundsProcessingStatus(refundResult?.status))) {
+            if (typeof createOrderRefund !== 'function') {
+              fail(500, { message: '退款服务尚未就绪，请稍后重试' })
+            }
+            refundResult = await createOrderRefund({
+              orderId,
+              userId: Number(order?.buyer_id || 0),
+              amount: Number(settlementPreview?.buyerRefundAmount || 0),
+              refundType: 'full',
+              reason: refundReason
+            })
+          }
+        } catch (error) {
+          await markOrderFundsProcessing({
+            orderId,
+            supportUserId,
+            supportScene: 'cancel_refund_processing',
+            supportNote: `原路退款发起失败：${error?.body?.message || error?.message || '请稍后重试'}`
+          })
+          throw error
+        }
+
+        if (!isFundsSuccessStatus(refundResult?.status)) {
+          await markOrderFundsProcessing({
+            orderId,
+            supportUserId,
+            supportScene: 'cancel_refund_processing',
+            supportNote: '客服已发起原路退款，等待支付通道确认结果。'
+          })
           const updated = await fetchOrderById(pool, orderId)
           const orderConversation = await getOrderConversationAccess(orderId, supportUserId, 'support')
           await emitSupportEvent({
@@ -1233,17 +1464,49 @@ export function createOrderLifecycleService({
             actorUserId: supportUserId,
             actorRole: 'support',
             actorName: orderConversation?.support_assignee_name || '',
-            eventType: 'cancelled',
-            note: note || '客服已取消订单，并按规则全额退款处理。',
+            eventType: 'note_updated',
+            note: '客服已发起原路退款，等待支付通道确认结果。',
             conversationOrder: orderConversation
           })
           return updated
+        }
+
+        const finalizeConn = await pool.getConnection()
+        let cancelledOrder = null
+        try {
+          await finalizeConn.beginTransaction()
+          await upsertSettlement(finalizeConn, orderId, settlementPreview, 'executed', supportUserId)
+          await finalizeConn.execute(
+            `UPDATE orders
+             SET support_note = ?,
+                 cancel_reason = COALESCE(NULLIF(cancel_reason, ''), '客服确认取消订单')
+             WHERE id = ?`,
+            [note || '客服已取消订单，退款原路退回买家。', orderId]
+          )
+          cancelledOrder = await transitionToCancelled(finalizeConn, orderId, { markSettlementExecuted: true })
+          await finalizeConn.commit()
         } catch (error) {
-          await conn.rollback()
+          await finalizeConn.rollback()
           throw error
         } finally {
-          conn.release()
+          finalizeConn.release()
         }
+        if (Number(cancelledOrder?.listing_id || 0) > 0 && typeof invalidateListingDetailCache === 'function') {
+          await invalidateListingDetailCache(cancelledOrder.listing_id)
+        }
+
+        const updated = await fetchOrderById(pool, orderId)
+        const orderConversation = await getOrderConversationAccess(orderId, supportUserId, 'support')
+        await emitSupportEvent({
+          orderId,
+          actorUserId: supportUserId,
+          actorRole: 'support',
+          actorName: orderConversation?.support_assignee_name || '',
+          eventType: 'cancelled',
+          note: note || '客服已取消订单，并已将款项原路退回买家。',
+          conversationOrder: orderConversation
+        })
+        return updated
       }
     )
   }

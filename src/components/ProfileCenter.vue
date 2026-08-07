@@ -349,22 +349,19 @@
       <section v-else-if="activeSection === 'wallet'" :key="'wallet'" class="profile-panel">
         <ProfileWalletPanel
           :is-logged-in="isLoggedIn"
-          :loading="walletLoading"
-          :error="walletError"
-          :withdraw-submitting="walletWithdrawSubmitting"
-          :can-apply-withdraw="canApplyWithdraw"
-          :balance="walletBalance"
-          :frozen-balance="walletFrozenBalance"
-          :withdrawable-balance="walletWithdrawableBalance"
-          :ledger="walletLedger"
-          :withdraw-list="walletWithdrawList"
-          :withdraw-form="withdrawForm"
+          :loading="settlementLoading"
+          :error="settlementError"
+          :submitting="settlementSubmitting"
+          :account-form="settlementAccountForm"
+          :payout-list="settlementPayoutList"
           :format-money="formatMoney"
           :format-order-date="formatOrderDate"
+          :get-bind-status-text="getSettlementBindStatusText"
+          :get-payout-status-text="getSettlementPayoutStatusText"
           @login="triggerLogin"
-          @refresh="loadWalletData"
-          @update:withdraw-form="handleWithdrawFormUpdate"
-          @submit="submitWithdraw"
+          @refresh="loadSettlementData"
+          @update:settlement-account-form="handleSettlementAccountFormUpdate"
+          @submit="submitSettlementAccount"
         />
       </section>
 
@@ -576,9 +573,11 @@ import {
   createOrderStatsData,
   createOrderStatusTabs,
   createProfileSections,
-  createWithdrawForm,
+  createSettlementAccountForm,
   formatOrderDateTime,
   formatPendingCountdown,
+  getSettlementBindStatusText,
+  getSettlementPayoutStatusText,
   normalizeKycStatus
 } from '../utils/profileCenter.js'
 import { showErrorToast, showSuccessToast, showWarningToast } from '../utils/toast.js'
@@ -696,14 +695,11 @@ export default {
       selectedConversationUserRole: 'buyer',
       showPaymentModal: false,
       selectedPaymentOrder: null,
-      walletBalance: 0,
-      walletFrozenBalance: 0,
-      walletWithdrawableBalance: 0,
-      walletLedger: [],
-      walletWithdrawList: [],
-      walletLoading: false,
-      walletWithdrawSubmitting: false,
-      walletError: '',
+      settlementLoading: false,
+      settlementSubmitting: false,
+      settlementError: '',
+      settlementPayoutList: [],
+      settlementAccountForm: createSettlementAccountForm(),
       kycLoading: false,
       kycSubmitting: false,
       kycSyncing: false,
@@ -731,7 +727,6 @@ export default {
       contributedRewardTotal: 0,
       inviterOrderList: [],
       inviteeOrderList: [],
-      withdrawForm: createWithdrawForm(),
       businessSettings: getCachedBusinessSettings()
     }
   },
@@ -792,9 +787,6 @@ export default {
     },
     canSubmitKyc() {
       return this.kycStatus === 'unverified' || this.kycStatus === 'failed'
-    },
-    canApplyWithdraw() {
-      return this.isLoggedIn
     },
     messageList() {
       const conversationItems = this.conversationList.map((item) => ({
@@ -864,7 +856,7 @@ export default {
     } else if (this.activeSection === 'published') {
       this.loadMyListingsData()
     } else if (this.activeSection === 'wallet') {
-      this.loadWalletData()
+      this.loadSettlementData()
     } else if (this.activeSection === 'invite') {
       this.loadInviteData()
     } else if (this.activeSection === 'verify') {
@@ -1021,7 +1013,7 @@ export default {
       } else if (normalizedSectionKey === 'published') {
         this.loadMyListingsData()
       } else if (normalizedSectionKey === 'wallet') {
-        this.loadWalletData()
+        this.loadSettlementData()
       } else if (normalizedSectionKey === 'invite') {
         this.loadInviteData()
       } else if (normalizedSectionKey === 'verify') {
@@ -1127,15 +1119,15 @@ export default {
         this.messageLoading = false
       }
     },
-    async loadWalletData() {
-      this.walletLoading = true
-      this.walletError = ''
+    async loadSettlementData() {
+      this.settlementLoading = true
+      this.settlementError = ''
       try {
-        await Promise.all([this.fetchWalletBalance(), this.fetchWalletLedger(), this.fetchWalletWithdrawList()])
+        await Promise.all([this.fetchSettlementAccount(), this.fetchSettlementPayoutList()])
       } catch (error) {
-        this.walletError = error.message || '钱包数据加载失败'
+        this.settlementError = error.message || '收款配置加载失败'
       } finally {
-        this.walletLoading = false
+        this.settlementLoading = false
       }
     },
     applyInvitePayload(data = {}) {
@@ -1526,21 +1518,28 @@ export default {
       const notificationUnread = this.computeNotificationUnreadCount()
       return conversationUnread + notificationUnread
     },
-    async fetchWalletBalance() {
-      const data = await apiFetch('/api/wallet')
-      this.walletBalance = Number(data.balance || 0)
-      this.walletFrozenBalance = Number(data.frozen_balance || 0)
-      this.walletWithdrawableBalance = Number(data.withdrawable_balance || data.balance || 0)
+    async fetchSettlementAccount() {
+      const data = await apiFetch('/api/settlement-account')
+      const account = data.settlement_account || {}
+      this.settlementAccountForm = {
+        provider: String(account.provider || 'mock_payment').trim() || 'mock_payment',
+        accountType: String(account.account_type || 'person').trim() || 'person',
+        bindStatus: String(account.bind_status || 'unbound').trim() || 'unbound',
+        huifuId: String(account.huifu_id || '').trim(),
+        acctId: String(account.acct_id || '').trim(),
+        accountName: String(account.account_name || '').trim(),
+        mobile: String(account.mobile || '').trim(),
+        idCardMasked: String(account.id_card_masked || '').trim(),
+        remark: String(account.remark || '').trim()
+      }
     },
-    async fetchWalletLedger() {
-      const data = await apiFetch('/api/wallet/ledger')
-      this.walletLedger = Array.isArray(data.list) ? data.list : []
-    },
-    async fetchWalletWithdrawList() {
-      const data = await apiFetch('/api/wallet/withdraw/list')
-      this.walletWithdrawList = Array.isArray(data.list) ? data.list : []
+    async fetchSettlementPayoutList() {
+      const data = await apiFetch('/api/settlement/payouts')
+      this.settlementPayoutList = Array.isArray(data.list) ? data.list : []
     },
     normalizeKycStatus,
+    getSettlementBindStatusText,
+    getSettlementPayoutStatusText,
     handleKycFormUpdate(nextForm = {}) {
       this.kycForm = {
         ...this.kycForm,
@@ -1606,61 +1605,52 @@ export default {
         this.kycSubmitting = false
       }
     },
-    handleWithdrawFormUpdate(nextForm = {}) {
-      this.withdrawForm = {
-        ...this.withdrawForm,
+    handleSettlementAccountFormUpdate(nextForm = {}) {
+      this.settlementAccountForm = {
+        ...this.settlementAccountForm,
         ...nextForm
       }
     },
-    async submitWithdraw() {
-      if (!this.canApplyWithdraw) {
-        showWarningToast('请先登录后再申请提现')
+    async submitSettlementAccount() {
+      if (!this.isLoggedIn) {
+        showWarningToast('请先登录后再保存收款配置')
         return
       }
 
-      const amount = Number(this.withdrawForm.amount || 0)
-      const accountName = String(this.withdrawForm.accountName || '').trim()
-      const accountNo = String(this.withdrawForm.accountNo || '').trim()
+      const huifuId = String(this.settlementAccountForm.huifuId || '').trim()
+      const accountName = String(this.settlementAccountForm.accountName || '').trim()
 
-      if (!Number.isFinite(amount) || amount < 1) {
-        showWarningToast('提现金额至少 1 元')
-        return
-      }
-      if (amount > Number(this.walletWithdrawableBalance || 0)) {
-        showWarningToast('提现金额不能超过可提现余额')
+      if (!huifuId) {
+        showWarningToast('请输入汇付ID')
         return
       }
       if (!accountName) {
         showWarningToast('请输入收款人姓名')
         return
       }
-      if (!accountNo) {
-        showWarningToast('请输入收款账号')
-        return
-      }
 
-      this.walletWithdrawSubmitting = true
+      this.settlementSubmitting = true
       try {
-        await apiFetch('/api/wallet/withdraw/apply', {
-          method: 'POST',
+        await apiFetch('/api/settlement-account', {
+          method: 'PUT',
           body: JSON.stringify({
-            amount,
-            channel: this.withdrawForm.channel,
+            provider: this.settlementAccountForm.provider,
+            account_type: this.settlementAccountForm.accountType,
+            bind_status: this.settlementAccountForm.bindStatus,
+            huifu_id: huifuId,
+            acct_id: String(this.settlementAccountForm.acctId || '').trim(),
             account_name: accountName,
-            account_no: accountNo,
-            remark: String(this.withdrawForm.remark || '').trim()
+            mobile: String(this.settlementAccountForm.mobile || '').trim(),
+            id_card_masked: String(this.settlementAccountForm.idCardMasked || '').trim(),
+            remark: String(this.settlementAccountForm.remark || '').trim()
           })
         })
-        this.withdrawForm.amount = ''
-        this.withdrawForm.accountName = ''
-        this.withdrawForm.accountNo = ''
-        this.withdrawForm.remark = ''
-        showSuccessToast('提现申请已提交')
-        await this.loadWalletData()
+        showSuccessToast('收款配置已保存')
+        await this.loadSettlementData()
       } catch (error) {
-        showErrorToast(error.message || '提交提现申请失败')
+        showErrorToast(error.message || '保存收款配置失败')
       } finally {
-        this.walletWithdrawSubmitting = false
+        this.settlementSubmitting = false
       }
     },
     async updateMyListingStatus(item, nextStatus) {

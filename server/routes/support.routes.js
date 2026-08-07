@@ -12,7 +12,8 @@ export function registerSupportRoutes(deps) {
     orderWriteLimiter,
     normalizeOrderMoneyFields,
     chatModule,
-    orderLifecycleService
+    orderLifecycleService,
+    paymentService
   } = deps
   const {
     normalizeSupportStatus,
@@ -247,14 +248,28 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
         const supportAssigneeDisplayName = row.support_assignee_username || ''
         const issueReason = row.support_scene === 'cancel_request'
           ? '取消订单申请'
+          : (row.support_scene === 'cancel_refund_processing'
+              ? '取消退款处理中'
+              : (row.support_scene === 'settlement_funds_processing'
+                  ? '结算打款处理中'
+                  : (row.support_scene === 'frozen_funds_processing'
+                      ? '冻结资金处理中'
           : (row.support_scene === 'settlement_dispute'
               ? '结算争议处理'
-              : (row.support_scene === 'fund_frozen' ? '资金冻结处理中' : '订单监督中'))
+              : (row.support_scene === 'fund_frozen'
+                  ? '资金冻结处理中'
+                  : '订单监督中')))))
         const issueNote = row.support_scene === 'cancel_request'
           ? (row.cancel_reason || row.support_note || '')
+          : (row.support_scene === 'cancel_refund_processing'
+              ? (row.support_note || '正在等待支付通道确认原路退款结果')
+              : (row.support_scene === 'settlement_funds_processing'
+                  ? (row.support_note || '正在等待支付通道确认退款/打款结果')
+                  : (row.support_scene === 'frozen_funds_processing'
+                      ? (row.support_note || '正在等待支付通道确认冻结资金处理结果')
           : (row.support_scene === 'fund_frozen'
               ? (row.support_freeze_reason || row.support_note || '')
-              : (row.support_note || ''))
+              : (row.support_note || '')))))
         const supportRequestedAt = row.support_requested_at || row.cancel_requested_at || row.created_at
         const supportOriginStatus = String(row.support_origin_status || '').trim()
         return {
@@ -867,6 +882,33 @@ app.put('/api/support/orders/:id/release-funds', authRequired, supportOnly, orde
       return res.status(status).json(error.body || { message: error.message || '解除冻结失败' })
     }
     res.status(500).json({ message: '解除冻结失败' })
+  }
+})
+
+app.post('/api/support/orders/:id/reconcile-funds', authRequired, supportOnly, orderWriteLimiter, async (req, res) => {
+  const orderId = Number(req.params?.id)
+
+  if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
+    return res.status(400).json({ message: '订单ID无效' })
+  }
+
+  try {
+    const result = await paymentService.reconcileOrderFunds({
+      orderId,
+      supportUserId: req.auth.userId
+    })
+    res.json({
+      finalized: Boolean(result?.finalized),
+      order: normalizeOrderMoneyFields(result?.order, { includeSensitiveContacts: true }),
+      refund: result?.refund || null,
+      payout: result?.payout || null
+    })
+  } catch (error) {
+    const status = Number(error?.status || 0)
+    if (status >= 400 && status < 600) {
+      return res.status(status).json(error.body || { message: error.message || '同步资金状态失败' })
+    }
+    res.status(500).json({ message: '同步资金状态失败' })
   }
 })
 }

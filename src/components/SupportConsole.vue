@@ -351,6 +351,15 @@
                   {{ statusSubmitting ? '提交中...' : '解除冻结' }}
                 </button>
                 <button
+                  v-if="canReconcileFunds"
+                  type="button"
+                  class="ghost-btn"
+                  :disabled="reconcileSubmitting"
+                  @click="reconcileFunds"
+                >
+                  {{ reconcileSubmitting ? '同步中...' : '同步资金结果' }}
+                </button>
+                <button
                   v-if="canExecuteSettlement"
                   type="button"
                   class="ok-btn"
@@ -736,6 +745,7 @@ export default {
       statusSubmitting: false,
       cancelSubmitting: false,
       settlementSubmitting: false,
+      reconcileSubmitting: false,
       messagePanelVisible: false,
       activeConversationType: 'order',
       activeConversationOrderId: 0,
@@ -920,6 +930,13 @@ export default {
     canReleaseFunds() {
       return this.activeOrder?.status === 'support_handling'
         && this.activeOrder?.support_scene === 'fund_frozen'
+        && this.activeOrder?.support_status !== 'resolved'
+    },
+    canReconcileFunds() {
+      return this.activeOrder?.status === 'support_handling'
+        && ['cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing'].includes(
+          String(this.activeOrder?.support_scene || '').trim()
+        )
         && this.activeOrder?.support_status !== 'resolved'
     }
   },
@@ -1496,7 +1513,7 @@ export default {
         title: '执行分账',
         message: isFrozenSettlement
           ? '是否确认按冻结资金规则执行分账？执行后将全额退还买家押金，买家支付租金全部计入平台收益，卖家无收益，且无需提交额外物品使用表单。'
-          : '是否确认执行分账？执行后将把本次结算结果计入买家和卖家钱包，订单将完成。',
+          : '是否确认执行分账？执行后将发起买家原路退款与卖家余额支付，订单会在支付通道确认后自动完成。',
         confirmText: '确认执行',
         cancelText: '返回',
         tone: 'primary'
@@ -1516,6 +1533,27 @@ export default {
         showErrorToast(error.message || '执行分账失败')
       } finally {
         this.settlementSubmitting = false
+      }
+    },
+    async reconcileFunds() {
+      if (!this.activeOrder || this.reconcileSubmitting) return
+      this.reconcileSubmitting = true
+      try {
+        const result = await apiFetch(
+          `/api/support/orders/${this.activeOrder.id}/reconcile-funds`,
+          {
+            method: 'POST'
+          }
+        )
+        showSuccessToast(result?.finalized ? '资金结果已同步，订单已自动收口' : '已同步最新资金结果')
+        await this.fetchOrders(this.activeStatus)
+        if (this.activeOrderId) {
+          await this.fetchTimeline(this.activeOrderId)
+        }
+      } catch (error) {
+        showErrorToast(error.message || '同步资金结果失败')
+      } finally {
+        this.reconcileSubmitting = false
       }
     },
     async cancelOrderBySupport() {

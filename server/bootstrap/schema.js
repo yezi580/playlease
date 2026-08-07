@@ -28,6 +28,7 @@ export async function runBootstrapSchemaTasks({
   ensureUploadQuotaSchema,
   ensureKycSchema,
   ensurePaymentChannelSchema,
+  ensureSettlementPaymentSchema,
   refreshUploadSortOrderFlags
 }) {
   await ensureUserRoleSchema()
@@ -55,5 +56,6 @@ export async function runBootstrapSchemaTasks({
   await ensureUploadQuotaSchema()
   await ensureKycSchema()
   await ensurePaymentChannelSchema()
+  await ensureSettlementPaymentSchema()
   await refreshUploadSortOrderFlags()
 }

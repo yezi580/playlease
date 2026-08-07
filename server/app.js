@@ -607,6 +607,11 @@ const paymentProvider = createPaymentProvider({
   huifuProductId: process.env.HUIFU_PRODUCT_ID,
   huifuId: process.env.HUIFU_HUIFU_ID,
   huifuHostingPreOrderUrl: process.env.HUIFU_HOSTING_PREORDER_URL,
+  huifuHostingQueryOrderUrl: process.env.HUIFU_HOSTING_QUERY_ORDER_URL,
+  huifuHostingRefundUrl: process.env.HUIFU_HOSTING_REFUND_URL,
+  huifuHostingRefundQueryUrl: process.env.HUIFU_HOSTING_REFUND_QUERY_URL,
+  huifuAcctPaymentPayUrl: process.env.HUIFU_ACCTPAYMENT_PAY_URL,
+  huifuAcctPaymentPayQueryUrl: process.env.HUIFU_ACCTPAYMENT_PAY_QUERY_URL,
   huifuNotifyUrl: process.env.HUIFU_NOTIFY_URL,
   huifuReturnUrl: process.env.HUIFU_RETURN_URL,
   huifuHostingProjectTitle: process.env.HUIFU_HOSTING_PROJECT_TITLE,
@@ -614,6 +619,12 @@ const paymentProvider = createPaymentProvider({
   huifuHostingProjectIdPc: process.env.HUIFU_HOSTING_PROJECT_ID_PC,
   huifuHostingStyleIdH5: process.env.HUIFU_HOSTING_STYLE_ID_H5,
   huifuHostingStyleIdPc: process.env.HUIFU_HOSTING_STYLE_ID_PC,
+  huifuRefundRiskCheckData: process.env.HUIFU_REFUND_RISK_CHECK_DATA,
+  huifuRefundTerminalDeviceData: process.env.HUIFU_REFUND_TERMINAL_DEVICE_DATA,
+  huifuBalancePayRiskCheckData: process.env.HUIFU_BALANCE_PAY_RISK_CHECK_DATA,
+  huifuBalancePayNotifyUrl: process.env.HUIFU_BALANCE_PAY_NOTIFY_URL,
+  huifuBalancePayTransFeeTakeFlag: process.env.HUIFU_BALANCE_PAY_TRANS_FEE_TAKE_FLAG,
+  huifuBalancePayFundType: process.env.HUIFU_BALANCE_PAY_FUND_TYPE,
   huifuMerchantPrivateKey: process.env.HUIFU_MERCHANT_PRIVATE_KEY,
   huifuPublicKey: process.env.HUIFU_PUBLIC_KEY,
   huifuVerifyResponseSignature: process.env.HUIFU_VERIFY_RESPONSE_SIGNATURE
@@ -678,6 +689,8 @@ const {
   markUserNotificationAsRead
 } = notificationService
 
+let paymentService = null
+
 const orderLifecycleService = createOrderLifecycleService({
   pool,
   ORDER_LOCK_TTL_MS,
@@ -697,9 +710,11 @@ const orderLifecycleService = createOrderLifecycleService({
   createConversationMessage,
   emitConversationMessage,
   emitSupportEvent,
-  emitSupportDeskUpdate
+  emitSupportDeskUpdate,
+  createOrderRefund: (payload) => paymentService?.createOrderRefund(payload),
+  createSettlementPayout: (payload) => paymentService?.createSettlementPayout(payload)
 })
-const paymentService = createPaymentService({
+paymentService = createPaymentService({
   pool,
   orderLifecycleService,
   paymentProvider
@@ -2195,6 +2210,83 @@ async function ensurePaymentChannelSchema() {
   )
 }
 
+async function ensureSettlementPaymentSchema() {
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS user_settlement_accounts (
+      user_id INT PRIMARY KEY COMMENT '用户ID',
+      provider VARCHAR(50) NOT NULL DEFAULT 'mock_payment' COMMENT '结算服务商',
+      account_type ENUM('person', 'enterprise') NOT NULL DEFAULT 'person' COMMENT '收款主体类型',
+      bind_status ENUM('unbound', 'pending', 'active', 'disabled') NOT NULL DEFAULT 'unbound' COMMENT '绑定状态',
+      huifu_id VARCHAR(32) DEFAULT NULL COMMENT '汇付ID',
+      acct_id VARCHAR(32) DEFAULT NULL COMMENT '汇付账户号',
+      account_name VARCHAR(80) NOT NULL DEFAULT '' COMMENT '收款人姓名',
+      mobile VARCHAR(20) DEFAULT NULL COMMENT '预留手机号',
+      id_card_masked VARCHAR(40) DEFAULT NULL COMMENT '脱敏证件号',
+      remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
+      last_verified_at DATETIME DEFAULT NULL COMMENT '最近校验时间',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_user_settlement_accounts_status (bind_status, updated_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS payment_refunds (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '退款单ID',
+      refund_no VARCHAR(40) NOT NULL COMMENT '平台退款单号',
+      transaction_no VARCHAR(40) NOT NULL COMMENT '原支付流水号',
+      order_id INT DEFAULT NULL COMMENT '关联订单ID',
+      user_id INT NOT NULL COMMENT '退款归属用户ID',
+      refund_type ENUM('full', 'partial') NOT NULL DEFAULT 'partial' COMMENT '退款类型',
+      amount BIGINT NOT NULL DEFAULT 0 COMMENT '退款金额（分）',
+      reason VARCHAR(255) DEFAULT NULL COMMENT '退款原因',
+      provider VARCHAR(50) NOT NULL DEFAULT 'mock_payment' COMMENT '退款服务商',
+      status ENUM('pending', 'processing', 'success', 'failed', 'cancelled') NOT NULL DEFAULT 'pending' COMMENT '退款状态',
+      provider_refund_no VARCHAR(100) DEFAULT NULL COMMENT '服务商退款单号',
+      provider_payload LONGTEXT DEFAULT NULL COMMENT '服务商响应JSON',
+      failure_reason VARCHAR(255) DEFAULT NULL COMMENT '失败原因',
+      completed_at DATETIME DEFAULT NULL COMMENT '退款完成时间',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY uk_payment_refunds_no (refund_no),
+      INDEX idx_payment_refunds_transaction_no (transaction_no, id),
+      INDEX idx_payment_refunds_order_id (order_id, id),
+      INDEX idx_payment_refunds_user_id (user_id, id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS settlement_payouts (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '余额支付单ID',
+      payout_no VARCHAR(40) NOT NULL COMMENT '平台余额支付单号',
+      order_id INT NOT NULL COMMENT '关联订单ID',
+      payee_user_id INT NOT NULL COMMENT '收款用户ID',
+      provider VARCHAR(50) NOT NULL DEFAULT 'mock_payment' COMMENT '余额支付服务商',
+      status ENUM('pending', 'processing', 'success', 'failed', 'cancelled') NOT NULL DEFAULT 'pending' COMMENT '打款状态',
+      amount BIGINT NOT NULL DEFAULT 0 COMMENT '打款金额（分）',
+      account_name VARCHAR(80) NOT NULL DEFAULT '' COMMENT '收款人姓名',
+      payee_huifu_id VARCHAR(32) NOT NULL DEFAULT '' COMMENT '收款方汇付ID',
+      payee_acct_id VARCHAR(32) DEFAULT NULL COMMENT '收款方账户号',
+      provider_request_id VARCHAR(100) DEFAULT NULL COMMENT '服务商打款单号',
+      provider_payload LONGTEXT DEFAULT NULL COMMENT '服务商响应JSON',
+      remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
+      failure_reason VARCHAR(255) DEFAULT NULL COMMENT '失败原因',
+      completed_at DATETIME DEFAULT NULL COMMENT '打款完成时间',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (payee_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY uk_settlement_payouts_no (payout_no),
+      INDEX idx_settlement_payouts_order_id (order_id, id),
+      INDEX idx_settlement_payouts_payee_user_id (payee_user_id, id),
+      INDEX idx_settlement_payouts_status (status, id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+}
+
 async function refreshUploadSortOrderFlags() {
   const databaseName = process.env.DB_NAME || 'game_rental'
 
@@ -2650,7 +2742,8 @@ registerSupportRoutes({
   orderWriteLimiter,
   normalizeOrderMoneyFields,
   chatModule,
-  orderLifecycleService
+  orderLifecycleService,
+  paymentService
 })
 
 
@@ -2706,6 +2799,7 @@ export function createApp() {
     ensureUploadQuotaSchema,
     ensureKycSchema,
     ensurePaymentChannelSchema,
+    ensureSettlementPaymentSchema,
     refreshUploadSortOrderFlags,
     expirePendingPaymentOrders,
     captureOnlinePresenceSnapshot

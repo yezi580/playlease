@@ -11,7 +11,7 @@ export const PROFILE_SECTION_ITEMS = Object.freeze([
   { key: 'published', label: '我发布的' },
   { key: 'orders', label: '我买到的' },
   { key: 'messages', label: '我的消息' },
-  { key: 'wallet', label: '我的钱包' },
+  { key: 'wallet', label: '收款设置' },
   { key: 'invite', label: '邀新赚钱' }
 ])
 
@@ -57,6 +57,21 @@ const WITHDRAW_CHANNEL_TEXT_MAP = Object.freeze({
   alipay: '支付宝',
   bank: '银行卡',
   wechat: '微信零钱'
+})
+
+const SETTLEMENT_BIND_STATUS_TEXT_MAP = Object.freeze({
+  unbound: '未配置',
+  pending: '待校验',
+  active: '已启用',
+  disabled: '已停用'
+})
+
+const SETTLEMENT_PAYOUT_STATUS_TEXT_MAP = Object.freeze({
+  pending: '待发起',
+  processing: '处理中',
+  success: '已到账',
+  failed: '打款失败',
+  cancelled: '已取消'
 })
 
 function cloneList(items = []) {
@@ -134,6 +149,20 @@ export function createWithdrawForm() {
   }
 }
 
+export function createSettlementAccountForm() {
+  return {
+    provider: 'mock_payment',
+    accountType: 'person',
+    bindStatus: 'active',
+    huifuId: '',
+    acctId: '',
+    accountName: '',
+    mobile: '',
+    idCardMasked: '',
+    remark: ''
+  }
+}
+
 export function normalizeKycStatus(value = '') {
   const normalized = String(value || '').trim().toLowerCase()
   return ['unverified', 'pending', 'verified', 'failed'].includes(normalized) ? normalized : 'unverified'
@@ -157,6 +186,14 @@ export function getWithdrawStatusText(status = '') {
 
 export function getWithdrawChannelText(channel = '') {
   return WITHDRAW_CHANNEL_TEXT_MAP[String(channel || '').trim().toLowerCase()] || '其他方式'
+}
+
+export function getSettlementBindStatusText(status = '') {
+  return SETTLEMENT_BIND_STATUS_TEXT_MAP[String(status || '').trim().toLowerCase()] || '未配置'
+}
+
+export function getSettlementPayoutStatusText(status = '') {
+  return SETTLEMENT_PAYOUT_STATUS_TEXT_MAP[String(status || '').trim().toLowerCase()] || '处理中'
 }
 
 export function formatPendingCountdown(createdAt, timeoutMinutes, nowTs) {

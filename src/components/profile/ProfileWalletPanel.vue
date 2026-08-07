@@ -1,166 +1,158 @@
 <template>
   <div v-if="!isLoggedIn" class="profile-placeholder-card">
-    <h4>我的钱包</h4>
-    <p>登录后可查看余额、结算流水、提现申请记录，并发起钱包提现。</p>
+    <h4>收款设置</h4>
+    <p>登录后可配置卖家收款账号，并查看平台发起的余额支付结算记录。</p>
     <button type="button" class="profile-login-btn" @click="$emit('login')">立即登录</button>
   </div>
   <div v-else class="profile-panel-card">
     <div class="wallet-summary-grid">
       <div>
-        <span class="wallet-summary-caption">钱包余额</span>
-        <strong class="wallet-summary-minor">￥{{ formatMoney(balance) }}</strong>
+        <span class="wallet-summary-caption">当前状态</span>
+        <strong class="wallet-summary-minor">{{ getBindStatusText(accountForm.bindStatus) }}</strong>
       </div>
       <div>
-        <span class="wallet-summary-caption tooltip-wrap">
-          冻结金额
-          <i class="help-icon">?</i>
-          <span class="tooltip-text">提现申请提交后，金额会先进入冻结状态，<br>待平台审核及打款完成后更新结果。</span>
-        </span>
-        <strong class="wallet-summary-minor wallet-summary-minor--frozen">￥{{ formatMoney(frozenBalance) }}</strong>
+        <span class="wallet-summary-caption">收款人</span>
+        <strong class="wallet-summary-minor">{{ accountForm.accountName || '--' }}</strong>
       </div>
       <div>
-        <span class="wallet-summary-caption">可提现余额</span>
-        <strong class="wallet-summary-minor wallet-summary-minor--highlight">￥{{ formatMoney(withdrawableBalance) }}</strong>
+        <span class="wallet-summary-caption">汇付ID</span>
+        <strong class="wallet-summary-minor wallet-summary-minor--highlight">{{ accountForm.huifuId || '--' }}</strong>
       </div>
     </div>
 
     <div class="wallet-action-card">
       <div class="wallet-action-header">
         <div>
-          <h4>申请提现</h4>
-          <p>支持支付宝、银行卡等方式，建议填写常用收款账户。</p>
+          <h4>收款账号配置</h4>
+          <p>余额支付会直接打到这里。买家退款走原路退回，不再经过站内钱包。</p>
         </div>
-        <button type="button" class="order-action-btn ghost" :disabled="loading || withdrawSubmitting" @click="$emit('refresh')">
-          刷新钱包
+        <button type="button" class="order-action-btn ghost" :disabled="loading || submitting" @click="$emit('refresh')">
+          刷新状态
         </button>
       </div>
 
       <form class="wallet-form-grid" @submit.prevent="$emit('submit')">
         <label class="wallet-form-field">
-          <span>提现金额</span>
+          <span>主体类型</span>
+          <select
+            :value="accountForm.accountType"
+            :disabled="submitting"
+            @change="updateForm('accountType', $event.target.value)"
+          >
+            <option value="person">个人</option>
+            <option value="enterprise">企业</option>
+          </select>
+        </label>
+        <label class="wallet-form-field">
+          <span>绑定状态</span>
+          <select
+            :value="accountForm.bindStatus"
+            :disabled="submitting"
+            @change="updateForm('bindStatus', $event.target.value)"
+          >
+            <option value="active">已启用</option>
+            <option value="pending">待校验</option>
+            <option value="disabled">已停用</option>
+          </select>
+        </label>
+        <label class="wallet-form-field">
+          <span>汇付ID</span>
           <input
-            :value="withdrawForm.amount"
-            type="number"
-            min="1"
-            step="0.01"
-            placeholder="最低 1 元"
-            :disabled="withdrawSubmitting || !canApplyWithdraw"
-            @input="updateForm('amount', $event.target.value)"
+            :value="accountForm.huifuId"
+            type="text"
+            maxlength="32"
+            placeholder="请输入汇付 huifu_id"
+            :disabled="submitting"
+            @input="updateForm('huifuId', $event.target.value)"
           >
         </label>
         <label class="wallet-form-field">
-          <span>提现方式</span>
-          <select
-            :value="withdrawForm.channel"
-            :disabled="withdrawSubmitting || !canApplyWithdraw"
-            @change="updateForm('channel', $event.target.value)"
+          <span>账户号</span>
+          <input
+            :value="accountForm.acctId"
+            type="text"
+            maxlength="32"
+            placeholder="选填，汇付 acct_id"
+            :disabled="submitting"
+            @input="updateForm('acctId', $event.target.value)"
           >
-            <option value="alipay">支付宝</option>
-            <option value="bank">银行卡</option>
-          </select>
         </label>
         <label class="wallet-form-field">
           <span>收款人姓名</span>
           <input
-            :value="withdrawForm.accountName"
+            :value="accountForm.accountName"
             type="text"
             maxlength="50"
-            placeholder="请输入收款人姓名"
-            :disabled="withdrawSubmitting || !canApplyWithdraw"
+            placeholder="请输入实名姓名"
+            :disabled="submitting"
             @input="updateForm('accountName', $event.target.value)"
           >
         </label>
         <label class="wallet-form-field">
-          <span>收款账号</span>
+          <span>预留手机号</span>
           <input
-            :value="withdrawForm.accountNo"
+            :value="accountForm.mobile"
             type="text"
-            maxlength="64"
-            placeholder="请输入支付宝账号或银行卡号"
-            :disabled="withdrawSubmitting || !canApplyWithdraw"
-            @input="updateForm('accountNo', $event.target.value)"
+            maxlength="20"
+            placeholder="选填，便于人工核对"
+            :disabled="submitting"
+            @input="updateForm('mobile', $event.target.value)"
+          >
+        </label>
+        <label class="wallet-form-field">
+          <span>脱敏证件号</span>
+          <input
+            :value="accountForm.idCardMasked"
+            type="text"
+            maxlength="40"
+            placeholder="如 3201********1234"
+            :disabled="submitting"
+            @input="updateForm('idCardMasked', $event.target.value)"
           >
         </label>
         <label class="wallet-form-field wallet-form-field--full">
           <span>备注说明</span>
           <input
-            :value="withdrawForm.remark"
+            :value="accountForm.remark"
             type="text"
             maxlength="100"
-            placeholder="选填，如收款账户说明"
-            :disabled="withdrawSubmitting || !canApplyWithdraw"
+            placeholder="选填，例如该账号已完成线下核验"
+            :disabled="submitting"
             @input="updateForm('remark', $event.target.value)"
           >
         </label>
-
         <div class="wallet-form-actions wallet-form-field--full">
-          <button type="submit" class="order-action-btn primary wallet-submit-btn" :disabled="withdrawSubmitting || !canApplyWithdraw">
-            {{ withdrawSubmitting ? '提交中...' : '提交提现申请' }}
+          <button type="submit" class="order-action-btn primary wallet-submit-btn" :disabled="submitting">
+            {{ submitting ? '保存中...' : '保存收款配置' }}
           </button>
         </div>
       </form>
     </div>
 
-    <div v-if="loading" class="profile-empty">正在加载钱包数据...</div>
+    <div v-if="loading" class="profile-empty">正在加载收款配置...</div>
     <div v-else-if="error" class="profile-empty profile-error">{{ error }}</div>
     <div v-else class="wallet-tab-section">
       <div class="wallet-tabs">
-        <button
-          type="button"
-          class="wallet-tab-btn"
-          :class="{ active: activeTab === 'ledger' }"
-          @click="activeTab = 'ledger'"
-        >
-          余额流水 ({{ ledger.length }})
-        </button>
-        <button
-          type="button"
-          class="wallet-tab-btn"
-          :class="{ active: activeTab === 'withdraw' }"
-          @click="activeTab = 'withdraw'"
-        >
-          提现记录 ({{ withdrawList.length }})
+        <button type="button" class="wallet-tab-btn active">
+          结算记录 ({{ payoutList.length }})
         </button>
       </div>
-
       <div class="wallet-tab-content">
-        <!-- 余额流水 Tab -->
-        <div v-show="activeTab === 'ledger'" class="wallet-tab-panel">
-          <div v-if="!ledger.length" class="profile-empty">当前还没有钱包流水。</div>
+        <div class="wallet-tab-panel">
+          <div v-if="!payoutList.length" class="profile-empty">当前还没有余额支付结算记录。</div>
           <div v-else class="wallet-ledger-list">
-            <article v-for="item in ledger" :key="item.id" class="wallet-ledger-item">
-              <div>
-                <h4>{{ item.remark || '订单结算入账' }}</h4>
-                <p>订单号：{{ item.order_id || '-' }}</p>
-                <p>变动后余额：￥{{ formatMoney(item.balance_after) }}</p>
-              </div>
-              <div class="wallet-ledger-amount">
-                <strong :class="{ 'wallet-ledger-amount--credit': item.direction === 'credit' }">
-                  {{ item.direction === 'credit' ? '+' : '-' }}￥{{ formatMoney(item.amount) }}
-                </strong>
-                <span>{{ formatOrderDate(item.created_at) }}</span>
-              </div>
-            </article>
-          </div>
-        </div>
-
-        <!-- 提现记录 Tab -->
-        <div v-show="activeTab === 'withdraw'" class="wallet-tab-panel">
-          <div v-if="!withdrawList.length" class="profile-empty">当前还没有提现记录。</div>
-          <div v-else class="wallet-ledger-list">
-            <article v-for="item in withdrawList" :key="item.id" class="wallet-ledger-item wallet-withdraw-item">
+            <article v-for="item in payoutList" :key="item.id" class="wallet-ledger-item wallet-withdraw-item">
               <div>
                 <div class="wallet-withdraw-title-row">
-                  <h4>提现申请 {{ item.request_no }}</h4>
-                  <span class="order-status" :class="`status-${item.status}`">{{ getWithdrawStatusText(item.status) }}</span>
+                  <h4>结算单 {{ item.payout_no }}</h4>
+                  <span class="order-status" :class="`status-${item.status}`">{{ getPayoutStatusText(item.status) }}</span>
                 </div>
-                <p>提现方式：{{ getWithdrawChannelText(item.channel) }}</p>
-                <p>到账账户：{{ item.account_name || '-' }} / {{ item.account_no_masked || '-' }}</p>
+                <p>关联订单：{{ item.order_id || '-' }}</p>
+                <p>收款账号：{{ item.account_name || '-' }} / {{ item.payee_huifu_id || '-' }}</p>
                 <p v-if="item.failure_reason">失败原因：{{ item.failure_reason }}</p>
               </div>
               <div class="wallet-ledger-amount">
                 <strong>￥{{ formatMoney(item.amount) }}</strong>
-                <span>到账金额：￥{{ formatMoney(item.net_amount) }}</span>
                 <span>{{ formatOrderDate(item.created_at) }}</span>
               </div>
             </article>
@@ -172,9 +164,6 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { getWithdrawChannelText, getWithdrawStatusText } from '../../utils/profileCenter.js'
-
 defineOptions({
   name: 'ProfileWalletPanel'
 })
@@ -183,34 +172,33 @@ const props = defineProps({
   isLoggedIn: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
-  withdrawSubmitting: { type: Boolean, default: false },
-  canApplyWithdraw: { type: Boolean, default: false },
-  balance: { type: Number, default: 0 },
-  frozenBalance: { type: Number, default: 0 },
-  withdrawableBalance: { type: Number, default: 0 },
-  ledger: { type: Array, default: () => [] },
-  withdrawList: { type: Array, default: () => [] },
-  withdrawForm: {
+  submitting: { type: Boolean, default: false },
+  payoutList: { type: Array, default: () => [] },
+  accountForm: {
     type: Object,
     default: () => ({
-      amount: '',
-      channel: 'alipay',
+      provider: 'mock_payment',
+      accountType: 'person',
+      bindStatus: 'active',
+      huifuId: '',
+      acctId: '',
       accountName: '',
-      accountNo: '',
+      mobile: '',
+      idCardMasked: '',
       remark: ''
     })
   },
   formatMoney: { type: Function, default: (value) => value || '0.00' },
-  formatOrderDate: { type: Function, default: (value) => value || '--' }
+  formatOrderDate: { type: Function, default: (value) => value || '--' },
+  getBindStatusText: { type: Function, default: (value) => value || '--' },
+  getPayoutStatusText: { type: Function, default: (value) => value || '--' }
 })
 
-const emit = defineEmits(['login', 'refresh', 'submit', 'update:withdraw-form'])
-
-const activeTab = ref('ledger')
+const emit = defineEmits(['login', 'refresh', 'submit', 'update:settlement-account-form'])
 
 function updateForm(field, value) {
-  emit('update:withdraw-form', {
-    ...props.withdrawForm,
+  emit('update:settlement-account-form', {
+    ...props.accountForm,
     [field]: String(value || '').trim()
   })
 }

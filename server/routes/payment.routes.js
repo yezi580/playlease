@@ -138,6 +138,48 @@ function serializeWithdrawRequest(normalizeOrderMoneyFields, row) {
   }
 }
 
+function serializeSettlementAccount(row) {
+  if (!row) return null
+  return {
+    user_id: row.user_id,
+    provider: row.provider || '',
+    account_type: row.account_type || 'person',
+    bind_status: row.bind_status || 'unbound',
+    huifu_id: row.huifu_id || '',
+    acct_id: row.acct_id || '',
+    account_name: row.account_name || '',
+    mobile: row.mobile || '',
+    id_card_masked: row.id_card_masked || '',
+    remark: row.remark || '',
+    last_verified_at: row.last_verified_at || null,
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null
+  }
+}
+
+function serializeSettlementPayout(normalizeOrderMoneyFields, row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    payout_no: row.payout_no,
+    order_id: row.order_id,
+    payee_user_id: row.payee_user_id,
+    provider: row.provider || '',
+    status: row.status || 'pending',
+    amount: normalizeAmount(normalizeOrderMoneyFields, row.amount),
+    account_name: row.account_name || '',
+    payee_huifu_id: row.payee_huifu_id || '',
+    payee_acct_id: row.payee_acct_id || '',
+    provider_request_id: row.provider_request_id || '',
+    remark: row.remark || '',
+    failure_reason: row.failure_reason || '',
+    completed_at: row.completed_at || null,
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+    provider_payload: row.provider_payload || null
+  }
+}
+
 export function registerPaymentRoutes(deps) {
   const {
     app,
@@ -150,6 +192,7 @@ export function registerPaymentRoutes(deps) {
     authenticatedWriteLimiter,
     orderWriteLimiter,
     normalizeOrderMoneyFields,
+    paymentProvider,
     paymentService,
     yuanToCent,
     createUserNotificationSafely
@@ -237,6 +280,54 @@ export function registerPaymentRoutes(deps) {
       })
     } catch (error) {
       handlePaymentServiceError(error, res, '处理支付回调失败')
+    }
+  })
+
+  app.get('/api/settlement-account', authRequired, authenticatedReadLimiter, async (req, res) => {
+    try {
+      const account = await paymentService.getSettlementAccount({
+        userId: req.auth.userId
+      })
+      res.json({
+        settlement_account: serializeSettlementAccount(account)
+      })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '获取收款账号配置失败')
+    }
+  })
+
+  app.put('/api/settlement-account', authRequired, authenticatedWriteLimiter, async (req, res) => {
+    try {
+      const account = await paymentService.upsertSettlementAccount({
+        userId: req.auth.userId,
+        provider: req.body?.provider,
+        accountType: req.body?.account_type,
+        bindStatus: req.body?.bind_status,
+        huifuId: req.body?.huifu_id,
+        acctId: req.body?.acct_id,
+        accountName: req.body?.account_name,
+        mobile: req.body?.mobile,
+        idCardMasked: req.body?.id_card_masked,
+        remark: req.body?.remark
+      })
+      res.json({
+        settlement_account: serializeSettlementAccount(account)
+      })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '保存收款账号配置失败')
+    }
+  })
+
+  app.get('/api/settlement/payouts', authRequired, authenticatedReadLimiter, async (req, res) => {
+    try {
+      const list = await paymentService.getUserSettlementPayoutList({
+        userId: req.auth.userId
+      })
+      res.json({
+        list: list.map((item) => serializeSettlementPayout(normalizeOrderMoneyFields, item))
+      })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '获取结算打款记录失败')
     }
   })
 

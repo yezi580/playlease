@@ -39,6 +39,12 @@ function createBusinessNo(prefix = 'TXN') {
   return `${prefix}${datePart}${randomPart}`.toUpperCase()
 }
 
+function getReqDateFromTransactionNo(transactionNo = '') {
+  const normalized = String(transactionNo || '').trim()
+  const matched = normalized.match(/\d{8}/)
+  return matched ? matched[0] : new Date().toISOString().slice(0, 10).replace(/-/g, '')
+}
+
 function safeJsonStringify(value) {
   try {
     return JSON.stringify(value ?? null)
@@ -218,6 +224,153 @@ async function fetchWithdrawRequestByNo(executor, requestNo) {
   return rows[0] || null
 }
 
+async function fetchSettlementAccountByUserId(executor, userId) {
+  const [rows] = await executor.execute(
+    `SELECT
+        user_id,
+        provider,
+        account_type,
+        bind_status,
+        huifu_id,
+        acct_id,
+        account_name,
+        mobile,
+        id_card_masked,
+        remark,
+        last_verified_at,
+        created_at,
+        updated_at
+     FROM user_settlement_accounts
+     WHERE user_id = ?
+     LIMIT 1`,
+    [Number(userId || 0)]
+  )
+  return rows[0] || null
+}
+
+async function fetchRefundByNo(executor, refundNo) {
+  const [rows] = await executor.execute(
+    `SELECT
+        id,
+        refund_no,
+        transaction_no,
+        order_id,
+        user_id,
+        refund_type,
+        amount,
+        reason,
+        provider,
+        status,
+        provider_refund_no,
+        provider_payload,
+        failure_reason,
+        completed_at,
+        created_at,
+        updated_at
+     FROM payment_refunds
+     WHERE refund_no = ?
+     LIMIT 1`,
+    [String(refundNo || '').trim()]
+  )
+  return rows[0] || null
+}
+
+async function fetchSettlementPayoutByNo(executor, payoutNo) {
+  const [rows] = await executor.execute(
+    `SELECT
+        id,
+        payout_no,
+        order_id,
+        payee_user_id,
+        provider,
+        status,
+        amount,
+        account_name,
+        payee_huifu_id,
+        payee_acct_id,
+        provider_request_id,
+        provider_payload,
+        remark,
+        failure_reason,
+        completed_at,
+        created_at,
+        updated_at
+     FROM settlement_payouts
+     WHERE payout_no = ?
+     LIMIT 1`,
+    [String(payoutNo || '').trim()]
+  )
+  return rows[0] || null
+}
+
+async function fetchOrderById(executor, orderId) {
+  const [rows] = await executor.execute(
+    `SELECT *
+     FROM orders
+     WHERE id = ?
+     LIMIT 1`,
+    [Number(orderId || 0)]
+  )
+  return rows[0] || null
+}
+
+async function fetchLatestRefundByOrderId(executor, orderId) {
+  const [rows] = await executor.execute(
+    `SELECT
+        id,
+        refund_no,
+        transaction_no,
+        order_id,
+        user_id,
+        refund_type,
+        amount,
+        reason,
+        provider,
+        status,
+        provider_refund_no,
+        provider_payload,
+        failure_reason,
+        completed_at,
+        created_at,
+        updated_at
+     FROM payment_refunds
+     WHERE order_id = ?
+     ORDER BY id DESC
+     LIMIT 1`,
+    [Number(orderId || 0)]
+  )
+  return rows[0] || null
+}
+
+async function fetchLatestSettlementPayoutByOrderId(executor, orderId) {
+  const [rows] = await executor.execute(
+    `SELECT
+        id,
+        payout_no,
+        order_id,
+        payee_user_id,
+        provider,
+        status,
+        amount,
+        account_name,
+        payee_huifu_id,
+        payee_acct_id,
+        provider_request_id,
+        provider_payload,
+        remark,
+        failure_reason,
+        completed_at,
+        created_at,
+        updated_at
+     FROM settlement_payouts
+     WHERE order_id = ?
+     ORDER BY id DESC
+     LIMIT 1`,
+    [Number(orderId || 0)]
+  )
+  return rows[0] || null
+}
+
 export function createPaymentService(config = {}) {
   const {
     pool,
@@ -230,6 +383,140 @@ export function createPaymentService(config = {}) {
       ...row,
       provider_payload: safeJsonParse(row?.provider_payload, null)
     }
+  }
+
+  function buildSettlementAccountResult(row) {
+    if (!row) return null
+    return {
+      ...row
+    }
+  }
+
+  function buildRefundResult(row) {
+    if (!row) return null
+    return {
+      ...row,
+      provider_payload: safeJsonParse(row?.provider_payload, null)
+    }
+  }
+
+  function buildSettlementPayoutResult(row) {
+    if (!row) return null
+    return {
+      ...row,
+      provider_payload: safeJsonParse(row?.provider_payload, null)
+    }
+  }
+
+  async function syncRefundWithProvider(refund = {}) {
+    const refundNo = String(refund?.refund_no || '').trim()
+    const status = String(refund?.status || '').trim().toLowerCase()
+    if (!refundNo || !['pending', 'processing'].includes(status)) {
+      return buildRefundResult(refund)
+    }
+    if (typeof paymentProvider?.queryRefund !== 'function') {
+      return buildRefundResult(refund)
+    }
+
+    const queryResult = await paymentProvider.queryRefund({
+      refundNo,
+      transactionNo: refund.transaction_no,
+      providerRefundNo: refund.provider_refund_no,
+      orgReqDate: getReqDateFromTransactionNo(refundNo)
+    })
+    if (!queryResult?.ok) {
+      return {
+        ...buildRefundResult(refund),
+        provider_query_status: 'failed',
+        provider_query_message: String(queryResult?.message || '退款查单失败').trim()
+      }
+    }
+
+    const nextStatus = ['success', 'failed', 'cancelled'].includes(String(queryResult.status || '').trim())
+      ? String(queryResult.status || '').trim()
+      : 'processing'
+    await pool.execute(
+      `UPDATE payment_refunds
+       SET status = ?,
+           provider = ?,
+           provider_refund_no = COALESCE(?, provider_refund_no),
+           provider_payload = ?,
+           failure_reason = CASE
+             WHEN ? = 'failed' THEN COALESCE(failure_reason, '退款失败，请人工核对')
+             ELSE failure_reason
+           END,
+           completed_at = CASE
+             WHEN ? = 'success' THEN COALESCE(completed_at, NOW())
+             ELSE completed_at
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE refund_no = ?`,
+      [
+        nextStatus,
+        String(queryResult.provider || refund.provider || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment',
+        String(queryResult.providerRefundNo || '').trim() || null,
+        safeJsonStringify(queryResult),
+        nextStatus,
+        nextStatus,
+        refundNo
+      ]
+    )
+    return buildRefundResult(await fetchRefundByNo(pool, refundNo))
+  }
+
+  async function syncSettlementPayoutWithProvider(payout = {}) {
+    const payoutNo = String(payout?.payout_no || '').trim()
+    const status = String(payout?.status || '').trim().toLowerCase()
+    if (!payoutNo || !['pending', 'processing'].includes(status)) {
+      return buildSettlementPayoutResult(payout)
+    }
+    if (typeof paymentProvider?.queryBalancePayout !== 'function') {
+      return buildSettlementPayoutResult(payout)
+    }
+
+    const queryResult = await paymentProvider.queryBalancePayout({
+      payoutNo,
+      providerPayoutNo: payout.provider_request_id,
+      orgReqDate: getReqDateFromTransactionNo(payoutNo)
+    })
+    if (!queryResult?.ok) {
+      return {
+        ...buildSettlementPayoutResult(payout),
+        provider_query_status: 'failed',
+        provider_query_message: String(queryResult?.message || '余额支付查单失败').trim()
+      }
+    }
+
+    const nextStatus = ['success', 'failed', 'cancelled'].includes(String(queryResult.status || '').trim())
+      ? String(queryResult.status || '').trim()
+      : 'processing'
+    await pool.execute(
+      `UPDATE settlement_payouts
+       SET status = ?,
+           provider = ?,
+           provider_request_id = COALESCE(?, provider_request_id),
+           provider_payload = ?,
+           failure_reason = CASE
+             WHEN ? = 'failed' THEN COALESCE(failure_reason, '余额支付失败，请人工核对')
+             ELSE failure_reason
+           END,
+           completed_at = CASE
+             WHEN ? = 'success' THEN COALESCE(completed_at, NOW())
+             ELSE completed_at
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE payout_no = ?`,
+      [
+        nextStatus,
+        String(queryResult.provider || payout.provider || paymentProvider?.withdrawMode || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment',
+        String(queryResult.providerPayoutNo || '').trim() || null,
+        safeJsonStringify(queryResult),
+        nextStatus,
+        nextStatus,
+        payoutNo
+      ]
+    )
+    return buildSettlementPayoutResult(await fetchSettlementPayoutByNo(pool, payoutNo))
   }
 
   async function syncPaymentTransactionWithProvider(transaction = {}) {
@@ -691,6 +978,470 @@ export function createPaymentService(config = {}) {
     return rows
   }
 
+  async function getSettlementAccount(payload = {}) {
+    const userId = Number(payload.userId || 0)
+    if (!userId) {
+      fail(400, { message: '用户信息不完整' })
+    }
+    const account = await fetchSettlementAccountByUserId(pool, userId)
+    if (account) {
+      return buildSettlementAccountResult(account)
+    }
+    return buildSettlementAccountResult({
+      user_id: userId,
+      provider: String(paymentProvider?.withdrawMode || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment',
+      account_type: 'person',
+      bind_status: 'unbound',
+      huifu_id: '',
+      acct_id: '',
+      account_name: '',
+      mobile: '',
+      id_card_masked: '',
+      remark: '',
+      last_verified_at: null,
+      created_at: null,
+      updated_at: null
+    })
+  }
+
+  async function upsertSettlementAccount(payload = {}) {
+    const userId = Number(payload.userId || 0)
+    const provider = String(payload.provider || paymentProvider?.withdrawMode || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment'
+    const accountType = ['person', 'enterprise'].includes(String(payload.accountType || '').trim())
+      ? String(payload.accountType || '').trim()
+      : 'person'
+    const bindStatus = ['unbound', 'pending', 'active', 'disabled'].includes(String(payload.bindStatus || '').trim())
+      ? String(payload.bindStatus || '').trim()
+      : 'active'
+    const huifuId = String(payload.huifuId || '').trim()
+    const acctId = String(payload.acctId || '').trim()
+    const accountName = String(payload.accountName || '').trim()
+    const mobile = String(payload.mobile || '').trim()
+    const idCardMasked = String(payload.idCardMasked || '').trim()
+    const remark = String(payload.remark || '').trim().slice(0, 255)
+
+    if (!userId) {
+      fail(400, { message: '用户信息不完整' })
+    }
+    if (!huifuId) {
+      fail(400, { message: '请填写汇付ID' })
+    }
+    if (!accountName) {
+      fail(400, { message: '请填写收款人姓名' })
+    }
+
+    await pool.execute(
+      `INSERT INTO user_settlement_accounts (
+        user_id,
+        provider,
+        account_type,
+        bind_status,
+        huifu_id,
+        acct_id,
+        account_name,
+        mobile,
+        id_card_masked,
+        remark,
+        last_verified_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        provider = VALUES(provider),
+        account_type = VALUES(account_type),
+        bind_status = VALUES(bind_status),
+        huifu_id = VALUES(huifu_id),
+        acct_id = VALUES(acct_id),
+        account_name = VALUES(account_name),
+        mobile = VALUES(mobile),
+        id_card_masked = VALUES(id_card_masked),
+        remark = VALUES(remark),
+        last_verified_at = NOW()`,
+      [
+        userId,
+        provider,
+        accountType,
+        bindStatus,
+        huifuId,
+        acctId || null,
+        accountName,
+        mobile || null,
+        idCardMasked || null,
+        remark || null
+      ]
+    )
+
+    const account = await fetchSettlementAccountByUserId(pool, userId)
+    return buildSettlementAccountResult(account)
+  }
+
+  async function getUserSettlementPayoutList(payload = {}) {
+    const userId = Number(payload.userId || 0)
+    if (!userId) {
+      fail(400, { message: '用户信息不完整' })
+    }
+    const [rows] = await pool.execute(
+      `SELECT
+          id,
+          payout_no,
+          order_id,
+          payee_user_id,
+          provider,
+          status,
+          amount,
+          account_name,
+          payee_huifu_id,
+          payee_acct_id,
+          provider_request_id,
+          provider_payload,
+          remark,
+          failure_reason,
+          completed_at,
+          created_at,
+          updated_at
+       FROM settlement_payouts
+       WHERE payee_user_id = ?
+       ORDER BY id DESC
+       LIMIT 100`,
+      [userId]
+    )
+    return rows.map((row) => buildSettlementPayoutResult(row))
+  }
+
+  async function createOrderRefund(payload = {}) {
+    const orderId = Number(payload.orderId || 0)
+    const userId = Number(payload.userId || 0)
+    const amount = Math.max(0, Number(payload.amount || 0) || 0)
+    const refundType = String(payload.refundType || 'partial').trim().toLowerCase() === 'full' ? 'full' : 'partial'
+    const reason = String(payload.reason || '').trim().slice(0, 255)
+    const explicitTransactionNo = String(payload.transactionNo || '').trim()
+
+    if (!orderId || !userId || amount <= 0) {
+      fail(400, { message: '退款参数不完整' })
+    }
+
+    const conn = await pool.getConnection()
+    let refundNo = ''
+    let transaction = null
+    try {
+      await conn.beginTransaction()
+
+      const [[orderRow]] = await conn.execute(
+        `SELECT id, buyer_id
+         FROM orders
+         WHERE id = ?
+         LIMIT 1
+         FOR UPDATE`,
+        [orderId]
+      )
+      if (!orderRow) {
+        fail(404, { message: '订单不存在' })
+      }
+      if (Number(orderRow.buyer_id || 0) !== userId) {
+        fail(403, { message: '无权为该订单发起退款' })
+      }
+
+      const [transactionRows] = await conn.execute(
+        `SELECT
+            transaction_no,
+            amount,
+            provider_trade_no,
+            provider
+         FROM payment_transactions
+         WHERE order_id = ?
+           AND status = 'paid'
+           AND (? = '' OR transaction_no = ?)
+         ORDER BY id DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [orderId, explicitTransactionNo, explicitTransactionNo]
+      )
+      transaction = transactionRows[0]
+      if (!transaction) {
+        fail(400, { message: '未找到可退款的已支付流水' })
+      }
+      if (amount > Number(transaction.amount || 0)) {
+        fail(400, { message: '退款金额不能大于原支付金额' })
+      }
+
+      refundNo = createBusinessNo('RFD')
+      await conn.execute(
+        `INSERT INTO payment_refunds (
+          refund_no,
+          transaction_no,
+          order_id,
+          user_id,
+          refund_type,
+          amount,
+          reason,
+          provider,
+          status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        [
+          refundNo,
+          transaction.transaction_no,
+          orderId,
+          userId,
+          refundType,
+          amount,
+          reason || null,
+          String(transaction.provider || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment'
+        ]
+      )
+
+      await conn.commit()
+    } catch (error) {
+      await conn.rollback()
+      throw error
+    } finally {
+      conn.release()
+    }
+
+    const refund = await fetchRefundByNo(pool, refundNo)
+    const providerResult = await paymentProvider.createRefund({
+      refundNo,
+      transactionNo: refund.transaction_no,
+      providerTradeNo: transaction.provider_trade_no,
+      orgReqDate: getReqDateFromTransactionNo(transaction.transaction_no),
+      orderId,
+      amount,
+      reason
+    })
+    if (!providerResult?.ok) {
+      await pool.execute(
+        `UPDATE payment_refunds
+         SET status = 'failed',
+             failure_reason = ?,
+             provider_payload = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE refund_no = ?`,
+        [
+          providerResult?.message || '退款申请失败',
+          safeJsonStringify(providerResult || null),
+          refundNo
+        ]
+      )
+      fail(502, { message: providerResult?.message || '退款申请失败' })
+    }
+
+    const refundStatus = String(providerResult.status || 'processing').trim() === 'success' ? 'success' : 'processing'
+    await pool.execute(
+      `UPDATE payment_refunds
+       SET status = ?,
+           provider = ?,
+           provider_refund_no = ?,
+           provider_payload = ?,
+           completed_at = CASE WHEN ? = 'success' THEN NOW() ELSE completed_at END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE refund_no = ?`,
+      [
+        refundStatus,
+        String(providerResult.provider || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment',
+        String(providerResult.providerRefundNo || '').trim() || null,
+        safeJsonStringify(providerResult),
+        refundStatus,
+        refundNo
+      ]
+    )
+    return buildRefundResult(await fetchRefundByNo(pool, refundNo))
+  }
+
+  async function createSettlementPayout(payload = {}) {
+    const orderId = Number(payload.orderId || 0)
+    const payeeUserId = Number(payload.payeeUserId || 0)
+    const amount = Math.max(0, Number(payload.amount || 0) || 0)
+    const remark = String(payload.remark || '').trim().slice(0, 255)
+
+    if (!orderId || !payeeUserId || amount <= 0) {
+      fail(400, { message: '余额支付参数不完整' })
+    }
+
+    const account = await fetchSettlementAccountByUserId(pool, payeeUserId)
+    if (!account || String(account.bind_status || '').trim() !== 'active' || !String(account.huifu_id || '').trim()) {
+      fail(400, { message: '卖家尚未完成收款账号配置，暂时不能执行余额支付' })
+    }
+
+    const payoutNo = createBusinessNo('POT')
+    await pool.execute(
+      `INSERT INTO settlement_payouts (
+        payout_no,
+        order_id,
+        payee_user_id,
+        provider,
+        status,
+        amount,
+        account_name,
+        payee_huifu_id,
+        payee_acct_id,
+        remark
+      ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+      [
+        payoutNo,
+        orderId,
+        payeeUserId,
+        String(paymentProvider?.withdrawMode || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment',
+        amount,
+        account.account_name,
+        account.huifu_id,
+        account.acct_id || null,
+        remark || null
+      ]
+    )
+
+    const providerResult = await paymentProvider.createBalancePayout({
+      payoutNo,
+      orderId,
+      amount,
+      payeeHuifuId: account.huifu_id,
+      payeeAcctId: account.acct_id || '',
+      accountName: account.account_name,
+      remark
+    })
+    if (!providerResult?.ok) {
+      await pool.execute(
+        `UPDATE settlement_payouts
+         SET status = 'failed',
+             failure_reason = ?,
+             provider_payload = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE payout_no = ?`,
+        [
+          providerResult?.message || '余额支付申请失败',
+          safeJsonStringify(providerResult || null),
+          payoutNo
+        ]
+      )
+      fail(502, { message: providerResult?.message || '余额支付申请失败' })
+    }
+
+    const payoutStatus = String(providerResult.status || 'processing').trim() === 'success' ? 'success' : 'processing'
+    await pool.execute(
+      `UPDATE settlement_payouts
+       SET status = ?,
+           provider = ?,
+           provider_request_id = ?,
+           provider_payload = ?,
+           completed_at = CASE WHEN ? = 'success' THEN NOW() ELSE completed_at END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE payout_no = ?`,
+      [
+        payoutStatus,
+        String(providerResult.provider || paymentProvider?.withdrawMode || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment',
+        String(providerResult.providerPayoutNo || '').trim() || null,
+        safeJsonStringify(providerResult),
+        payoutStatus,
+        payoutNo
+      ]
+    )
+    return buildSettlementPayoutResult(await fetchSettlementPayoutByNo(pool, payoutNo))
+  }
+
+  async function reconcileOrderFunds(payload = {}) {
+    const orderId = Number(payload.orderId || 0)
+    const supportUserId = Number(payload.supportUserId || 0)
+    if (!orderId || !supportUserId) {
+      fail(400, { message: '订单或客服信息不完整' })
+    }
+
+    const order = await fetchOrderById(pool, orderId)
+    if (!order) {
+      fail(404, { message: '订单不存在' })
+    }
+    if (Number(order.support_assignee_id || 0) !== supportUserId) {
+      fail(403, { message: '只有当前负责客服可以同步资金状态' })
+    }
+
+    const supportScene = String(order.support_scene || '').trim()
+    if (!['cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing'].includes(supportScene)) {
+      fail(400, { message: '当前订单不在资金处理中状态' })
+    }
+
+    let refund = await fetchLatestRefundByOrderId(pool, orderId)
+    let payout = await fetchLatestSettlementPayoutByOrderId(pool, orderId)
+
+    if (refund) {
+      refund = await syncRefundWithProvider(refund)
+    }
+    if (supportScene === 'settlement_funds_processing' && payout) {
+      payout = await syncSettlementPayoutWithProvider(payout)
+    }
+
+    const refundFailed = ['failed', 'cancelled'].includes(String(refund?.status || '').trim())
+    const payoutFailed = ['failed', 'cancelled'].includes(String(payout?.status || '').trim())
+
+    if (refundFailed || payoutFailed) {
+      const messages = []
+      if (refundFailed) {
+        messages.push(`退款失败：${refund?.failure_reason || refund?.provider_query_message || '请人工核对汇付结果'}`)
+      }
+      if (payoutFailed) {
+        messages.push(`打款失败：${payout?.failure_reason || payout?.provider_query_message || '请人工核对汇付结果'}`)
+      }
+      await pool.execute(
+        `UPDATE orders
+         SET support_note = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [messages.join('；').slice(0, 255), orderId]
+      )
+      return {
+        order: await fetchOrderById(pool, orderId),
+        refund: buildRefundResult(refund),
+        payout: buildSettlementPayoutResult(payout),
+        finalized: false
+      }
+    }
+
+    const refundDone = !refund || String(refund.status || '').trim() === 'success'
+    const payoutDone = supportScene !== 'settlement_funds_processing'
+      || !payout
+      || String(payout.status || '').trim() === 'success'
+
+    if (refundDone && payoutDone) {
+      let finalizedOrder = null
+      if (supportScene === 'cancel_refund_processing') {
+        finalizedOrder = await orderLifecycleService.cancelOrderBySupport({
+          orderId,
+          supportUserId,
+          note: '客服已确认原路退款完成，订单已取消。'
+        })
+      } else {
+        finalizedOrder = await orderLifecycleService.executeSettlement({
+          orderId,
+          supportUserId
+        })
+      }
+      return {
+        order: finalizedOrder,
+        refund: buildRefundResult(await fetchLatestRefundByOrderId(pool, orderId)),
+        payout: buildSettlementPayoutResult(await fetchLatestSettlementPayoutByOrderId(pool, orderId)),
+        finalized: true
+      }
+    }
+
+    const processingNotes = []
+    if (refund && !refundDone) {
+      processingNotes.push('退款处理中')
+    }
+    if (supportScene === 'settlement_funds_processing' && payout && !payoutDone) {
+      processingNotes.push('打款处理中')
+    }
+    if (processingNotes.length) {
+      await pool.execute(
+        `UPDATE orders
+         SET support_note = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [`已主动查询汇付结果，当前${processingNotes.join('，')}。`, orderId]
+      )
+    }
+
+    return {
+      order: await fetchOrderById(pool, orderId),
+      refund: buildRefundResult(refund),
+      payout: buildSettlementPayoutResult(payout),
+      finalized: false
+    }
+  }
+
   async function applyWithdraw(payload = {}) {
     const userId = Number(payload.userId || 0)
     const amount = Math.max(0, Number(payload.amount || 0) || 0)
@@ -1038,6 +1789,12 @@ export function createPaymentService(config = {}) {
     getPaymentTransactionDetail,
     closePaymentTransaction,
     handlePaymentCallback,
+    getSettlementAccount,
+    upsertSettlementAccount,
+    getUserSettlementPayoutList,
+    createOrderRefund,
+    createSettlementPayout,
+    reconcileOrderFunds,
     getUserWithdrawList,
     getAdminWithdrawList,
     applyWithdraw,
