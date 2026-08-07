@@ -47,7 +47,7 @@
           <KeepAlive include="HomePage">
             <component
               :is="Component"
-              :key="currentRoute.fullPath"
+              :key="'home'"
               class="page-stage"
               :is-logged-in="isLoggedIn"
               :current-user="currentUser"

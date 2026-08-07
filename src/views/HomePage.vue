@@ -42,41 +42,15 @@
 import FilterBar from '../components/FilterBar.vue'
 import SortBar from '../components/SortBar.vue'
 import ProductCard from '../components/ProductCard.vue'
+import {
+  createDefaultHomeFilters,
+  createEmptyHomeFilters,
+  getHomeListStateSnapshot,
+  updateHomeListState
+} from '../composables/useHomeListState.js'
 import { apiFetch } from '../utils/api.js'
 import { canOpenListingDetail, LISTING_DETAIL_LOGIN_TIP } from '../constants/accessPolicy.js'
 import { showErrorToast } from '../utils/toast.js'
-
-const HOME_VIEW_STATE_KEY = 'home_listing_view_state'
-
-function createDefaultResourceFilters() {
-  return {
-    loginTimeRange: '',
-    insuranceLevel: '9格',
-    energyLevel: '7级',
-    weightLevel: '7级',
-    knifeSkin: '',
-    operatorAppearance: [],
-    loginMethod: '',
-    rentPrice: '',
-    hafuCoin: '',
-    deposit: ''
-  }
-}
-
-function createEmptyResourceFilters() {
-  return {
-    loginTimeRange: '',
-    insuranceLevel: '',
-    energyLevel: '',
-    weightLevel: '',
-    knifeSkin: '',
-    operatorAppearance: [],
-    loginMethod: '',
-    rentPrice: '',
-    hafuCoin: '',
-    deposit: ''
-  }
-}
 
 export default {
   name: 'HomePage',
@@ -93,24 +67,32 @@ export default {
   },
   emits: ['require-login', 'auth-expired'],
   data() {
+    const cachedState = getHomeListStateSnapshot()
     return {
-      currentSortKey: 'default',
-      currentSortOrder: 'desc',
-      smallAmountOnly: false,
-      highRatioOnly: false,
+      currentSortKey: cachedState.currentSortKey,
+      currentSortOrder: cachedState.currentSortOrder,
+      smallAmountOnly: cachedState.smallAmountOnly,
+      highRatioOnly: cachedState.highRatioOnly,
       listLoading: false,
       listAppending: false,
-      listings: [],
-      listTotal: 0,
-      currentListPage: 1,
-      pageSize: 10,
+      listings: cachedState.listings,
+      listTotal: cachedState.listTotal,
+      currentListPage: cachedState.currentListPage,
+      pageSize: cachedState.pageSize,
       listRequestSeq: 0,
       loadMoreObserver: null,
-      resourceFilters: createDefaultResourceFilters(),
-      listingNoSearch: '',
-      pendingViewStateRestore: null,
+      resourceFilters: cachedState.resourceFilters,
+      listingNoSearch: cachedState.listingNoSearch,
+      pendingViewStateRestore: cachedState.initialized
+        ? {
+            scrollTop: cachedState.scrollTop,
+            listingNoSearch: cachedState.listingNoSearch
+          }
+        : null,
       restoreViewStateTimer: null,
-      restoreViewStateRetryCount: 0
+      restoreViewStateRetryCount: 0,
+      hasCachedHomeState: cachedState.initialized,
+      hasLoadedHomeState: cachedState.hasLoaded
     }
   },
   computed: {
@@ -130,23 +112,45 @@ export default {
       this.listingNoSearch = value
       
       if (value) {
-        this.resourceFilters = createEmptyResourceFilters()
+        this.resourceFilters = createEmptyHomeFilters()
       } else {
-        this.resourceFilters = createDefaultResourceFilters()
+        this.resourceFilters = createDefaultHomeFilters()
       }
 
       this.currentListPage = 1
+      this.persistHomeListState({
+        hasLoaded: false,
+        listings: [],
+        listTotal: 0,
+        currentListPage: 1
+      })
       this.fetchListings({ page: 1, append: false })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   },
   mounted() {
-    this.listingNoSearch = this.routeListingNo
-    if (this.listingNoSearch) {
-      this.resourceFilters = createEmptyResourceFilters()
+    if (this.routeListingNo !== this.listingNoSearch) {
+      this.listingNoSearch = this.routeListingNo
+      this.resourceFilters = this.listingNoSearch
+        ? createEmptyHomeFilters()
+        : createDefaultHomeFilters()
+      this.listings = []
+      this.listTotal = 0
+      this.currentListPage = 1
+      this.hasLoadedHomeState = false
     }
-    this.fetchListings({ page: 1, append: false })
+
     this.setupLoadMoreObserver()
+
+    if (this.hasLoadedHomeState && this.hasCachedHomeState) {
+      this.$nextTick(() => {
+        this.observeLoadMoreSentinel()
+        this.tryRestoreSavedViewState()
+      })
+      return
+    }
+
+    this.fetchListings({ page: 1, append: false })
   },
   activated() {
     this.$nextTick(() => {
@@ -155,10 +159,12 @@ export default {
     })
   },
   deactivated() {
+    this.persistHomeListState()
     this.disconnectLoadMoreObserver()
     this.clearRestoreViewStateTimer()
   },
   beforeUnmount() {
+    this.persistHomeListState()
     this.disconnectLoadMoreObserver()
     this.clearRestoreViewStateTimer()
   },
@@ -166,38 +172,33 @@ export default {
     getCurrentScrollTop() {
       return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
     },
-    saveViewStateForDetail() {
-      const payload = {
+    persistHomeListState(overrides = {}) {
+      updateHomeListState({
+        currentSortKey: this.currentSortKey,
+        currentSortOrder: this.currentSortOrder,
+        smallAmountOnly: this.smallAmountOnly,
+        highRatioOnly: this.highRatioOnly,
+        resourceFilters: this.resourceFilters,
+        listingNoSearch: this.listingNoSearch,
+        listings: this.listings,
+        listTotal: this.listTotal,
+        currentListPage: this.currentListPage,
+        pageSize: this.pageSize,
         scrollTop: this.getCurrentScrollTop(),
-        listingNoSearch: this.listingNoSearch
-      }
-      sessionStorage.setItem(HOME_VIEW_STATE_KEY, JSON.stringify(payload))
+        ...overrides
+      })
     },
     restoreSavedViewState() {
-      const rawState = this.pendingViewStateRestore
-        ? JSON.stringify(this.pendingViewStateRestore)
-        : sessionStorage.getItem(HOME_VIEW_STATE_KEY)
-      if (!rawState) return
-
-      let parsedState = null
-      try {
-        parsedState = JSON.parse(rawState)
-      } catch {
-        sessionStorage.removeItem(HOME_VIEW_STATE_KEY)
-        this.pendingViewStateRestore = null
-        return
-      }
-
-      const scrollTop = Number(parsedState?.scrollTop)
+      const stateToRestore = this.pendingViewStateRestore || getHomeListStateSnapshot()
+      const scrollTop = Number(stateToRestore?.scrollTop)
       if (!Number.isFinite(scrollTop) || scrollTop < 0) {
-        sessionStorage.removeItem(HOME_VIEW_STATE_KEY)
         this.pendingViewStateRestore = null
         return
       }
 
       this.pendingViewStateRestore = {
         scrollTop,
-        listingNoSearch: parsedState?.listingNoSearch || ''
+        listingNoSearch: stateToRestore?.listingNoSearch || ''
       }
       this.restoreViewStateRetryCount = 0
       this.tryRestoreSavedViewState()
@@ -215,7 +216,6 @@ export default {
       }, 80)
     },
     finalizeSavedViewStateRestore() {
-      sessionStorage.removeItem(HOME_VIEW_STATE_KEY)
       this.pendingViewStateRestore = null
       this.restoreViewStateRetryCount = 0
       this.clearRestoreViewStateTimer()
@@ -312,6 +312,10 @@ export default {
 
         const apiPage = Number(data.page || page)
         this.currentListPage = Number.isFinite(apiPage) && apiPage > 0 ? apiPage : 1
+        this.hasLoadedHomeState = true
+        this.persistHomeListState({
+          hasLoaded: true
+        })
       } catch (error) {
         if (requestSeq !== this.listRequestSeq) return
 
@@ -319,6 +323,10 @@ export default {
           this.listings = []
           this.listTotal = 0
         }
+        this.hasLoadedHomeState = true
+        this.persistHomeListState({
+          hasLoaded: true
+        })
 
         if (Number(error?.status) === 401) {
           this.$emit('auth-expired', '登录已过期，请重新登录')
@@ -348,6 +356,12 @@ export default {
     handleFilterSearch(payload) {
       this.resourceFilters = { ...payload }
       this.currentListPage = 1
+      this.persistHomeListState({
+        hasLoaded: false,
+        listings: [],
+        listTotal: 0,
+        currentListPage: 1
+      })
       this.fetchListings({ page: 1, append: false })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
@@ -369,6 +383,12 @@ export default {
       }
 
       this.currentListPage = 1
+      this.persistHomeListState({
+        hasLoaded: false,
+        listings: [],
+        listTotal: 0,
+        currentListPage: 1
+      })
       this.fetchListings({ page: 1, append: false })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
@@ -376,17 +396,30 @@ export default {
       const query = listingNo ? { listingNo } : {}
       
       if (listingNo) {
-        this.resourceFilters = createEmptyResourceFilters()
+        this.resourceFilters = createEmptyHomeFilters()
       } else {
-        this.resourceFilters = createDefaultResourceFilters()
+        this.resourceFilters = createDefaultHomeFilters()
       }
 
       if (listingNo === this.routeListingNo) {
         this.currentListPage = 1
+        this.persistHomeListState({
+          hasLoaded: false,
+          listings: [],
+          listTotal: 0,
+          currentListPage: 1
+        })
         this.fetchListings({ page: 1, append: false })
         window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
+      this.persistHomeListState({
+        hasLoaded: false,
+        listings: [],
+        listTotal: 0,
+        currentListPage: 1,
+        listingNoSearch: listingNo
+      })
       this.$router.push({
         name: 'home',
         query
@@ -397,7 +430,7 @@ export default {
         return
       }
 
-      this.saveViewStateForDetail()
+      this.persistHomeListState()
 
       if (!canOpenListingDetail({ isLoggedIn: this.isLoggedIn, source: 'resource' })) {
         this.$emit('require-login', {
