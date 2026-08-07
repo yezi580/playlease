@@ -37,28 +37,6 @@ export const MY_LISTING_STATUS_TABS = Object.freeze([
   { key: 'support_handling', label: '客服处理中' }
 ])
 
-const KYC_STATUS_TEXT_MAP = Object.freeze({
-  unverified: '未认证',
-  pending: '审核中',
-  verified: '已认证',
-  failed: '认证失败'
-})
-
-const WITHDRAW_STATUS_TEXT_MAP = Object.freeze({
-  pending_review: '待审核',
-  processing: '处理中',
-  success: '已打款',
-  failed: '打款失败',
-  rejected: '已驳回',
-  cancelled: '已取消'
-})
-
-const WITHDRAW_CHANNEL_TEXT_MAP = Object.freeze({
-  alipay: '支付宝',
-  bank: '银行卡',
-  wechat: '微信零钱'
-})
-
 const SETTLEMENT_BIND_STATUS_TEXT_MAP = Object.freeze({
   unbound: '未配置',
   pending: '待校验',
@@ -132,23 +110,6 @@ export function createMyListingsStatsData() {
   }
 }
 
-export function createKycForm() {
-  return {
-    realName: '',
-    idCardNo: ''
-  }
-}
-
-export function createWithdrawForm() {
-  return {
-    amount: '',
-    channel: 'alipay',
-    accountName: '',
-    accountNo: '',
-    remark: ''
-  }
-}
-
 export function createSettlementAccountForm() {
   return {
     provider: 'mock_payment',
@@ -161,31 +122,6 @@ export function createSettlementAccountForm() {
     idCardMasked: '',
     remark: ''
   }
-}
-
-export function normalizeKycStatus(value = '') {
-  const normalized = String(value || '').trim().toLowerCase()
-  return ['unverified', 'pending', 'verified', 'failed'].includes(normalized) ? normalized : 'unverified'
-}
-
-export function getKycStatusText(status = '') {
-  return KYC_STATUS_TEXT_MAP[normalizeKycStatus(status)] || '未认证'
-}
-
-export function getKycStatusDescription(status = '') {
-  const normalized = normalizeKycStatus(status)
-  if (normalized === 'verified') return '你的实名信息已通过审核，可正常发布商品并申请钱包提现。'
-  if (normalized === 'pending') return '当前无需实名认证。'
-  if (normalized === 'failed') return '本次实名申请未通过，请根据审核反馈修正信息后重新提交。'
-  return '当前无需实名认证。'
-}
-
-export function getWithdrawStatusText(status = '') {
-  return WITHDRAW_STATUS_TEXT_MAP[String(status || '').trim()] || '处理中'
-}
-
-export function getWithdrawChannelText(channel = '') {
-  return WITHDRAW_CHANNEL_TEXT_MAP[String(channel || '').trim().toLowerCase()] || '其他方式'
 }
 
 export function getSettlementBindStatusText(status = '') {

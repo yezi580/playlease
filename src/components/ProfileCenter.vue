@@ -321,31 +321,6 @@
         </div>
       </section>
 
-      <section v-else-if="activeSection === 'verify'" :key="'verify'" class="profile-panel">
-        <ProfileVerifyPanel
-          :is-logged-in="isLoggedIn"
-          :loading="kycLoading"
-          :error="kycError"
-          :kyc-status="kycStatus"
-          :real-name-masked="kycRealNameMasked"
-          :id-card-masked="kycIdCardMasked"
-          :submitted-at="kycSubmittedAt"
-          :verified-at="kycVerifiedAt"
-          :failure-reason="kycFailureReason"
-          :can-submit="canSubmitKyc"
-          :submitting="kycSubmitting"
-          :syncing="kycSyncing"
-          :verify-url="kycVerifyUrl"
-          :kyc-form="kycForm"
-          :format-order-date="formatOrderDate"
-          @login="triggerLogin"
-          @update:kyc-form="handleKycFormUpdate"
-          @submit="submitKyc"
-          @continue="continueKycVerification"
-          @sync-result="syncKycResult({}, { showToast: true })"
-        />
-      </section>
-
       <section v-else-if="activeSection === 'wallet'" :key="'wallet'" class="profile-panel">
         <ProfileWalletPanel
           :is-logged-in="isLoggedIn"
@@ -371,7 +346,7 @@
           <div v-else-if="inviteError" class="profile-empty profile-error">{{ inviteError }}</div>
           <div v-else class="invite-panel">
             <article class="invite-rule-card">
-              <p>{{ inviteRewardRuleText }}</p>
+              <p>邀请码仅用于建立邀请关系，当前不再提供邀请返现入账。</p>
             </article>
 
             <div class="invite-summary-grid">
@@ -409,70 +384,17 @@
               </article>
 
               <article class="invite-summary-card invite-summary-card--full">
-                <div class="invite-order-section-header invite-summary-card-header">
-                  <div class="invite-summary-title">
-                    <h4>累计返现</h4>
+                <span class="invite-summary-label">邀请关系</span>
+                <template v-if="inviterInfo">
+                  <div class="invite-summary-stack">
+                    <strong>{{ inviterInfo.username || '已绑定邀请人' }}</strong>
+                    <span>邀请码：{{ inviterInfo.inviteCode || '--' }}</span>
                   </div>
-                </div>
-                <strong>￥{{ formatMoney(invitedRewardTotal) }}</strong>
+                </template>
+                <template v-else>
+                  <strong>当前未绑定邀请人</strong>
+                </template>
               </article>
-            </div>
-
-            <div class="invite-order-section">
-              <div class="invite-order-section-header">
-                <h4>我赚的</h4>
-                <span>{{ inviterOrderList.length }} 条</span>
-              </div>
-              <div v-if="!inviterOrderList.length" class="invite-order-list">
-                <article class="invite-order-card invite-order-card--empty">
-                  <div class="profile-empty">暂时还没有通过我的邀请码产生返现的订单</div>
-                </article>
-              </div>
-              <div v-else class="invite-order-list">
-                <article v-for="order in inviterOrderList" :key="`inviter-${order.order_id}`" class="invite-order-card">
-                  <div>
-                    <h4>{{ order.listing_title || '订单' }}</h4>
-                    <p>订单编号：{{ order.order_no || '-' }}</p>
-                    <p>出号用户：{{ order.invitee_username || order.seller_name || '未知用户' }}</p>
-                    <p>订单完成：{{ formatOrderDate(order.finished_at) }}</p>
-                  </div>
-                  <div class="invite-order-amounts">
-                    <strong>￥{{ formatMoney(order.reward_amount) }}</strong>
-                    <span>到账时间 {{ formatOrderDate(order.awarded_at) }}</span>
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            <div class="invite-order-section">
-              <div class="invite-order-section-header">
-                <h4>TA赚的</h4>
-                <span>{{ inviteeOrderList.length }} 条</span>
-              </div>
-              <div v-if="!boundInviteCode" class="invite-order-list">
-                <article class="invite-order-card invite-order-card--empty">
-                  <div class="profile-empty">当前还未绑定邀请码</div>
-                </article>
-              </div>
-              <div v-else-if="!inviteeOrderList.length" class="invite-order-list">
-                <article class="invite-order-card invite-order-card--empty">
-                  <div class="profile-empty">当前还没有因我出号而给邀请人产生返现的订单</div>
-                </article>
-              </div>
-              <div v-else class="invite-order-list">
-                <article v-for="order in inviteeOrderList" :key="`invitee-${order.order_id}`" class="invite-order-card">
-                  <div>
-                    <h4>{{ order.listing_title || '订单' }}</h4>
-                    <p>订单编号：{{ order.order_no || '-' }}</p>
-                    <p>邀请人：{{ order.inviter_username || inviterInfo?.username || '未知用户' }}</p>
-                    <p>订单完成：{{ formatOrderDate(order.finished_at) }}</p>
-                  </div>
-                  <div class="invite-order-amounts">
-                    <strong>￥{{ formatMoney(order.reward_amount) }}</strong>
-                    <span>到账时间 {{ formatOrderDate(order.awarded_at) }}</span>
-                  </div>
-                </article>
-              </div>
             </div>
           </div>
         </div>
@@ -561,13 +483,11 @@ import {
   calculateCompensationFeeAmount,
   fetchBusinessSettings,
   getCachedBusinessSettings,
-  getInviteRewardRuleText,
   getPendingPaymentTimeoutMinutes
 } from '../utils/businessSettings.js'
 import {
   createFeedbackCategories,
   createFeedbackForm,
-  createKycForm,
   createMyListingsStatsData,
   createMyListingStatusTabs,
   createOrderStatsData,
@@ -577,8 +497,7 @@ import {
   formatOrderDateTime,
   formatPendingCountdown,
   getSettlementBindStatusText,
-  getSettlementPayoutStatusText,
-  normalizeKycStatus
+  getSettlementPayoutStatusText
 } from '../utils/profileCenter.js'
 import { showErrorToast, showSuccessToast, showWarningToast } from '../utils/toast.js'
 import { showConfirm } from '../utils/confirm.js'
@@ -586,7 +505,6 @@ import ConversationPanel from './ConversationPanel.vue'
 import PaymentModal from './PaymentModal.vue'
 import CopyTextButton from './CopyTextButton.vue'
 import ProfileMessagesPanel from './profile/ProfileMessagesPanel.vue'
-import ProfileVerifyPanel from './profile/ProfileVerifyPanel.vue'
 import ProfileWalletPanel from './profile/ProfileWalletPanel.vue'
 
 export default {
@@ -596,7 +514,6 @@ export default {
     PaymentModal,
     CopyTextButton,
     ProfileMessagesPanel,
-    ProfileVerifyPanel,
     ProfileWalletPanel
   },
   emits: ['view-listing-detail', 'edit-listing', 'view-order-detail', 'login', 'unread-change', 'logout', 'payment-success'],
@@ -700,22 +617,6 @@ export default {
       settlementError: '',
       settlementPayoutList: [],
       settlementAccountForm: createSettlementAccountForm(),
-      kycLoading: false,
-      kycSubmitting: false,
-      kycSyncing: false,
-      kycError: '',
-      kycStatus: 'unverified',
-      kycRealNameMasked: '',
-      kycIdCardMasked: '',
-      kycVerifiedAt: null,
-      kycSubmittedAt: null,
-      kycFailureReason: '',
-      kycCompletedAt: null,
-      kycOrderNo: '',
-      kycBizToken: '',
-      kycVerifyUrl: '',
-      kycRuleId: '',
-      kycForm: createKycForm(),
       inviteLoading: false,
       inviteSubmitting: false,
       inviteError: '',
@@ -723,10 +624,6 @@ export default {
       ownInviteCode: '',
       boundInviteCode: '',
       inviterInfo: null,
-      invitedRewardTotal: 0,
-      contributedRewardTotal: 0,
-      inviterOrderList: [],
-      inviteeOrderList: [],
       businessSettings: getCachedBusinessSettings()
     }
   },
@@ -753,9 +650,6 @@ export default {
     },
     orderCounterpartyLabel() {
       return '卖家'
-    },
-    inviteRewardRuleText() {
-      return getInviteRewardRuleText(this.businessSettings)
     },
     orderTotalPages() {
       const total = Number(this.orderTotal || 0)
@@ -784,9 +678,6 @@ export default {
     },
     hasUnreadMessages() {
       return Number(this.totalUnreadCount || this.unreadMessageCount || 0) > 0
-    },
-    canSubmitKyc() {
-      return this.kycStatus === 'unverified' || this.kycStatus === 'failed'
     },
     messageList() {
       const conversationItems = this.conversationList.map((item) => ({
@@ -859,8 +750,6 @@ export default {
       this.loadSettlementData()
     } else if (this.activeSection === 'invite') {
       this.loadInviteData()
-    } else if (this.activeSection === 'verify') {
-      this.loadKycData()
     }
   },
   beforeUnmount() {
@@ -1016,13 +905,11 @@ export default {
         this.loadSettlementData()
       } else if (normalizedSectionKey === 'invite') {
         this.loadInviteData()
-      } else if (normalizedSectionKey === 'verify') {
-        this.loadKycData()
       }
     },
     isSupportedSection(sectionKey) {
       const normalized = String(sectionKey || '').trim()
-      return [...this.visibleSections.map((item) => item.key), 'verify'].includes(normalized)
+      return this.visibleSections.some((item) => item.key === normalized)
     },
     async submitFeedback() {
       const category = String(this.feedbackForm.category || '').trim()
@@ -1140,10 +1027,6 @@ export default {
           inviteCode: String(data.inviter.invite_code || '').trim()
         }
         : null
-      this.invitedRewardTotal = Number(data.invited_reward_total || 0)
-      this.contributedRewardTotal = Number(data.contributed_reward_total || 0)
-      this.inviterOrderList = Array.isArray(data.inviter_order_list) ? data.inviter_order_list : []
-      this.inviteeOrderList = Array.isArray(data.invitee_order_list) ? data.invitee_order_list : []
       if (this.boundInviteCode) {
         this.inviteCodeInput = ''
       }
@@ -1158,10 +1041,6 @@ export default {
         this.ownInviteCode = ''
         this.boundInviteCode = ''
         this.inviterInfo = null
-        this.invitedRewardTotal = 0
-        this.contributedRewardTotal = 0
-        this.inviterOrderList = []
-        this.inviteeOrderList = []
         this.inviteError = error.status === 401 ? '登录已过期，请重新登录后查看邀新数据' : (error.message || '邀新数据加载失败')
       } finally {
         this.inviteLoading = false
@@ -1201,128 +1080,6 @@ export default {
         showErrorToast(error.message || '绑定邀请码失败')
       } finally {
         this.inviteSubmitting = false
-      }
-    },
-    getKycCallbackParams() {
-      const searchParams = new URLSearchParams(window.location.search || '')
-      const bizToken = String(
-        searchParams.get('biz_token')
-        || searchParams.get('bizToken')
-        || searchParams.get('BizToken')
-        || ''
-      ).trim()
-      const orderNo = String(
-        searchParams.get('order_no')
-        || searchParams.get('orderNo')
-        || searchParams.get('OrderNo')
-        || ''
-      ).trim()
-      return {
-        bizToken,
-        orderNo
-      }
-    },
-    clearKycCallbackParams() {
-      const url = new URL(window.location.href)
-      const keys = ['biz_token', 'bizToken', 'BizToken', 'order_no', 'orderNo', 'OrderNo']
-      keys.forEach((key) => url.searchParams.delete(key))
-      window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
-    },
-    applyKycStatusPayload(data = {}) {
-      this.kycStatus = this.normalizeKycStatus(data.status)
-      this.kycRealNameMasked = String(data.real_name_masked || '').trim()
-      this.kycIdCardMasked = String(data.id_card_masked || '').trim()
-      this.kycVerifiedAt = data.verified_at || data.latest_record?.verified_at || null
-      this.kycSubmittedAt = data.latest_record?.submitted_at || data.latest_record?.created_at || this.kycSubmittedAt || null
-      this.kycCompletedAt = data.completed_at || data.latest_record?.completed_at || null
-      this.kycFailureReason = String(data.failure_reason || data.latest_record?.failure_reason || '').trim()
-      this.kycOrderNo = String(data.order_no || data.latest_record?.order_no || '').trim()
-      this.kycBizToken = String(data.biz_token || data.latest_record?.biz_token || '').trim()
-      this.kycVerifyUrl = String(data.redirect_url || data.verify_url || data.latest_record?.verify_url || '').trim()
-      this.kycRuleId = String(data.rule_id || data.latest_record?.rule_id || '').trim()
-    },
-    async syncKycResult(payload = {}, options = {}) {
-      const bizToken = String(payload.bizToken || payload.biz_token || this.kycBizToken || '').trim()
-      const orderNo = String(payload.orderNo || payload.order_no || this.kycOrderNo || '').trim()
-      if (!bizToken && !orderNo) {
-        if (options.showToast) {
-          showWarningToast('当前没有可同步的实名认证会话')
-        }
-        return null
-      }
-
-      this.kycSyncing = true
-      try {
-        const data = await apiFetch('/api/kyc/result/sync', {
-          method: 'POST',
-          body: JSON.stringify({
-            biz_token: bizToken || undefined,
-            order_no: orderNo || undefined
-          })
-        })
-        this.applyKycStatusPayload(data)
-        this.clearKycCallbackParams()
-        await this.loadKycData({ skipRedirectSync: true })
-
-        if (options.showToast) {
-          if (this.kycStatus === 'verified') {
-            showSuccessToast('实名认证已完成')
-          } else if (this.kycStatus === 'failed') {
-            showWarningToast(this.kycFailureReason || '实名认证未通过，请核对后重试')
-          } else {
-            showSuccessToast('实名认证结果已刷新')
-          }
-        }
-        return data
-      } catch (error) {
-        if (options.showToast !== false) {
-          showErrorToast(error.message || '同步实名认证结果失败')
-        }
-        throw error
-      } finally {
-        this.kycSyncing = false
-      }
-    },
-    continueKycVerification() {
-      if (!this.kycVerifyUrl) {
-        showWarningToast('当前没有可继续的实名认证会话')
-        return
-      }
-      window.location.assign(this.kycVerifyUrl)
-    },
-    async loadKycData(options = {}) {
-      const skipRedirectSync = Boolean(options?.skipRedirectSync)
-      this.kycLoading = true
-      this.kycError = ''
-      try {
-        const data = await apiFetch('/api/kyc/status')
-        this.applyKycStatusPayload(data)
-
-        if (!skipRedirectSync) {
-          const callbackParams = this.getKycCallbackParams()
-          if (callbackParams.bizToken || callbackParams.orderNo) {
-            try {
-              await this.syncKycResult(callbackParams, { showToast: true })
-            } catch (syncError) {
-              this.kycError = syncError.message || '同步实名认证结果失败'
-            }
-          }
-        }
-      } catch (error) {
-        this.kycStatus = 'unverified'
-        this.kycRealNameMasked = ''
-        this.kycIdCardMasked = ''
-        this.kycVerifiedAt = null
-        this.kycSubmittedAt = null
-        this.kycFailureReason = ''
-        this.kycCompletedAt = null
-        this.kycOrderNo = ''
-        this.kycBizToken = ''
-        this.kycVerifyUrl = ''
-        this.kycRuleId = ''
-        this.kycError = error.status === 401 ? '登录已过期，请重新登录后查看实名认证信息' : (error.message || '实名认证信息加载失败')
-      } finally {
-        this.kycLoading = false
       }
     },
     async fetchOrderStats() {
@@ -1537,74 +1294,8 @@ export default {
       const data = await apiFetch('/api/settlement/payouts')
       this.settlementPayoutList = Array.isArray(data.list) ? data.list : []
     },
-    normalizeKycStatus,
     getSettlementBindStatusText,
     getSettlementPayoutStatusText,
-    handleKycFormUpdate(nextForm = {}) {
-      this.kycForm = {
-        ...this.kycForm,
-        ...nextForm
-      }
-    },
-    async submitKyc() {
-      const realName = String(this.kycForm.realName || '').trim()
-      const idCardNo = String(this.kycForm.idCardNo || '').trim().toUpperCase()
-
-      if (!/^[A-Za-z\u4e00-\u9fa5·\s]{2,30}$/.test(realName)) {
-        showWarningToast('请输入真实有效的姓名')
-        return
-      }
-      if (!/^(\d{15}|\d{17}[\dXx])$/.test(idCardNo)) {
-        showWarningToast('请输入真实有效的证件号码')
-        return
-      }
-
-      this.kycSubmitting = true
-      try {
-        const data = await apiFetch('/api/kyc/submit', {
-          method: 'POST',
-          body: JSON.stringify({
-            real_name: realName,
-            id_card_no: idCardNo
-          })
-        })
-        this.applyKycStatusPayload({
-          ...data,
-          latest_record: {
-            order_no: data.order_no || '',
-            biz_token: data.biz_token || '',
-            verify_url: data.redirect_url || '',
-            rule_id: data.rule_id || '',
-            submitted_at: new Date().toISOString()
-          }
-        })
-        this.kycSubmittedAt = new Date().toISOString()
-        this.kycForm.realName = ''
-        this.kycForm.idCardNo = ''
-
-        if (data.redirect_url) {
-          showSuccessToast('实名认证会话已创建，正在进入腾讯云刷脸核身页面')
-          window.location.assign(data.redirect_url)
-          return
-        }
-
-        if (data.sync_required) {
-          await this.syncKycResult({
-            bizToken: data.biz_token,
-            orderNo: data.order_no
-          }, {
-            showToast: true
-          })
-        } else {
-          showSuccessToast(data.is_mock ? '实名认证申请已提交，当前为测试模式' : '实名认证申请已提交')
-          await this.loadKycData({ skipRedirectSync: true })
-        }
-      } catch (error) {
-        showErrorToast(error.message || '提交实名认证失败')
-      } finally {
-        this.kycSubmitting = false
-      }
-    },
     handleSettlementAccountFormUpdate(nextForm = {}) {
       this.settlementAccountForm = {
         ...this.settlementAccountForm,
@@ -2349,89 +2040,21 @@ export default {
   grid-column: 1 / -1;
 }
 
-.invite-summary-card-header {
-  margin-bottom: 0;
-}
-
-.invite-summary-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.invite-summary-title h4 {
-  margin: 0;
-  color: #111827;
-  font-size: 18px;
-}
-
-/* Tooltip Styles */
-.tooltip-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  position: relative;
-}
-
-.help-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #e5e7eb;
-  color: #6b7280;
-  font-size: 10px;
-  font-style: normal;
-  cursor: help;
-  position: relative;
-}
-
-.tooltip-text {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  background: #1f2937;
-  color: #fff !important;
-  font-size: 12px;
-  line-height: 1.5;
-  border-radius: 6px;
-  width: max-content;
-  text-align: left;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s ease;
-  z-index: 100;
-  pointer-events: none;
-  font-weight: normal !important;
-  white-space: nowrap;
-}
-
-.tooltip-text::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: #1f2937;
-}
-
-.tooltip-wrap:hover .tooltip-text {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(-4px);
-}
-
 .invite-summary-label {
   display: block;
   color: #6b7280;
   font-size: 13px;
+}
+
+.invite-summary-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.invite-summary-stack span {
+  color: #6b7280;
+  font-size: 14px;
 }
 
 .invite-summary-card strong {
@@ -3184,24 +2807,11 @@ export default {
     padding: 14px;
   }
 
-  .wallet-ledger-item {
+  .wallet-action-header {
     flex-direction: column;
   }
 
-  .wallet-ledger-amount {
-    align-items: flex-start;
-  }
-
-  .verify-status-card,
-  .wallet-action-header,
-  .wallet-subpanel-header,
-  .wallet-withdraw-title-row {
-    flex-direction: column;
-  }
-
-  .verify-info-grid,
   .wallet-summary-grid,
-  .wallet-panels,
   .wallet-form-grid,
   .invite-summary-grid {
     grid-template-columns: 1fr;

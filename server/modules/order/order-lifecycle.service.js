@@ -220,8 +220,6 @@ export function createOrderLifecycleService({
         : inferSellerRentFromBuyerRent(buyerRentAmount))
     const businessSettings = await loadBusinessSettings(executor)
     const sellerServiceFeeRatePercent = businessSettings.platformCommission?.sellerServiceFeeRatePercent
-    const buyerServiceFeeAmount = calculateBuyerServiceFeeAmount(buyerRentAmount, sellerRentAmount)
-    const inviteRewardRatePercent = Math.max(0, Number(businessSettings.inviteReward?.buyerServiceFeeRewardRatePercent || 0))
     const platformFeeAmount = calculateServiceFeeFromSellerRent(
       sellerRentAmount,
       sellerServiceFeeRatePercent
@@ -243,8 +241,6 @@ export function createOrderLifecycleService({
       sellerRentAmount,
       depositAmount,
       usedItemsAmount,
-      buyerServiceFeeAmount,
-      inviteRewardRatePercent,
       platformFeeAmount,
       sellerIncomeAmount,
       buyerRefundAmount
@@ -313,8 +309,6 @@ export function createOrderLifecycleService({
       sellerRentAmount: rentAmount,
       depositAmount,
       usedItemsAmount: 0,
-      buyerServiceFeeAmount: 0,
-      inviteRewardRatePercent: 0,
       platformFeeAmount: 0,
       sellerIncomeAmount: 0,
       buyerRefundAmount: buyerRentAmount + depositAmount
@@ -330,111 +324,10 @@ export function createOrderLifecycleService({
       sellerRentAmount: buyerRentAmount,
       depositAmount,
       usedItemsAmount: 0,
-      buyerServiceFeeAmount: 0,
-      inviteRewardRatePercent: 0,
       platformFeeAmount: buyerRentAmount,
       sellerIncomeAmount: 0,
       buyerRefundAmount: depositAmount
     }
-  }
-
-  async function ensureWalletAccount(executor, userId) {
-    await executor.execute(
-      `INSERT INTO wallet_accounts (user_id, balance)
-       VALUES (?, 0)
-       ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)`,
-      [userId]
-    )
-  }
-
-  async function creditWallet(executor, userId, amount, orderId, remark, businessType = 'order_settlement') {
-    const safeAmount = Number(amount || 0)
-    if (safeAmount <= 0) return
-
-    await ensureWalletAccount(executor, userId)
-    const [[accountRow]] = await executor.execute(
-      `SELECT balance
-       FROM wallet_accounts
-       WHERE user_id = ?
-       LIMIT 1
-       FOR UPDATE`,
-      [userId]
-    )
-    const balanceBefore = Number(accountRow?.balance || 0)
-    const balanceAfter = balanceBefore + safeAmount
-    await executor.execute(
-      `UPDATE wallet_accounts
-       SET balance = ?
-       WHERE user_id = ?`,
-      [balanceAfter, userId]
-    )
-    await executor.execute(
-      `INSERT INTO wallet_ledger (
-        user_id, order_id, business_type, direction, amount, balance_before, balance_after, remark
-      ) VALUES (?, ?, ?, 'credit', ?, ?, ?, ?)`,
-      [userId, orderId, businessType, safeAmount, balanceBefore, balanceAfter, remark || null]
-    )
-  }
-
-  async function awardInviteRewardForSettlement(executor, order, preview) {
-    const sellerUserId = Number(order?.seller_id || 0)
-    const orderId = Number(order?.id || 0)
-    const buyerServiceFeeAmount = Math.max(0, Number(preview?.buyerServiceFeeAmount || 0))
-    const rewardRatePercent = Math.max(0, Number(preview?.inviteRewardRatePercent || 0))
-    if (!sellerUserId || !orderId || buyerServiceFeeAmount <= 0 || rewardRatePercent <= 0) {
-      return
-    }
-
-    const [[inviteeRow]] = await executor.execute(
-      `SELECT inviter_user_id
-       FROM users
-       WHERE id = ?
-       LIMIT 1`,
-      [sellerUserId]
-    )
-    const inviterUserId = Number(inviteeRow?.inviter_user_id || 0)
-    if (!inviterUserId || inviterUserId === sellerUserId) {
-      return
-    }
-
-    const [[existingReward]] = await executor.execute(
-      `SELECT id
-       FROM invite_rewards
-       WHERE order_id = ?
-       LIMIT 1
-       FOR UPDATE`,
-      [orderId]
-    )
-    if (existingReward?.id) {
-      return
-    }
-
-    const rewardAmount = Math.floor(buyerServiceFeeAmount * rewardRatePercent / 100)
-    if (rewardAmount <= 0) {
-      return
-    }
-
-    await creditWallet(
-      executor,
-      inviterUserId,
-      rewardAmount,
-      orderId,
-      `邀新返现入账（买家服务费的 ${rewardRatePercent}%）`,
-      'invite_reward'
-    )
-    await executor.execute(
-      `INSERT INTO invite_rewards (
-        order_id, inviter_user_id, invitee_user_id, reward_rate_percent, platform_fee_amount, reward_amount
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        orderId,
-        inviterUserId,
-        sellerUserId,
-        rewardRatePercent,
-        buyerServiceFeeAmount,
-        rewardAmount
-      ]
-    )
   }
 
   async function transitionToCancelled(executor, orderId, options = {}) {
@@ -1323,9 +1216,6 @@ export function createOrderLifecycleService({
         try {
           await finalizeConn.beginTransaction()
           await upsertSettlement(finalizeConn, orderId, preview, 'executed', supportUserId)
-          if (!isFrozenSettlement) {
-            await awardInviteRewardForSettlement(finalizeConn, order, preview)
-          }
           await finalizeConn.execute(
             `UPDATE orders
              SET status = 'completed',

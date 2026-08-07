@@ -314,14 +314,6 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     requireTrustedDevice: false,
     allowTrustedDeviceBypassPasskey: true
   },
-  reviewWithdraw: {
-    action: 'review_withdraw',
-    message: '审核提现申请需要完成二次校验',
-    maxAgeMinutes: 5,
-    requirePasskey: true,
-    requireTrustedDevice: false,
-    allowTrustedDeviceBypassPasskey: true
-  },
   approveListing: {
     action: 'approve_listing',
     message: '审核通过商品需要完成二次校验',
@@ -1775,55 +1767,6 @@ async function ensureOrderWorkflowSchema() {
   )
 }
 
-async function ensureWalletSchema() {
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS wallet_accounts (
-      user_id INT PRIMARY KEY COMMENT '用户ID',
-      balance BIGINT NOT NULL DEFAULT 0 COMMENT '钱包余额（分）',
-      frozen_balance BIGINT NOT NULL DEFAULT 0 COMMENT '提现冻结金额（分）',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-  )
-
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS wallet_ledger (
-      id INT AUTO_INCREMENT PRIMARY KEY COMMENT '钱包流水ID',
-      user_id INT NOT NULL COMMENT '用户ID',
-      order_id INT DEFAULT NULL COMMENT '关联订单ID',
-      business_type VARCHAR(50) NOT NULL DEFAULT 'order' COMMENT '业务类型',
-      direction ENUM('credit', 'debit') NOT NULL DEFAULT 'credit' COMMENT '流水方向',
-      amount BIGINT NOT NULL DEFAULT 0 COMMENT '变动金额（分）',
-      balance_before BIGINT NOT NULL DEFAULT 0 COMMENT '变动前余额（分）',
-      balance_after BIGINT NOT NULL DEFAULT 0 COMMENT '变动后余额（分）',
-      remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
-      INDEX idx_wallet_ledger_user_created (user_id, created_at, id),
-      INDEX idx_wallet_ledger_order_id (order_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-  )
-
-  const databaseName = process.env.DB_NAME || 'game_rental'
-  const [walletColumnRows] = await pool.execute(
-    `SELECT COLUMN_NAME
-     FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = ?
-       AND TABLE_NAME = 'wallet_accounts'
-       AND COLUMN_NAME = 'frozen_balance'
-     LIMIT 1`,
-    [databaseName]
-  )
-  if (!walletColumnRows.length) {
-    await pool.execute(
-      `ALTER TABLE wallet_accounts
-       ADD COLUMN frozen_balance BIGINT NOT NULL DEFAULT 0 COMMENT '提现冻结金额（分）' AFTER balance`
-    )
-  }
-}
-
 const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 function buildRandomInviteCode(length = 8) {
@@ -1901,27 +1844,6 @@ async function ensureInviteSchema() {
   if (!inviterIndexRows.length) {
     await pool.execute(`CREATE INDEX idx_users_inviter_user_id ON users (inviter_user_id)`)
   }
-
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS invite_rewards (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '邀请返现记录ID',
-      order_id INT NOT NULL COMMENT '关联订单ID',
-      inviter_user_id INT NOT NULL COMMENT '邀请人用户ID',
-      invitee_user_id INT NOT NULL COMMENT '被邀请人用户ID',
-      reward_rate_percent DECIMAL(5,2) NOT NULL DEFAULT 30.00 COMMENT '返现比例',
-      platform_fee_amount BIGINT NOT NULL DEFAULT 0 COMMENT '买家服务费（分）',
-      reward_amount BIGINT NOT NULL DEFAULT 0 COMMENT '返现金额（分）',
-      awarded_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '返现发放时间',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-      FOREIGN KEY (inviter_user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (invitee_user_id) REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE INDEX uk_invite_rewards_order_id (order_id),
-      INDEX idx_invite_rewards_inviter (inviter_user_id, awarded_at, id),
-      INDEX idx_invite_rewards_invitee (invitee_user_id, awarded_at, id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-  )
 
   const generateUniqueInviteCode = async () => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -2006,150 +1928,6 @@ async function ensureUploadQuotaSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   )
 }
-
-
-async function ensureKycSchema() {
-  const databaseName = process.env.DB_NAME || 'game_rental'
-  const userColumns = [
-    {
-      name: 'kyc_status',
-      sql: `ALTER TABLE users
-            ADD COLUMN kyc_status ENUM('unverified', 'pending', 'verified', 'failed') NOT NULL DEFAULT 'unverified' COMMENT '实名认证状态' AFTER banned_until`
-    },
-    {
-      name: 'kyc_real_name',
-      sql: `ALTER TABLE users
-            ADD COLUMN kyc_real_name VARCHAR(50) DEFAULT NULL COMMENT '实名姓名快照' AFTER kyc_status`
-    },
-    {
-      name: 'kyc_real_name_masked',
-      sql: `ALTER TABLE users
-            ADD COLUMN kyc_real_name_masked VARCHAR(50) DEFAULT NULL COMMENT '脱敏后的实名姓名' AFTER kyc_real_name`
-    },
-    {
-      name: 'kyc_id_card_masked',
-      sql: `ALTER TABLE users
-            ADD COLUMN kyc_id_card_masked VARCHAR(40) DEFAULT NULL COMMENT '脱敏后的证件号' AFTER kyc_real_name_masked`
-    },
-    {
-      name: 'kyc_verified_at',
-      sql: `ALTER TABLE users
-            ADD COLUMN kyc_verified_at DATETIME DEFAULT NULL COMMENT '实名认证通过时间' AFTER kyc_id_card_masked`
-    }
-  ]
-
-  for (const column of userColumns) {
-    const [rows] = await pool.execute(
-      `SELECT COLUMN_NAME
-       FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = ?
-         AND TABLE_NAME = 'users'
-         AND COLUMN_NAME = ?
-       LIMIT 1`,
-      [databaseName, column.name]
-    )
-    if (!rows.length) {
-      await pool.execute(column.sql)
-    }
-  }
-
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS user_kyc_records (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '实名认证记录ID',
-      user_id INT NOT NULL COMMENT '用户ID',
-      real_name VARCHAR(50) NOT NULL COMMENT '实名姓名',
-      real_name_masked VARCHAR(50) DEFAULT NULL COMMENT '脱敏后的实名姓名',
-      id_card_masked VARCHAR(40) NOT NULL COMMENT '脱敏后的证件号',
-      id_card_hash CHAR(64) NOT NULL COMMENT '证件号摘要',
-      status ENUM('pending', 'verified', 'failed') NOT NULL DEFAULT 'pending' COMMENT '实名状态',
-      provider VARCHAR(50) NOT NULL DEFAULT 'disabled' COMMENT '实名服务商',
-      provider_request_id VARCHAR(100) DEFAULT NULL COMMENT '服务商请求单号',
-      order_no VARCHAR(64) DEFAULT NULL COMMENT '平台侧实名订单号',
-      biz_token VARCHAR(128) DEFAULT NULL COMMENT '服务商核身流程标识',
-      verify_url VARCHAR(1024) DEFAULT NULL COMMENT '核身跳转地址',
-      rule_id VARCHAR(64) DEFAULT NULL COMMENT '核身业务流程ID',
-      biz_seq_no VARCHAR(128) DEFAULT NULL COMMENT '服务商业务流水号',
-      request_id VARCHAR(128) DEFAULT NULL COMMENT '服务商请求ID',
-      similarity DECIMAL(6,2) DEFAULT NULL COMMENT '人脸比对分',
-      live_rate DECIMAL(6,2) DEFAULT NULL COMMENT '活体得分',
-      completed_at DATETIME DEFAULT NULL COMMENT '实名流程完成时间',
-      failure_reason VARCHAR(255) DEFAULT NULL COMMENT '失败原因',
-      provider_payload LONGTEXT DEFAULT NULL COMMENT '服务商响应JSON',
-      submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
-      verified_at DATETIME DEFAULT NULL COMMENT '通过时间',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE KEY uk_user_kyc_records_provider_request_id (provider_request_id),
-      INDEX idx_user_kyc_records_user_id (user_id, id),
-      INDEX idx_user_kyc_records_status (status, id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-  )
-
-  const recordColumns = [
-    {
-      name: 'order_no',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN order_no VARCHAR(64) DEFAULT NULL COMMENT '平台侧实名订单号' AFTER provider_request_id`
-    },
-    {
-      name: 'biz_token',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN biz_token VARCHAR(128) DEFAULT NULL COMMENT '服务商核身流程标识' AFTER order_no`
-    },
-    {
-      name: 'verify_url',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN verify_url VARCHAR(1024) DEFAULT NULL COMMENT '核身跳转地址' AFTER biz_token`
-    },
-    {
-      name: 'rule_id',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN rule_id VARCHAR(64) DEFAULT NULL COMMENT '核身业务流程ID' AFTER verify_url`
-    },
-    {
-      name: 'biz_seq_no',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN biz_seq_no VARCHAR(128) DEFAULT NULL COMMENT '服务商业务流水号' AFTER rule_id`
-    },
-    {
-      name: 'request_id',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN request_id VARCHAR(128) DEFAULT NULL COMMENT '服务商请求ID' AFTER biz_seq_no`
-    },
-    {
-      name: 'similarity',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN similarity DECIMAL(6,2) DEFAULT NULL COMMENT '人脸比对分' AFTER request_id`
-    },
-    {
-      name: 'live_rate',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN live_rate DECIMAL(6,2) DEFAULT NULL COMMENT '活体得分' AFTER similarity`
-    },
-    {
-      name: 'completed_at',
-      sql: `ALTER TABLE user_kyc_records
-            ADD COLUMN completed_at DATETIME DEFAULT NULL COMMENT '实名流程完成时间' AFTER live_rate`
-    }
-  ]
-
-  for (const column of recordColumns) {
-    const [rows] = await pool.execute(
-      `SELECT COLUMN_NAME
-       FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = ?
-         AND TABLE_NAME = 'user_kyc_records'
-         AND COLUMN_NAME = ?
-       LIMIT 1`,
-      [databaseName, column.name]
-    )
-    if (!rows.length) {
-      await pool.execute(column.sql)
-    }
-  }
-}
-
 async function ensurePaymentChannelSchema() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS payment_transactions (
@@ -2179,35 +1957,6 @@ async function ensurePaymentChannelSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   )
 
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS wallet_withdraw_requests (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '提现申请ID',
-      request_no VARCHAR(40) NOT NULL COMMENT '平台提现单号',
-      user_id INT NOT NULL COMMENT '提现用户ID',
-      channel VARCHAR(30) NOT NULL DEFAULT 'alipay' COMMENT '提现渠道',
-      provider VARCHAR(50) NOT NULL DEFAULT 'pending' COMMENT '代付服务商',
-      amount BIGINT NOT NULL DEFAULT 0 COMMENT '申请提现金额（分）',
-      fee_amount BIGINT NOT NULL DEFAULT 0 COMMENT '手续费（分）',
-      net_amount BIGINT NOT NULL DEFAULT 0 COMMENT '到账金额（分）',
-      status ENUM('pending_review', 'processing', 'success', 'failed', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending_review' COMMENT '提现状态',
-      account_name VARCHAR(80) NOT NULL DEFAULT '' COMMENT '收款账户姓名',
-      account_no_masked VARCHAR(120) NOT NULL DEFAULT '' COMMENT '脱敏后的收款账号',
-      account_snapshot_json LONGTEXT DEFAULT NULL COMMENT '收款账户快照JSON，后续可替换为加密密文',
-      provider_request_id VARCHAR(100) DEFAULT NULL COMMENT '服务商打款单号',
-      provider_payload LONGTEXT DEFAULT NULL COMMENT '服务商响应JSON',
-      remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
-      failure_reason VARCHAR(255) DEFAULT NULL COMMENT '失败原因',
-      reviewed_by_user_id INT DEFAULT NULL COMMENT '审核管理员ID',
-      reviewed_at DATETIME DEFAULT NULL COMMENT '审核时间',
-      paid_at DATETIME DEFAULT NULL COMMENT '打款完成时间',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE KEY uk_wallet_withdraw_requests_no (request_no),
-      INDEX idx_wallet_withdraw_requests_user_id (user_id, id),
-      INDEX idx_wallet_withdraw_requests_status (status, id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
-  )
 }
 
 async function ensureSettlementPaymentSchema() {
@@ -2793,11 +2542,9 @@ export function createApp() {
     ensurePresaleSupportSchema,
     ensureOrderWorkflowSchema,
     ensureSupportEventSchema,
-    ensureWalletSchema,
     ensureInviteSchema,
     ensureSmsSecuritySchema,
     ensureUploadQuotaSchema,
-    ensureKycSchema,
     ensurePaymentChannelSchema,
     ensureSettlementPaymentSchema,
     refreshUploadSortOrderFlags,

@@ -22,11 +22,9 @@ export async function runBootstrapSchemaTasks({
   ensurePresaleSupportSchema,
   ensureOrderWorkflowSchema,
   ensureSupportEventSchema,
-  ensureWalletSchema,
   ensureInviteSchema,
   ensureSmsSecuritySchema,
   ensureUploadQuotaSchema,
-  ensureKycSchema,
   ensurePaymentChannelSchema,
   ensureSettlementPaymentSchema,
   refreshUploadSortOrderFlags
@@ -50,11 +48,9 @@ export async function runBootstrapSchemaTasks({
   await ensurePresaleSupportSchema()
   await ensureOrderWorkflowSchema()
   await ensureSupportEventSchema()
-  await ensureWalletSchema()
   await ensureInviteSchema()
   await ensureSmsSecuritySchema()
   await ensureUploadQuotaSchema()
-  await ensureKycSchema()
   await ensurePaymentChannelSchema()
   await ensureSettlementPaymentSchema()
   await refreshUploadSortOrderFlags()

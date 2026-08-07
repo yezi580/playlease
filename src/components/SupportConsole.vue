@@ -479,225 +479,6 @@
     </Transition>
     </template>
 
-    <template v-else-if="canAccessWithdrawDesk">
-      <div class="toolbar">
-        <div class="toolbar-search">
-          <input
-            v-model.trim="withdrawKeywordDraft"
-            type="text"
-            class="search-input"
-            maxlength="50"
-            placeholder="搜索提现单号、用户名、手机号"
-            @keydown.enter.prevent="applyWithdrawFilters"
-          >
-          <button type="button" class="search-submit-btn" aria-label="搜索提现申请" @click="applyWithdrawFilters">
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path
-                d="M8.75 3.5a5.25 5.25 0 1 0 0 10.5a5.25 5.25 0 0 0 0-10.5Zm-6.75 5.25a6.75 6.75 0 1 1 12.17 4.02l3.53 3.53a.75.75 0 1 1-1.06 1.06l-3.53-3.53A6.75 6.75 0 0 1 2 8.75Z"
-              />
-            </svg>
-          </button>
-        </div>
-        <div class="toolbar-actions">
-          <button
-            v-for="tab in withdrawStatusTabs"
-            :key="tab.value"
-            type="button"
-            class="tab-btn"
-            :class="{ 'tab-btn--active': activeWithdrawStatus === tab.value }"
-            @click="changeWithdrawStatus(tab.value)"
-          >
-            {{ tab.label }}
-          </button>
-          <button type="button" class="ghost-btn" :disabled="withdrawLoading || withdrawSubmitting" @click="fetchWithdrawRequests">
-            刷新
-          </button>
-        </div>
-      </div>
-
-      <div class="summary-grid">
-        <article class="summary-card">
-          <span>待审核申请</span>
-          <strong>{{ withdrawSummary.pending_review }}</strong>
-        </article>
-        <article class="summary-card">
-          <span>处理中申请</span>
-          <strong>{{ withdrawSummary.processing }}</strong>
-        </article>
-        <article class="summary-card">
-          <span>已打款</span>
-          <strong>{{ withdrawSummary.success }}</strong>
-        </article>
-        <article class="summary-card">
-          <span>已拒绝 / 失败</span>
-          <strong>{{ withdrawSummary.rejected + withdrawSummary.failed }}</strong>
-        </article>
-      </div>
-
-      <div class="shell">
-        <aside class="panel panel--orders">
-          <div class="panel-head">
-            <h3>提现申请</h3>
-            <span>{{ filteredWithdrawRequests.length }} 条</span>
-          </div>
-          <div class="panel-scroll-shell">
-            <div
-              ref="ordersPanel"
-              class="panel-body panel-body--orders"
-              :style="{ opacity: withdrawLoading ? 0.6 : 1, pointerEvents: withdrawLoading ? 'none' : 'auto', transition: 'opacity 0.2s' }"
-              @scroll="handlePanelScroll('orders')"
-            >
-              <div v-if="withdrawLoading && !filteredWithdrawRequests.length" class="state">正在加载提现申请...</div>
-              <div v-else-if="withdrawError" class="state state--error">{{ withdrawError }}</div>
-              <div v-else-if="!filteredWithdrawRequests.length && !withdrawLoading" class="state">当前没有匹配的提现申请。</div>
-              <template v-else>
-                <button
-                  v-for="item in filteredWithdrawRequests"
-                  :key="item.id"
-                  type="button"
-                  class="order-card"
-                  :class="{ 'order-card--active': Number(item.id) === Number(activeWithdrawId) }"
-                  @click="selectWithdraw(item.id)"
-                >
-                  <div class="order-card-top">
-                    <div class="order-card-title">
-                      <strong>{{ item.request_no }}</strong>
-                    </div>
-                    <span>{{ formatDateTime(item.created_at) }}</span>
-                  </div>
-                  <p>用户：{{ item.username || '未知用户' }}</p>
-                  <div class="order-card-meta">
-                    <span>手机号：{{ item.phone || '-' }}</span>
-                    <span>方式：{{ getWithdrawChannelLabel(item.channel) }}</span>
-                  </div>
-                  <div class="order-card-meta">
-                    <span>提现金额：￥{{ formatMoney(item.amount) }}</span>
-                    <span>状态：{{ getWithdrawStatusLabel(item.status) }}</span>
-                  </div>
-                  <p class="reason">{{ item.remark || '等待管理员审核' }}</p>
-                </button>
-              </template>
-            </div>
-            <div
-              v-show="ordersScrollbarEnabled"
-              class="panel-scrollbar"
-              :class="{ 'panel-scrollbar--visible': ordersScrollbarVisible }"
-              aria-hidden="true"
-            >
-              <span class="panel-scrollbar-thumb" :style="getScrollbarThumbStyle('orders')"></span>
-            </div>
-          </div>
-        </aside>
-
-        <section class="panel panel--detail">
-          <template v-if="activeWithdrawRequest">
-            <div class="panel-head">
-              <h3>审核详情</h3>
-              <span class="badge" :class="`badge--${activeWithdrawRequest.status}`">
-                {{ getWithdrawStatusLabel(activeWithdrawRequest.status) }}
-              </span>
-            </div>
-
-            <div class="panel-scroll-shell">
-              <div
-                ref="detailPanel"
-                class="panel-body panel-body--detail"
-                @scroll="handlePanelScroll('detail')"
-              >
-                <div class="detail-grid">
-                  <div><span>提现单号</span><strong>{{ activeWithdrawRequest.request_no }}</strong></div>
-                  <div><span>申请用户</span><strong>{{ activeWithdrawRequest.username || '-' }}</strong></div>
-                  <div><span>手机号</span><strong>{{ activeWithdrawRequest.phone || '-' }}</strong></div>
-                  <div><span>提现方式</span><strong>{{ getWithdrawChannelLabel(activeWithdrawRequest.channel) }}</strong></div>
-                  <div><span>提现金额</span><strong>￥{{ formatMoney(activeWithdrawRequest.amount) }}</strong></div>
-                  <div><span>手续费</span><strong>￥{{ formatMoney(activeWithdrawRequest.fee_amount) }}</strong></div>
-                  <div><span>到账金额</span><strong>￥{{ formatMoney(activeWithdrawRequest.net_amount) }}</strong></div>
-                  <div><span>申请时间</span><strong>{{ formatDateTime(activeWithdrawRequest.created_at) }}</strong></div>
-                  <div><span>审核时间</span><strong>{{ formatDateTime(activeWithdrawRequest.reviewed_at) }}</strong></div>
-                  <div><span>打款时间</span><strong>{{ formatDateTime(activeWithdrawRequest.paid_at) }}</strong></div>
-                </div>
-
-                <div class="info-blocks">
-                  <article class="info-block">
-                    <h4>收款信息</h4>
-                    <p>收款人：{{ activeWithdrawRequest.account_name || '-' }}</p>
-                    <p>收款账号：{{ activeWithdrawRequest.account_no_masked || '-' }}</p>
-                    <p>渠道备注：{{ activeWithdrawRequest.provider || 'manual' }}</p>
-                  </article>
-                  <article class="info-block">
-                    <h4>审核说明</h4>
-                    <p>{{ activeWithdrawRequest.remark || '暂无审核说明。' }}</p>
-                    <p v-if="activeWithdrawRequest.failure_reason">失败原因：{{ activeWithdrawRequest.failure_reason }}</p>
-                  </article>
-                </div>
-
-                <article class="info-block">
-                  <div class="note-head">
-                    <h4>审核备注</h4>
-                    <span>{{ withdrawRemarkDraft.length }}/255</span>
-                  </div>
-                  <textarea
-                    v-model.trim="withdrawRemarkDraft"
-                    class="note-textarea"
-                    rows="4"
-                    maxlength="255"
-                    placeholder="填写审核备注，驳回时建议说明具体原因。"
-                  ></textarea>
-                </article>
-
-                <div class="detail-actions">
-                  <button
-                    v-if="canApproveWithdraw"
-                    type="button"
-                    class="ok-btn"
-                    :disabled="withdrawSubmitting"
-                    @click="reviewWithdraw('approve')"
-                  >
-                    {{ withdrawSubmitting ? '提交中...' : '通过并发起打款' }}
-                  </button>
-                  <button
-                    v-if="canRejectWithdraw"
-                    type="button"
-                    class="danger-btn"
-                    :disabled="withdrawSubmitting"
-                    @click="reviewWithdraw('reject')"
-                  >
-                    {{ withdrawSubmitting ? '提交中...' : '驳回并退回余额' }}
-                  </button>
-                </div>
-              </div>
-              <div
-                v-show="detailScrollbarEnabled"
-                class="panel-scrollbar"
-                :class="{ 'panel-scrollbar--visible': detailScrollbarVisible }"
-                aria-hidden="true"
-              >
-                <span class="panel-scrollbar-thumb" :style="getScrollbarThumbStyle('detail')"></span>
-              </div>
-            </div>
-          </template>
-
-          <div v-else class="panel-scroll-shell">
-            <div
-              ref="detailPanel"
-              class="panel-body panel-body--detail panel-body--empty"
-              @scroll="handlePanelScroll('detail')"
-            >
-              <div class="state">请选择一条提现申请查看详情。</div>
-            </div>
-            <div
-              v-show="detailScrollbarEnabled"
-              class="panel-scrollbar"
-              :class="{ 'panel-scrollbar--visible': detailScrollbarVisible }"
-              aria-hidden="true"
-            >
-              <span class="panel-scrollbar-thumb" :style="getScrollbarThumbStyle('detail')"></span>
-            </div>
-          </div>
-        </section>
-      </div>
-    </template>
-
     <div v-else class="panel">
       <div class="state state--error">当前账号无权访问工作台。</div>
     </div>
@@ -767,23 +548,6 @@ export default {
       detailScrollbarThumbTop: 0,
       ordersScrollbarThumbHeight: 0,
       detailScrollbarThumbHeight: 0,
-      withdrawLoading: false,
-      withdrawError: '',
-      withdrawKeyword: '',
-      withdrawKeywordDraft: '',
-      activeWithdrawStatus: 'pending_review',
-      withdrawRequests: [],
-      activeWithdrawId: 0,
-      withdrawRemarkDraft: '',
-      withdrawSubmitting: false,
-      withdrawSummary: {
-        pending_review: 0,
-        processing: 0,
-        success: 0,
-        failed: 0,
-        rejected: 0,
-        cancelled: 0
-      },
       scrollbarFadeTimers: {
         orders: null,
         detail: null
@@ -801,14 +565,8 @@ export default {
     isSupportUser() {
       return this.currentUserRole === 'support'
     },
-    isAdminUser() {
-      return this.currentUserRole === 'admin'
-    },
     canAccessOrderDesk() {
       return this.isSupportUser
-    },
-    canAccessWithdrawDesk() {
-      return this.isAdminUser
     },
     isAfterSaleDesk() {
       return this.activeDesk === 'aftersale'
@@ -844,48 +602,11 @@ export default {
         { value: 'resolved', label: '已完成', count: counts.resolved || 0 }
       ]
     },
-    withdrawStatusTabs() {
-      return [
-        { value: 'pending_review', label: `待审核 ${this.withdrawSummary.pending_review || 0}` },
-        { value: 'processing', label: `处理中 ${this.withdrawSummary.processing || 0}` },
-        { value: 'success', label: `已打款 ${this.withdrawSummary.success || 0}` },
-        { value: 'failed', label: `打款失败 ${this.withdrawSummary.failed || 0}` },
-        { value: 'rejected', label: `已驳回 ${this.withdrawSummary.rejected || 0}` }
-      ]
-    },
     activeOrder() {
       return this.orders.find((item) => Number(item.id) === Number(this.activeOrderId)) || null
     },
     activePresaleConsultation() {
       return this.presaleConsultations.find((item) => Number(item.id) === Number(this.activePresaleId)) || null
-    },
-    filteredWithdrawRequests() {
-      const keyword = String(this.withdrawKeyword || '').trim().toLowerCase()
-      const list = this.withdrawRequests.filter((item) => (
-        String(item.status || '').trim() === this.activeWithdrawStatus
-      ))
-      if (!keyword) return list
-      return list.filter((item) => {
-        const haystack = [
-          item.request_no,
-          item.username,
-          item.phone,
-          item.account_name,
-          item.account_no_masked
-        ]
-          .map((value) => String(value || '').toLowerCase())
-          .join(' ')
-        return haystack.includes(keyword)
-      })
-    },
-    activeWithdrawRequest() {
-      return this.filteredWithdrawRequests.find((item) => Number(item.id) === Number(this.activeWithdrawId)) || null
-    },
-    canApproveWithdraw() {
-      return this.activeWithdrawRequest?.status === 'pending_review'
-    },
-    canRejectWithdraw() {
-      return this.activeWithdrawRequest?.status === 'pending_review'
     },
     canSaveNote() {
       return this.activeOrder && String(this.noteDraft || '').trim() !== String(this.activeOrder.support_note || '').trim()
@@ -974,15 +695,6 @@ export default {
           this.updateScrollbar('detail')
         })
       }
-    },
-    activeWithdrawRequest: {
-      immediate: true,
-      handler(request) {
-        this.withdrawRemarkDraft = request?.remark || ''
-        this.$nextTick(() => {
-          this.updateScrollbar('detail')
-        })
-      }
     }
   },
   mounted() {
@@ -990,8 +702,6 @@ export default {
       this.fetchOrders()
       this.fetchSupportDeskUnreadSummary()
       this.setupRealtimeSupportDeskSocket()
-    } else if (this.canAccessWithdrawDesk) {
-      this.fetchWithdrawRequests()
     }
     window.addEventListener('resize', this.refreshScrollbars)
   },
@@ -1266,16 +976,6 @@ export default {
       }
       await this.fetchPresaleConsultations(this.activeStatus)
     },
-    applyWithdrawFilters() {
-      this.withdrawKeyword = String(this.withdrawKeywordDraft || '').trim().slice(0, 50)
-      if (this.filteredWithdrawRequests.length && !this.filteredWithdrawRequests.some((item) => Number(item.id) === Number(this.activeWithdrawId))) {
-        this.activeWithdrawId = Number(this.filteredWithdrawRequests[0].id || 0)
-      }
-      if (!this.filteredWithdrawRequests.length) {
-        this.activeWithdrawId = 0
-      }
-      this.refreshScrollbars()
-    },
     changeStatus(status) {
       if (status === this.activeStatus) return
       if (this.isAfterSaleDesk) {
@@ -1296,93 +996,6 @@ export default {
         return
       }
       await this.fetchPresaleConsultations(this.activeStatus)
-    },
-    async fetchWithdrawRequests() {
-      this.withdrawLoading = true
-      this.withdrawError = ''
-      try {
-        const data = await apiFetch('/api/admin/withdraw-requests')
-        const list = Array.isArray(data.list) ? data.list : []
-        this.withdrawRequests = list
-        this.withdrawSummary = list.reduce((summary, item) => {
-          const key = String(item.status || '').trim()
-          if (Object.prototype.hasOwnProperty.call(summary, key)) {
-            summary[key] += 1
-          }
-          return summary
-        }, {
-          pending_review: 0,
-          processing: 0,
-          success: 0,
-          failed: 0,
-          rejected: 0,
-          cancelled: 0
-        })
-        if (list.length && !list.some((item) => Number(item.id) === Number(this.activeWithdrawId))) {
-          this.activeWithdrawId = Number(list[0].id || 0)
-        }
-        if (!list.length) {
-          this.activeWithdrawId = 0
-        }
-        this.applyWithdrawFilters()
-      } catch (error) {
-        this.withdrawRequests = []
-        this.withdrawSummary = {
-          pending_review: 0,
-          processing: 0,
-          success: 0,
-          failed: 0,
-          rejected: 0,
-          cancelled: 0
-        }
-        this.activeWithdrawId = 0
-        this.withdrawError = error.message || '加载提现申请失败'
-      } finally {
-        this.withdrawLoading = false
-        this.refreshScrollbars()
-      }
-    },
-    changeWithdrawStatus(status) {
-      if (status === this.activeWithdrawStatus) return
-      this.activeWithdrawStatus = status
-      this.applyWithdrawFilters()
-    },
-    selectWithdraw(withdrawId) {
-      this.activeWithdrawId = Number(withdrawId || 0)
-    },
-    async reviewWithdraw(action) {
-      if (!this.activeWithdrawRequest || this.withdrawSubmitting) return
-      const actionText = action === 'approve' ? '通过并发起打款' : '驳回并退回余额'
-      const message = action === 'approve'
-        ? '确认通过该提现申请吗？通过后系统将按当前支付配置发起打款。'
-        : '确认驳回该提现申请吗？驳回后金额将退回用户钱包余额。'
-      const confirmed = await showConfirm({
-        title: actionText,
-        message,
-        confirmText: actionText,
-        cancelText: '取消',
-        tone: action === 'approve' ? 'primary' : 'danger'
-      })
-      if (!confirmed) return
-
-      this.withdrawSubmitting = true
-      try {
-        const data = await apiFetch(`/api/admin/withdraw-requests/${this.activeWithdrawRequest.id}/review`, {
-          method: 'POST',
-          body: JSON.stringify({
-            action,
-            remark: this.withdrawRemarkDraft
-          })
-        })
-        showSuccessToast(action === 'approve' ? '提现审核已通过' : '提现申请已驳回')
-        const nextId = Number(data.withdraw_request?.id || this.activeWithdrawRequest.id || 0)
-        await this.fetchWithdrawRequests()
-        this.activeWithdrawId = nextId
-      } catch (error) {
-        showErrorToast(error.message || '提交提现审核失败')
-      } finally {
-        this.withdrawSubmitting = false
-      }
     },
     selectOrder(orderId) {
       this.activeOrderId = Number(orderId || 0)
@@ -1691,25 +1304,6 @@ export default {
     },
     getSupportStatusLabel(status) {
       return status === 'resolved' ? '已完成' : '处理中'
-    },
-    getWithdrawStatusLabel(status) {
-      const textMap = {
-        pending_review: '待审核',
-        processing: '处理中',
-        success: '已打款',
-        failed: '打款失败',
-        rejected: '已驳回',
-        cancelled: '已取消'
-      }
-      return textMap[String(status || '').trim()] || '处理中'
-    },
-    getWithdrawChannelLabel(channel) {
-      const textMap = {
-        alipay: '支付宝',
-        bank: '银行卡',
-        wechat: '微信零钱'
-      }
-      return textMap[String(channel || '').trim().toLowerCase()] || '其他方式'
     },
     formatMoney(value) {
       return formatMoneyFixed(value, 2)

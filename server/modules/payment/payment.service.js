@@ -1,12 +1,12 @@
-/*作用：支付和提现的核心业务服务层。
+/*作用：支付与结算资金处理的核心业务服务层。
 * 现在用途：
 * 创建平台支付流水
 * 处理支付回调
 * 同步订单支付状态
-* 创建提现申请
-* 管理员审核提现
-* 处理提现回调
-* 更新钱包余额、冻结金额、流水记录
+* 管理卖家收款账号
+* 创建订单退款
+* 创建卖家结算打款
+* 对账订单资金状态
 * 它是“业务中台层”，上面接路由，下面接 provider 和数据库。
 */
 
@@ -62,73 +62,12 @@ function safeJsonParse(value, fallback = null) {
   }
 }
 
-function maskAccountNo(value = '') {
-  const normalized = String(value || '').trim()
-  if (normalized.length <= 8) return normalized
-  return `${normalized.slice(0, 4)}****${normalized.slice(-4)}`
-}
-
 function normalizePaymentCallbackStatus(value = '') {
   const normalized = String(value || '').trim().toLowerCase()
   if (['success', 'paid', 'trade_success', 'succeeded'].includes(normalized)) return 'paid'
   if (['failed', 'fail', 'error'].includes(normalized)) return 'failed'
   if (['cancelled', 'canceled', 'closed'].includes(normalized)) return 'cancelled'
   return 'pending'
-}
-
-function normalizeWithdrawCallbackStatus(value = '') {
-  const normalized = String(value || '').trim().toLowerCase()
-  if (['success', 'paid', 'finished', 'succeeded'].includes(normalized)) return 'success'
-  if (['failed', 'fail', 'rejected'].includes(normalized)) return 'failed'
-  if (['processing', 'pending', 'accepted'].includes(normalized)) return 'processing'
-  return 'processing'
-}
-
-async function ensureWalletAccount(executor, userId) {
-  await executor.execute(
-    `INSERT INTO wallet_accounts (user_id, balance, frozen_balance)
-     VALUES (?, 0, 0)
-     ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)`,
-    [userId]
-  )
-}
-
-async function getWalletAccountForUpdate(executor, userId) {
-  await ensureWalletAccount(executor, userId)
-  const [[row]] = await executor.execute(
-    `SELECT user_id, balance, frozen_balance
-     FROM wallet_accounts
-     WHERE user_id = ?
-     LIMIT 1
-     FOR UPDATE`,
-    [userId]
-  )
-  return row || { user_id: userId, balance: 0, frozen_balance: 0 }
-}
-
-async function appendWalletLedger(executor, payload = {}) {
-  await executor.execute(
-    `INSERT INTO wallet_ledger (
-      user_id,
-      order_id,
-      business_type,
-      direction,
-      amount,
-      balance_before,
-      balance_after,
-      remark
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      Number(payload.userId || 0),
-      payload.orderId ? Number(payload.orderId) : null,
-      String(payload.businessType || 'system').trim() || 'system',
-      String(payload.direction || 'credit').trim() === 'debit' ? 'debit' : 'credit',
-      Math.max(0, Number(payload.amount || 0) || 0),
-      Math.max(0, Number(payload.balanceBefore || 0) || 0),
-      Math.max(0, Number(payload.balanceAfter || 0) || 0),
-      String(payload.remark || '').trim() || null
-    ]
-  )
 }
 
 async function fetchPaymentTransactionByNo(executor, transactionNo) {
@@ -156,70 +95,6 @@ async function fetchPaymentTransactionByNo(executor, transactionNo) {
      WHERE transaction_no = ?
      LIMIT 1`,
     [String(transactionNo || '').trim()]
-  )
-  return rows[0] || null
-}
-
-async function fetchWithdrawRequestById(executor, withdrawRequestId) {
-  const [rows] = await executor.execute(
-    `SELECT
-        id,
-        request_no,
-        user_id,
-        channel,
-        provider,
-        amount,
-        fee_amount,
-        net_amount,
-        status,
-        account_name,
-        account_no_masked,
-        account_snapshot_json,
-        provider_request_id,
-        provider_payload,
-        remark,
-        failure_reason,
-        reviewed_by_user_id,
-        reviewed_at,
-        paid_at,
-        created_at,
-        updated_at
-     FROM wallet_withdraw_requests
-     WHERE id = ?
-     LIMIT 1`,
-    [Number(withdrawRequestId || 0)]
-  )
-  return rows[0] || null
-}
-
-async function fetchWithdrawRequestByNo(executor, requestNo) {
-  const [rows] = await executor.execute(
-    `SELECT
-        id,
-        request_no,
-        user_id,
-        channel,
-        provider,
-        amount,
-        fee_amount,
-        net_amount,
-        status,
-        account_name,
-        account_no_masked,
-        account_snapshot_json,
-        provider_request_id,
-        provider_payload,
-        remark,
-        failure_reason,
-        reviewed_by_user_id,
-        reviewed_at,
-        paid_at,
-        created_at,
-        updated_at
-     FROM wallet_withdraw_requests
-     WHERE request_no = ?
-     LIMIT 1`,
-    [String(requestNo || '').trim()]
   )
   return rows[0] || null
 }
@@ -904,80 +779,6 @@ export function createPaymentService(config = {}) {
     }
   }
 
-  async function getUserWithdrawList(payload = {}) {
-    const userId = Number(payload.userId || 0)
-    const [rows] = await pool.execute(
-      `SELECT
-          id,
-          request_no,
-          user_id,
-          channel,
-          provider,
-          amount,
-          fee_amount,
-          net_amount,
-          status,
-          account_name,
-          account_no_masked,
-          provider_request_id,
-          remark,
-          failure_reason,
-          reviewed_by_user_id,
-          reviewed_at,
-          paid_at,
-          created_at,
-          updated_at
-       FROM wallet_withdraw_requests
-       WHERE user_id = ?
-       ORDER BY id DESC
-       LIMIT 100`,
-      [userId]
-    )
-    return rows
-  }
-
-  async function getAdminWithdrawList(payload = {}) {
-    const status = String(payload.status || '').trim().toLowerCase()
-    const params = []
-    let whereSql = ''
-    if (status) {
-      whereSql = 'WHERE wr.status = ?'
-      params.push(status)
-    }
-
-    const [rows] = await pool.execute(
-      `SELECT
-          wr.id,
-          wr.request_no,
-          wr.user_id,
-          u.username,
-          u.phone,
-          wr.channel,
-          wr.provider,
-          wr.amount,
-          wr.fee_amount,
-          wr.net_amount,
-          wr.status,
-          wr.account_name,
-          wr.account_no_masked,
-          wr.provider_request_id,
-          wr.remark,
-          wr.failure_reason,
-          wr.reviewed_by_user_id,
-          wr.reviewed_at,
-          wr.paid_at,
-          wr.created_at,
-          wr.updated_at
-       FROM wallet_withdraw_requests wr
-       JOIN users u ON u.id = wr.user_id
-       ${whereSql}
-       ORDER BY wr.id DESC
-       LIMIT 200`,
-      params
-    )
-    return rows
-  }
-
   async function getSettlementAccount(payload = {}) {
     const userId = Number(payload.userId || 0)
     if (!userId) {
@@ -1337,6 +1138,7 @@ export function createPaymentService(config = {}) {
   async function reconcileOrderFunds(payload = {}) {
     const orderId = Number(payload.orderId || 0)
     const supportUserId = Number(payload.supportUserId || 0)
+
     if (!orderId || !supportUserId) {
       fail(400, { message: '订单或客服信息不完整' })
     }
@@ -1442,348 +1244,6 @@ export function createPaymentService(config = {}) {
     }
   }
 
-  async function applyWithdraw(payload = {}) {
-    const userId = Number(payload.userId || 0)
-    const amount = Math.max(0, Number(payload.amount || 0) || 0)
-    const channel = String(payload.channel || 'bank').trim().toLowerCase() || 'bank'
-    const accountName = String(payload.accountName || '').trim()
-    const accountNo = String(payload.accountNo || '').trim()
-    const remark = String(payload.remark || '').trim().slice(0, 255)
-
-    if (!userId || amount <= 0) {
-      fail(400, { message: '提现申请参数不完整' })
-    }
-    if (!accountName || !accountNo) {
-      fail(400, { message: '请输入完整的收款账户信息' })
-    }
-
-    const conn = await pool.getConnection()
-    try {
-      await conn.beginTransaction()
-
-      const [[userRow]] = await conn.execute(
-        `SELECT id
-         FROM users
-         WHERE id = ?
-         LIMIT 1
-         FOR UPDATE`,
-        [userId]
-      )
-      if (!userRow) {
-        fail(404, { message: '用户不存在' })
-      }
-
-      const walletAccount = await getWalletAccountForUpdate(conn, userId)
-      const balanceBefore = Number(walletAccount.balance || 0)
-      const frozenBefore = Number(walletAccount.frozen_balance || 0)
-      if (balanceBefore < amount) {
-        fail(400, { message: '钱包可提现余额不足' })
-      }
-
-      const requestNo = createBusinessNo('WD')
-      const balanceAfter = balanceBefore - amount
-      const frozenAfter = frozenBefore + amount
-      await conn.execute(
-        `UPDATE wallet_accounts
-         SET balance = ?,
-             frozen_balance = ?
-         WHERE user_id = ?`,
-        [balanceAfter, frozenAfter, userId]
-      )
-
-      await appendWalletLedger(conn, {
-        userId,
-        orderId: null,
-        businessType: 'withdraw_apply',
-        direction: 'debit',
-        amount,
-        balanceBefore,
-        balanceAfter,
-        remark: `提现申请已提交，单号 ${requestNo}`
-      })
-
-      await conn.execute(
-        `INSERT INTO wallet_withdraw_requests (
-          request_no,
-          user_id,
-          channel,
-          provider,
-          amount,
-          fee_amount,
-          net_amount,
-          status,
-          account_name,
-          account_no_masked,
-          account_snapshot_json,
-          remark
-        ) VALUES (?, ?, ?, ?, ?, 0, ?, 'pending_review', ?, ?, ?, ?)`,
-        [
-          requestNo,
-          userId,
-          channel,
-          String(paymentProvider?.withdrawMode || paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment',
-          amount,
-          amount,
-          accountName,
-          maskAccountNo(accountNo),
-          safeJsonStringify({
-            accountName,
-            accountNo,
-            payeeRealName: accountName
-          }),
-          remark || null
-        ]
-      )
-
-      const request = await fetchWithdrawRequestByNo(conn, requestNo)
-      await conn.commit()
-      return {
-        ...request,
-        provider_payload: safeJsonParse(request?.provider_payload, null)
-      }
-    } catch (error) {
-      await conn.rollback()
-      throw error
-    } finally {
-      conn.release()
-    }
-  }
-
-  async function reviewWithdraw(payload = {}) {
-    const withdrawRequestId = Number(payload.withdrawRequestId || 0)
-    const adminUserId = Number(payload.adminUserId || 0)
-    const action = String(payload.action || '').trim().toLowerCase()
-    const remark = String(payload.remark || '').trim().slice(0, 255)
-
-    if (!withdrawRequestId || !adminUserId || !['approve', 'reject'].includes(action)) {
-      fail(400, { message: '审核参数不合法' })
-    }
-
-    const conn = await pool.getConnection()
-    try {
-      await conn.beginTransaction()
-
-      const request = await fetchWithdrawRequestById(conn, withdrawRequestId)
-      if (!request) {
-        fail(404, { message: '提现申请不存在' })
-      }
-      if (String(request.status || '') !== 'pending_review') {
-        fail(400, { message: '当前提现申请不在待审核状态' })
-      }
-
-      const walletAccount = await getWalletAccountForUpdate(conn, Number(request.user_id || 0))
-      const balanceBefore = Number(walletAccount.balance || 0)
-      const frozenBefore = Number(walletAccount.frozen_balance || 0)
-      const amount = Number(request.amount || 0)
-      if (frozenBefore < amount) {
-        fail(400, { message: '钱包冻结金额不足，无法继续处理该提现申请' })
-      }
-
-      if (action === 'reject') {
-        const balanceAfter = balanceBefore + amount
-        const frozenAfter = frozenBefore - amount
-        await conn.execute(
-          `UPDATE wallet_accounts
-           SET balance = ?,
-               frozen_balance = ?
-           WHERE user_id = ?`,
-          [balanceAfter, frozenAfter, Number(request.user_id || 0)]
-        )
-        await appendWalletLedger(conn, {
-          userId: Number(request.user_id || 0),
-          orderId: null,
-          businessType: 'withdraw_reject',
-          direction: 'credit',
-          amount,
-          balanceBefore,
-          balanceAfter,
-          remark: `提现驳回退回余额，单号 ${request.request_no}`
-        })
-        await conn.execute(
-          `UPDATE wallet_withdraw_requests
-           SET status = 'rejected',
-               provider = 'manual',
-               failure_reason = ?,
-               reviewed_by_user_id = ?,
-               reviewed_at = NOW(),
-               remark = COALESCE(?, remark),
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = ?`,
-          [remark || '管理员驳回提现申请', adminUserId, remark || null, withdrawRequestId]
-        )
-        const updatedRequest = await fetchWithdrawRequestById(conn, withdrawRequestId)
-        await conn.commit()
-        return {
-          ...updatedRequest,
-          provider_payload: safeJsonParse(updatedRequest?.provider_payload, null)
-        }
-      }
-
-      const accountSnapshot = safeJsonParse(request.account_snapshot_json, {})
-      const providerResult = await paymentProvider.createWithdrawal({
-        requestNo: request.request_no,
-        channel: request.channel,
-        amount,
-        accountName: accountSnapshot?.accountName || request.account_name,
-        accountNo: accountSnapshot?.accountNo || '',
-          payeeRealName: accountSnapshot?.payeeRealName || request.account_name
-      })
-      if (!providerResult?.ok) {
-        fail(502, { message: providerResult?.message || '提现代付下单失败' })
-      }
-
-      const nextStatus = String(providerResult.status || 'processing').trim() === 'success'
-        ? 'success'
-        : 'processing'
-
-      await conn.execute(
-        `UPDATE wallet_withdraw_requests
-         SET status = ?,
-             provider = ?,
-             provider_request_id = ?,
-             provider_payload = ?,
-             reviewed_by_user_id = ?,
-             reviewed_at = NOW(),
-             paid_at = CASE WHEN ? = 'success' THEN NOW() ELSE paid_at END,
-             remark = COALESCE(?, remark),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-        [
-          nextStatus,
-          String(providerResult.provider || paymentProvider.mode || 'mock_payment').trim() || 'mock_payment',
-          String(providerResult.providerRequestId || '').trim() || null,
-          safeJsonStringify(providerResult),
-          adminUserId,
-          nextStatus,
-          remark || null,
-          withdrawRequestId
-        ]
-      )
-
-      if (nextStatus === 'success') {
-        await conn.execute(
-          `UPDATE wallet_accounts
-           SET frozen_balance = ?
-           WHERE user_id = ?`,
-          [frozenBefore - amount, Number(request.user_id || 0)]
-        )
-      }
-
-      const updatedRequest = await fetchWithdrawRequestById(conn, withdrawRequestId)
-      await conn.commit()
-      return {
-        ...updatedRequest,
-        provider_payload: safeJsonParse(updatedRequest?.provider_payload, null)
-      }
-    } catch (error) {
-      await conn.rollback()
-      throw error
-    } finally {
-      conn.release()
-    }
-  }
-
-  async function handleWithdrawCallback(payload = {}) {
-    const requestNo = String(payload.requestNo || '').trim()
-    const providerRequestId = String(payload.providerRequestId || '').trim()
-    const callbackStatus = normalizeWithdrawCallbackStatus(payload.status)
-    const failureReason = String(payload.failureReason || '').trim().slice(0, 255)
-
-    if (!requestNo) {
-      fail(400, { message: '提现单号不能为空' })
-    }
-
-    const conn = await pool.getConnection()
-    try {
-      await conn.beginTransaction()
-      const request = await fetchWithdrawRequestByNo(conn, requestNo)
-      if (!request) {
-        fail(404, { message: '提现申请不存在' })
-      }
-      const previousStatus = String(request.status || '').trim()
-      if (['success', 'rejected', 'failed'].includes(String(request.status || '').trim())) {
-        await conn.commit()
-        return {
-          ...request,
-          previous_status: previousStatus,
-          provider_payload: safeJsonParse(request.provider_payload, null)
-        }
-      }
-
-      const walletAccount = await getWalletAccountForUpdate(conn, Number(request.user_id || 0))
-      const balanceBefore = Number(walletAccount.balance || 0)
-      const frozenBefore = Number(walletAccount.frozen_balance || 0)
-      const amount = Number(request.amount || 0)
-
-      await conn.execute(
-        `UPDATE wallet_withdraw_requests
-         SET status = ?,
-             provider_request_id = COALESCE(?, provider_request_id),
-             provider_payload = ?,
-             failure_reason = CASE
-               WHEN ? = 'failed' THEN ?
-               ELSE failure_reason
-             END,
-             paid_at = CASE
-               WHEN ? = 'success' THEN COALESCE(paid_at, NOW())
-               ELSE paid_at
-             END,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-        [
-          callbackStatus,
-          providerRequestId || null,
-          safeJsonStringify(payload.rawPayload ?? payload),
-          callbackStatus,
-          failureReason || '提现失败，金额已退回钱包',
-          callbackStatus,
-          Number(request.id || 0)
-        ]
-      )
-
-      if (callbackStatus === 'success') {
-        await conn.execute(
-          `UPDATE wallet_accounts
-           SET frozen_balance = ?
-           WHERE user_id = ?`,
-          [Math.max(0, frozenBefore - amount), Number(request.user_id || 0)]
-        )
-      } else if (callbackStatus === 'failed') {
-        const balanceAfter = balanceBefore + amount
-        await conn.execute(
-          `UPDATE wallet_accounts
-           SET balance = ?,
-               frozen_balance = ?
-           WHERE user_id = ?`,
-          [balanceAfter, Math.max(0, frozenBefore - amount), Number(request.user_id || 0)]
-        )
-        await appendWalletLedger(conn, {
-          userId: Number(request.user_id || 0),
-          orderId: null,
-          businessType: 'withdraw_fail_refund',
-          direction: 'credit',
-          amount,
-          balanceBefore,
-          balanceAfter,
-          remark: `提现失败退回余额，单号 ${request.request_no}`
-        })
-      }
-
-      const updatedRequest = await fetchWithdrawRequestByNo(conn, requestNo)
-      await conn.commit()
-      return {
-        ...updatedRequest,
-        previous_status: previousStatus,
-        provider_payload: safeJsonParse(updatedRequest?.provider_payload, null)
-      }
-    } catch (error) {
-      await conn.rollback()
-      throw error
-    } finally {
-      conn.release()
-    }
-  }
-
   return {
     createOrderPayment,
     getPaymentTransactionDetail,
@@ -1794,11 +1254,6 @@ export function createPaymentService(config = {}) {
     getUserSettlementPayoutList,
     createOrderRefund,
     createSettlementPayout,
-    reconcileOrderFunds,
-    getUserWithdrawList,
-    getAdminWithdrawList,
-    applyWithdraw,
-    reviewWithdraw,
-    handleWithdrawCallback
+    reconcileOrderFunds
   }
 }

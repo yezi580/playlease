@@ -625,7 +625,6 @@ function createHuifuCashierProvider(config = {}) {
           rawResponse: responseBody
         }
       }
-
       return {
         ok: true,
         provider: 'huifu_cashier',

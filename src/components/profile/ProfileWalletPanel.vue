@@ -83,7 +83,7 @@
             :value="accountForm.accountName"
             type="text"
             maxlength="50"
-            placeholder="请输入实名姓名"
+            placeholder="请输入收款人姓名"
             :disabled="submitting"
             @input="updateForm('accountName', $event.target.value)"
           >

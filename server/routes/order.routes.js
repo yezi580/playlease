@@ -431,48 +431,6 @@ app.put('/api/support/orders/:id/execute-settlement', authRequired, supportOnly,
   }
 })
 
-app.get('/api/wallet', authRequired, authenticatedReadLimiter, async (req, res) => {
-  try {
-    const [[accountRow]] = await pool.execute(
-      `SELECT balance, frozen_balance
-       FROM wallet_accounts
-       WHERE user_id = ?
-       LIMIT 1`,
-      [req.auth.userId]
-    )
-    res.json({
-      balance: normalizeOrderMoneyFields({ amount: Number(accountRow?.balance || 0), deposit_amount: 0 }).amount,
-      frozen_balance: normalizeOrderMoneyFields({ amount: Number(accountRow?.frozen_balance || 0), deposit_amount: 0 }).amount,
-      withdrawable_balance: normalizeOrderMoneyFields({ amount: Number(accountRow?.balance || 0), deposit_amount: 0 }).amount
-    })
-  } catch (_error) {
-    res.status(500).json({ message: '鑾峰彇閽卞寘浣欓澶辫触' })
-  }
-})
-
-app.get('/api/wallet/ledger', authRequired, authenticatedReadLimiter, async (req, res) => {
-  try {
-    const [rows] = await pool.execute(
-      `SELECT id, order_id, business_type, direction, amount, balance_before, balance_after, remark, created_at
-       FROM wallet_ledger
-       WHERE user_id = ?
-       ORDER BY id DESC
-       LIMIT 100`,
-      [req.auth.userId]
-    )
-    res.json({
-      list: rows.map((row) => ({
-        ...row,
-        amount: normalizeOrderMoneyFields({ amount: row.amount, deposit_amount: 0 }).amount,
-        balance_before: normalizeOrderMoneyFields({ amount: row.balance_before, deposit_amount: 0 }).amount,
-        balance_after: normalizeOrderMoneyFields({ amount: row.balance_after, deposit_amount: 0 }).amount
-      }))
-    })
-  } catch (_error) {
-    res.status(500).json({ message: '鑾峰彇閽卞寘娴佹按澶辫触' })
-  }
-})
-
 app.get('/api/orders/:id', authRequired, authenticatedReadLimiter, async (req, res) => {
   const orderId = Number(req.params?.id)
 
