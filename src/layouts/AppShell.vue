@@ -109,7 +109,6 @@
           {{ topBarBackActionText }}
         </button>
       </div>
-
       <template v-if="showHomeQuickActions">
         <div class="quick-action-wrapper invite-action">
           <button
@@ -232,13 +231,6 @@ const {
 const showHomeQuickActions = computed(() => {
   return routeName.value === 'home' && !showAuth.value
 })
-
-watch(
-  () => route.fullPath,
-  () => {
-    // 路由变化时可以处理其他逻辑
-  }
-)
 
 watch(
   () => showAuth.value,
@@ -546,7 +538,6 @@ function handleLogout() {
   box-shadow: 0 6px 20px rgba(6, 182, 212, 0.15);
   transform: translateX(-4px);
 }
-
 .home-quick-action-btn:hover {
   color: var(--brand-primary);
   border-color: var(--brand-primary);
