@@ -652,5 +652,33 @@ function handleLogout() {
     width: 20px;
     height: 20px;
   }
+
+  /* 移动端客服/售前咨询按钮显眼样式 */
+  .presale-action .home-quick-action-btn {
+    width: 56px;
+    height: 56px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: var(--brand-primary, #10b981);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    animation: pulse-shadow-soft 2.5s infinite;
+  }
+
+  .presale-action .action-icon {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@keyframes pulse-shadow-soft {
+  0% {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 0 0 0 rgba(16, 185, 129, 0.2);
+  }
+  70% {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 0 0 0 rgba(16, 185, 129, 0);
+  }
 }
 </style>
