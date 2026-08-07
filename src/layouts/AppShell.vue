@@ -32,10 +32,7 @@
     />
     <AppToast />
     <AppConfirm />
-    <main
-      class="main-content"
-      :class="{ 'has-floating-back': showTopBarBackAction && topBarBackActionText }"
-    >
+    <main class="main-content">
       <AuthPanel
         v-if="showAuth"
         :mode="authMode"
@@ -43,11 +40,28 @@
         @auth-success="handleAuthSuccess"
       />
       <RouterView v-else v-slot="{ Component, route: currentRoute }">
-        <template v-if="currentRoute.name === 'home'">
-          <KeepAlive include="HomePage">
+        <Transition name="app-page" mode="out-in">
+          <template v-if="currentRoute.name === 'home'">
+            <KeepAlive include="HomePage">
+              <component
+                :is="Component"
+                :key="'home'"
+                class="page-stage"
+                :is-logged-in="isLoggedIn"
+                :current-user="currentUser"
+                :current-user-role="currentUserRole"
+                :unread-message-count="regularUnreadMessageCount"
+                @require-login="handleRequireLogin"
+                @auth-expired="handleAuthExpired"
+                @logout="handleLogout"
+                @unread-change="handleUnreadChange"
+              />
+            </KeepAlive>
+          </template>
+          <template v-else>
             <component
               :is="Component"
-              :key="'home'"
+              :key="currentRoute.fullPath"
               class="page-stage"
               :is-logged-in="isLoggedIn"
               :current-user="currentUser"
@@ -58,23 +72,8 @@
               @logout="handleLogout"
               @unread-change="handleUnreadChange"
             />
-          </KeepAlive>
-        </template>
-        <template v-else>
-          <component
-            :is="Component"
-            :key="currentRoute.fullPath"
-            class="page-stage"
-            :is-logged-in="isLoggedIn"
-            :current-user="currentUser"
-            :current-user-role="currentUserRole"
-            :unread-message-count="regularUnreadMessageCount"
-            @require-login="handleRequireLogin"
-            @auth-expired="handleAuthExpired"
-            @logout="handleLogout"
-            @unread-change="handleUnreadChange"
-          />
-        </template>
+          </template>
+        </Transition>
       </RouterView>
     </main>
 
@@ -97,18 +96,6 @@
         'is-home': routeName === 'home'
       }"
     >
-      <div
-        v-if="showTopBarBackAction && topBarBackActionText"
-        class="quick-action-wrapper global-back-wrapper"
-      >
-        <button
-          class="global-floating-back-btn"
-          @click="handleTopBarBack"
-        >
-          <span class="back-icon">←</span>
-          {{ topBarBackActionText }}
-        </button>
-      </div>
       <template v-if="showHomeQuickActions">
         <div class="quick-action-wrapper invite-action">
           <button
@@ -497,11 +484,28 @@ function handleLogout() {
 
 .main-content {
   flex: 1;
-  box-sizing: border-box;
 }
 
 .page-stage {
   min-height: 100%;
+}
+
+.app-page-enter-active,
+.app-page-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease, filter 0.18s ease;
+  will-change: opacity, transform, filter;
+}
+
+.app-page-enter-from {
+  opacity: 0;
+  transform: translateY(6px) scale(0.996);
+  filter: blur(1px);
+}
+
+.app-page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.998);
+  filter: blur(0.6px);
 }
 
 .global-floating-actions {
@@ -515,34 +519,11 @@ function handleLogout() {
   gap: 12px;
 }
 
-.global-floating-back-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 24px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 100px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  color: #4b5563;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.global-floating-back-btn:hover {
-  color: var(--brand-primary, #06b6d4);
-  border-color: var(--brand-primary, #06b6d4);
-  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.15);
-  transform: translateX(-4px);
-}
 .home-quick-action-btn:hover {
   color: var(--brand-primary);
   border-color: var(--brand-primary);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.15);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.18);
 }
 
 .quick-action-wrapper {
@@ -553,11 +534,9 @@ function handleLogout() {
 }
 
 .action-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
-  font-weight: 600;
-  text-align: center;
-  transition: color 0.2s ease;
+  font-weight: 500;
 }
 
 .home-quick-action-btn {
@@ -580,12 +559,6 @@ function handleLogout() {
 .action-icon {
   width: 22px;
   height: 22px;
-}
-
-@media (min-width: 961px) and (max-width: 1920px) {
-  .main-content.has-floating-back {
-    padding-right: 220px;
-  }
 }
 
 @media (min-width: 961px) {
@@ -613,17 +586,17 @@ function handleLogout() {
     gap: 8px;
   }
 
-  .global-back-wrapper {
+  .invite-action {
+    display: none;
+  }
+
+  .action-label {
     display: none;
   }
 
   .home-quick-action-btn {
     width: 46px;
     height: 46px;
-  }
-
-  .action-label {
-    display: none;
   }
 
   .action-icon {
