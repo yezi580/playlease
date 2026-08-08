@@ -112,15 +112,8 @@ export function createMyListingsStatsData() {
 
 export function createSettlementAccountForm() {
   return {
-    provider: 'mock_payment',
-    accountType: 'person',
-    bindStatus: 'active',
     huifuId: '',
-    acctId: '',
-    accountName: '',
-    mobile: '',
-    idCardMasked: '',
-    remark: ''
+    accountName: ''
   }
 }
 

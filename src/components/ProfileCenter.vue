@@ -650,8 +650,8 @@ export default {
       return this.isLoggedIn && String(this.currentUserRole || '').trim() !== 'admin'
     },
     settlementAccountReady() {
-      return String(this.settlementAccountForm.bindStatus || '').trim().toLowerCase() === 'active'
-        && String(this.settlementAccountForm.huifuId || '').trim() !== ''
+      return String(this.settlementAccountForm.huifuId || '').trim() !== ''
+        && String(this.settlementAccountForm.accountName || '').trim() !== ''
     },
     visibleSections() {
       return this.canAccessFeedback
@@ -1302,15 +1302,8 @@ export default {
       const account = data.settlement_account || {}
       this.merchantPortalUrl = String(data.merchant_portal_url || '').trim()
       this.settlementAccountForm = {
-        provider: String(account.provider || 'mock_payment').trim() || 'mock_payment',
-        accountType: String(account.account_type || 'person').trim() || 'person',
-        bindStatus: String(account.bind_status || 'unbound').trim() || 'unbound',
         huifuId: String(account.huifu_id || '').trim(),
-        acctId: String(account.acct_id || '').trim(),
-        accountName: String(account.account_name || '').trim(),
-        mobile: String(account.mobile || '').trim(),
-        idCardMasked: String(account.id_card_masked || '').trim(),
-        remark: String(account.remark || '').trim()
+        accountName: String(account.account_name || '').trim()
       }
     },
     async fetchSettlementPayoutList() {
@@ -1348,15 +1341,10 @@ export default {
         await apiFetch('/api/settlement-account', {
           method: 'PUT',
           body: JSON.stringify({
-            provider: this.settlementAccountForm.provider,
-            account_type: this.settlementAccountForm.accountType,
-            bind_status: this.settlementAccountForm.bindStatus,
+            account_type: 'person',
+            bind_status: 'active',
             huifu_id: huifuId,
-            acct_id: String(this.settlementAccountForm.acctId || '').trim(),
-            account_name: accountName,
-            mobile: String(this.settlementAccountForm.mobile || '').trim(),
-            id_card_masked: String(this.settlementAccountForm.idCardMasked || '').trim(),
-            remark: String(this.settlementAccountForm.remark || '').trim()
+            account_name: accountName
           })
         })
         showSuccessToast('收款配置已保存')

@@ -7,8 +7,8 @@
   <div v-else class="profile-panel-card">
     <div class="wallet-summary-grid">
       <div>
-        <span class="wallet-summary-caption">当前状态</span>
-        <strong class="wallet-summary-minor">{{ getBindStatusText(accountForm.bindStatus) }}</strong>
+        <span class="wallet-summary-caption">进件状态</span>
+        <strong class="wallet-summary-minor">{{ isAccountReady ? '已完成' : '未完成' }}</strong>
       </div>
       <div>
         <span class="wallet-summary-caption">收款人</span>
@@ -23,13 +23,12 @@
     <div v-if="!isAccountReady" class="wallet-onboarding-guide">
       <div class="wallet-onboarding-header">
         <h4>个人进件引导</h4>
-        <p>完成个人进件后，订单结算时才能正常收到打款。未完成进件的卖家在客服分账时会被拦截。</p>
+        <p>卖家完成进件后才能收到结算打款，买家退押金走原路退回无需进件。请在汇付完成进件后，将汇付ID填入下方。</p>
       </div>
       <ol class="wallet-onboarding-steps">
         <li>
           <div class="wallet-onboarding-step-content">
-            <strong>前往汇付后台完成进件</strong>
-            <p>在汇付商户平台完成个人商户进件（实名认证 + 绑定结算卡），获取您的汇付 ID。</p>
+            <strong>前往汇付完成进件</strong>
           </div>
           <a
             v-if="merchantPortalUrl"
@@ -42,8 +41,7 @@
         </li>
         <li>
           <div class="wallet-onboarding-step-content">
-            <strong>返回此处填写收款账号</strong>
-            <p>将汇付后台返回的汇付 ID 和收款人信息填入下方表单，绑定状态设为"已启用"并保存。</p>
+            <strong>返回填写汇付ID</strong>
           </div>
         </li>
       </ol>
@@ -62,48 +60,14 @@
 
       <form class="wallet-form-grid" @submit.prevent="$emit('submit')">
         <label class="wallet-form-field">
-          <span>主体类型</span>
-          <select
-            :value="accountForm.accountType"
-            :disabled="submitting"
-            @change="updateForm('accountType', $event.target.value)"
-          >
-            <option value="person">个人</option>
-            <option value="enterprise">企业</option>
-          </select>
-        </label>
-        <label class="wallet-form-field">
-          <span>绑定状态</span>
-          <select
-            :value="accountForm.bindStatus"
-            :disabled="submitting"
-            @change="updateForm('bindStatus', $event.target.value)"
-          >
-            <option value="active">已启用</option>
-            <option value="pending">待校验</option>
-            <option value="disabled">已停用</option>
-          </select>
-        </label>
-        <label class="wallet-form-field">
           <span>汇付ID</span>
           <input
             :value="accountForm.huifuId"
             type="text"
             maxlength="32"
-            placeholder="请输入汇付 huifu_id"
+            placeholder="在汇付后台完成进件后获取"
             :disabled="submitting"
             @input="updateForm('huifuId', $event.target.value)"
-          >
-        </label>
-        <label class="wallet-form-field">
-          <span>账户号</span>
-          <input
-            :value="accountForm.acctId"
-            type="text"
-            maxlength="32"
-            placeholder="选填，汇付 acct_id"
-            :disabled="submitting"
-            @input="updateForm('acctId', $event.target.value)"
           >
         </label>
         <label class="wallet-form-field">
@@ -112,42 +76,9 @@
             :value="accountForm.accountName"
             type="text"
             maxlength="50"
-            placeholder="请输入收款人姓名"
+            placeholder="请输入在汇付注册的姓名"
             :disabled="submitting"
             @input="updateForm('accountName', $event.target.value)"
-          >
-        </label>
-        <label class="wallet-form-field">
-          <span>预留手机号</span>
-          <input
-            :value="accountForm.mobile"
-            type="text"
-            maxlength="20"
-            placeholder="选填，便于人工核对"
-            :disabled="submitting"
-            @input="updateForm('mobile', $event.target.value)"
-          >
-        </label>
-        <label class="wallet-form-field">
-          <span>脱敏证件号</span>
-          <input
-            :value="accountForm.idCardMasked"
-            type="text"
-            maxlength="40"
-            placeholder="如 3201********1234"
-            :disabled="submitting"
-            @input="updateForm('idCardMasked', $event.target.value)"
-          >
-        </label>
-        <label class="wallet-form-field wallet-form-field--full">
-          <span>备注说明</span>
-          <input
-            :value="accountForm.remark"
-            type="text"
-            maxlength="100"
-            placeholder="选填，例如该账号已完成线下核验"
-            :disabled="submitting"
-            @input="updateForm('remark', $event.target.value)"
           >
         </label>
         <div class="wallet-form-actions wallet-form-field--full">
@@ -209,15 +140,8 @@ const props = defineProps({
   accountForm: {
     type: Object,
     default: () => ({
-      provider: 'mock_payment',
-      accountType: 'person',
-      bindStatus: 'active',
       huifuId: '',
-      acctId: '',
-      accountName: '',
-      mobile: '',
-      idCardMasked: '',
-      remark: ''
+      accountName: ''
     })
   },
   formatMoney: { type: Function, default: (value) => value || '0.00' },
@@ -227,8 +151,8 @@ const props = defineProps({
 })
 
 const isAccountReady = computed(() => {
-  return String(props.accountForm.bindStatus || '').trim().toLowerCase() === 'active'
-    && String(props.accountForm.huifuId || '').trim() !== ''
+  return String(props.accountForm.huifuId || '').trim() !== ''
+    && String(props.accountForm.accountName || '').trim() !== ''
 })
 
 const emit = defineEmits(['login', 'refresh', 'submit', 'update:settlement-account-form'])
