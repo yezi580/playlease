@@ -600,6 +600,7 @@ const paymentProvider = createPaymentProvider({
   huifuId: process.env.HUIFU_HUIFU_ID,
   huifuHostingPreOrderUrl: process.env.HUIFU_HOSTING_PREORDER_URL,
   huifuHostingQueryOrderUrl: process.env.HUIFU_HOSTING_QUERY_ORDER_URL,
+  huifuHostingCloseUrl: process.env.HUIFU_HOSTING_CLOSE_URL,
   huifuHostingRefundUrl: process.env.HUIFU_HOSTING_REFUND_URL,
   huifuHostingRefundQueryUrl: process.env.HUIFU_HOSTING_REFUND_QUERY_URL,
   huifuAcctPaymentPayUrl: process.env.HUIFU_ACCTPAYMENT_PAY_URL,
@@ -621,6 +622,18 @@ const paymentProvider = createPaymentProvider({
   huifuPublicKey: process.env.HUIFU_PUBLIC_KEY,
   huifuVerifyResponseSignature: process.env.HUIFU_VERIFY_RESPONSE_SIGNATURE
 })
+
+const paymentConfigIssues = typeof paymentProvider?.getConfigIssues === 'function'
+  ? paymentProvider.getConfigIssues()
+  : []
+if (paymentConfigIssues.length) {
+  const paymentMessage = `[payment] provider config check failed: ${paymentConfigIssues.join('; ')}`
+  const strictPaymentCheck = !['0', 'false', 'off', 'no', ''].includes(String(process.env.PAYMENT_PROVIDER_STRICT_STARTUP_CHECK || '').trim().toLowerCase())
+  if (strictPaymentCheck) {
+    throw new Error(paymentMessage)
+  }
+  console.warn(paymentMessage)
+}
 
 const chatModule = createChatModule({
   pool,

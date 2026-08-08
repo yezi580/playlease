@@ -55,11 +55,12 @@
 
 当前配置说明:
 
-- 当前生产配置以 `deploy/env/prod.env` 为准；若启用汇付，请同步补齐支付查单、退款、退款查单、余额支付、余额支付查单相关 `HUIFU_*` 变量
+- 当前生产配置以 `deploy/env/prod.env` 为准；若启用汇付，请同步补齐支付查单、关单、退款、退款查单、余额支付、余额支付查单相关 `HUIFU_*` 变量
+- 生产环境已启用支付配置启动校验（`PAYMENT_PROVIDER_STRICT_STARTUP_CHECK=true`），汇付配置缺失将阻止应用启动
 - 实名认证模块已从当前业务主链路移除，无需再维护相关 `KYC_*` 配置
 - 微信支付与腾讯云 FaceID 相关配置当前不再需要
-- 文件上传默认走本地存储，`FILE_STORAGE_DRIVER=local`
-- 如需改回腾讯 COS，再补齐 `COS_*` 并将 `FILE_STORAGE_DRIVER` 改为 `cos`
+- 文件上传走腾讯云 COS 存储，`FILE_STORAGE_DRIVER=cos`，需补齐 `COS_*` 配置
+- 如需改回本地存储，将 `FILE_STORAGE_DRIVER` 改为 `local` 即可
 - 生产编排中的挂载路径全部为相对路径，项目放在 `/opt/my-app` 无需额外改代码
 - 当前生产应用连接池建议值:
   - `DB_CONNECTION_LIMIT=40`

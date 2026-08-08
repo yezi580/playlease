@@ -14,6 +14,9 @@ function safeJsonParse(value, fallback = null) {
 function createUnsupportedPaymentProvider(providerName = 'unknown') {
   return {
     mode: providerName,
+    getConfigIssues() {
+      return [`支付服务商 ${providerName} 未识别`]
+    },
     async createPaymentOrder() {
       return {
         ok: false,
@@ -329,6 +332,7 @@ function createHuifuCashierProvider(config = {}) {
     hostingRefundQueryUrl: resolveHuifuApiUrl(config.huifuHostingRefundQueryUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/queryrefundinfo'),
     acctPaymentPayUrl: resolveHuifuApiUrl(config.huifuAcctPaymentPayUrl, config.huifuGatewayUrl, '/v2/trade/acctpayment/pay'),
     acctPaymentPayQueryUrl: resolveHuifuApiUrl(config.huifuAcctPaymentPayQueryUrl, config.huifuGatewayUrl, '/v2/trade/acctpayment/pay/query'),
+    hostingCloseUrl: resolveHuifuApiUrl(config.huifuHostingCloseUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/close'),
     notifyUrl: String(config.huifuNotifyUrl || '').trim(),
     returnUrl: String(config.huifuReturnUrl || '').trim(),
     appName: String(config.appName || 'my-app').trim() || 'my-app',
@@ -374,6 +378,9 @@ function createHuifuCashierProvider(config = {}) {
     }
     if (action === 'query_payment' && !runtimeConfig.hostingQueryOrderUrl) {
       issues.push('缺少 HUIFU_HOSTING_QUERY_ORDER_URL')
+    }
+    if (action === 'close_payment' && !runtimeConfig.hostingCloseUrl) {
+      issues.push('缺少 HUIFU_HOSTING_CLOSE_URL')
     }
     if (action === 'refund' && !runtimeConfig.hostingRefundUrl) {
       issues.push('缺少 HUIFU_HOSTING_REFUND_URL')
@@ -512,6 +519,7 @@ function createHuifuCashierProvider(config = {}) {
       trans_amt: toCentAmountYuanString(payload.amount),
       goods_desc: String(payload.subject || payload.transactionNo || `${runtimeConfig.appName}支付订单`).trim().slice(0, 128),
       pre_order_type: '1',
+      multi_pay_way_flag: 'Y',
       hosting_data: JSON.stringify(hostingData)
     }
     if (runtimeConfig.notifyUrl) {
@@ -730,6 +738,16 @@ function createHuifuCashierProvider(config = {}) {
     })
   }
 
+  function buildHostingCloseBusinessData(payload = {}) {
+    return sanitizeHuifuObject({
+      req_date: getReqDateFromTransactionNo(createHuifuReqSeqId('PCL')),
+      req_seq_id: createHuifuReqSeqId('PCL'),
+      huifu_id: runtimeConfig.huifuId,
+      org_req_date: String(payload.orgReqDate || getReqDateFromTransactionNo(payload.transactionNo)).trim(),
+      org_req_seq_id: String(payload.transactionNo || payload.orgReqSeqId || '').trim()
+    })
+  }
+
   function buildBalancePayoutBusinessData(payload = {}) {
     const acctInfos = [
       sanitizeHuifuObject({
@@ -776,6 +794,9 @@ function createHuifuCashierProvider(config = {}) {
 
   return {
     mode: 'huifu_cashier',
+    getConfigIssues() {
+      return getConfigIssueList()
+    },
     async createPaymentOrder(payload = {}) {
       return createPaymentOrder(payload)
     },
@@ -961,12 +982,44 @@ function createHuifuCashierProvider(config = {}) {
         rawResponse: response.rawResponse
       }
     },
-    async closePaymentOrder() {
+    async closePaymentOrder(payload = {}) {
+      const transactionNo = String(payload.transactionNo || '').trim()
+      const issues = getActionConfigIssues('close_payment')
+      if (issues.length) {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: 'config_incomplete',
+          message: `汇付关单配置不完整：${issues.join('；')}`
+        }
+      }
+      if (!transactionNo) {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: 'invalid_transaction_no',
+          message: '支付流水号不能为空'
+        }
+      }
+      const businessData = buildHostingCloseBusinessData(payload)
+      const response = await sendHuifuRequest(runtimeConfig.hostingCloseUrl, businessData, {
+        provider: 'huifu_cashier'
+      })
+      if (!response.ok) {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: response.reason || 'provider_rejected',
+          message: response.message || response.respDesc || `汇付关单失败（交易号 ${transactionNo}）`,
+          rawResponse: response.rawResponse
+        }
+      }
       return {
-        ok: false,
+        ok: true,
         provider: 'huifu_cashier',
-        reason: 'provider_not_implemented',
-        message: '汇付统一收银台关单能力待补充'
+        transactionNo,
+        status: 'cancelled',
+        rawResponse: response.rawResponse
       }
     },
     async parsePaymentCallback(payload = {}) {
@@ -1012,6 +1065,9 @@ function createMockPaymentProvider(config = {}) {
 
   return {
     mode: 'mock_payment',
+    getConfigIssues() {
+      return []
+    },
     async createPaymentOrder(payload = {}) {
       const channel = String(payload.channel || 'online').trim().toLowerCase() || 'online'
       const transactionNo = String(payload.transactionNo || '').trim()
@@ -1297,6 +1353,11 @@ export function createPaymentProvider(config = {}) {
     mode: paymentProvider.mode,
     paymentMode: paymentProvider.mode,
     withdrawMode: withdrawProvider.mode,
+    getConfigIssues() {
+      return typeof paymentProvider.getConfigIssues === 'function'
+        ? paymentProvider.getConfigIssues()
+        : []
+    },
     async createPaymentOrder(payload = {}) {
       return paymentProvider.createPaymentOrder(payload)
     },
