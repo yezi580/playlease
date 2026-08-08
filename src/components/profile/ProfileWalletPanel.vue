@@ -25,33 +25,23 @@
         <h4>个人进件引导</h4>
         <p>卖家完成进件后才能收到结算打款，买家退押金走原路退回无需进件。请在汇付完成进件后，将汇付ID填入下方。</p>
       </div>
-      <ol class="wallet-onboarding-steps">
-        <li>
-          <div class="wallet-onboarding-step-content">
-            <strong>前往汇付完成进件</strong>
-          </div>
-          <a
-            v-if="merchantPortalUrl"
-            :href="merchantPortalUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="order-action-btn primary wallet-onboarding-link"
-          >前往汇付后台</a>
-          <span v-else class="wallet-onboarding-hint">请联系平台客服获取汇付后台地址</span>
-        </li>
-        <li>
-          <div class="wallet-onboarding-step-content">
-            <strong>返回填写汇付ID</strong>
-          </div>
-        </li>
-      </ol>
+      <div class="wallet-onboarding-inline">
+        <span>1.前往汇付完成进件 &nbsp; 2.返回填写汇付ID</span>
+        <a
+          v-if="merchantPortalUrl"
+          :href="merchantPortalUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="order-action-btn primary wallet-onboarding-link"
+        >前往汇付后台</a>
+        <span v-else class="wallet-onboarding-hint">请联系平台客服获取汇付后台地址</span>
+      </div>
     </div>
 
     <div class="wallet-action-card">
       <div class="wallet-action-header">
         <div>
-        <h4>个人进件 · 收款账号配置</h4>
-        <p>余额支付会直接打到这里。买家退款走原路退回，不再经过站内钱包。未完成进件的卖家在客服分账时会被拦截。</p>
+        <h4>收款账号配置</h4>
       </div>
         <button type="button" class="order-action-btn ghost" :disabled="loading || submitting" @click="$emit('refresh')">
           刷新状态
@@ -302,30 +292,18 @@ function updateForm(field, value) {
   list-style: decimal;
 }
 
-.wallet-onboarding-steps li {
+.wallet-onboarding-inline {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 0;
+  margin-top: 12px;
 }
 
-.wallet-onboarding-steps li + li {
-  border-top: 1px dashed #fde68a;
-}
-
-.wallet-onboarding-step-content strong {
-  display: block;
+.wallet-onboarding-inline span {
   color: #92400e;
   font-size: 14px;
-  margin-bottom: 2px;
-}
-
-.wallet-onboarding-step-content p {
-  margin: 0;
-  color: #b45309;
-  font-size: 12px;
-  line-height: 1.5;
+  font-weight: 600;
 }
 
 .wallet-onboarding-link {
@@ -345,7 +323,7 @@ function updateForm(field, value) {
 }
 
 @media (max-width: 960px) {
-  .wallet-onboarding-steps li {
+  .wallet-onboarding-inline {
     flex-direction: column;
     align-items: flex-start;
   }
