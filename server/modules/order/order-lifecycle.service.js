@@ -1250,7 +1250,7 @@ export function createOrderLifecycleService({
           if (Number(order.listing_id || 0) > 0) {
             await finalizeConn.execute(
               `UPDATE listings
-               SET listing_status = 'active'
+               SET listing_status = 'sold_out'
                WHERE id = ? AND listing_status = 'rented'`,
               [order.listing_id]
             )
