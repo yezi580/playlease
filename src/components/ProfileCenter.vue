@@ -176,6 +176,13 @@
       </section>
 
       <section v-else-if="activeSection === 'published'" :key="'published'" class="profile-panel profile-panel--published">
+        <div v-if="isLoggedIn && !settlementAccountReady" class="profile-onboarding-alert">
+          <div class="profile-onboarding-alert-content">
+            <strong>个人进件未完成</strong>
+            <p>完成个人进件（收款账号配置）后，订单结算时才能正常收到打款。未完成的卖家在客服分账时会被拦截。</p>
+          </div>
+          <button type="button" class="order-action-btn primary profile-onboarding-btn" @click="switchSection('wallet')">去配置</button>
+        </div>
         <div class="profile-panel-card">
           <div class="profile-order-toolbar">
             <div class="order-filter-tabs" aria-label="我发布的状态筛选">
@@ -329,6 +336,7 @@
           :submitting="settlementSubmitting"
           :account-form="settlementAccountForm"
           :payout-list="settlementPayoutList"
+          :merchant-portal-url="merchantPortalUrl"
           :format-money="formatMoney"
           :format-order-date="formatOrderDate"
           :get-bind-status-text="getSettlementBindStatusText"
@@ -616,6 +624,7 @@ export default {
       settlementSubmitting: false,
       settlementError: '',
       settlementPayoutList: [],
+      merchantPortalUrl: '',
       settlementAccountForm: createSettlementAccountForm(),
       inviteLoading: false,
       inviteSubmitting: false,
@@ -639,6 +648,10 @@ export default {
     },
     canAccessFeedback() {
       return this.isLoggedIn && String(this.currentUserRole || '').trim() !== 'admin'
+    },
+    settlementAccountReady() {
+      return String(this.settlementAccountForm.bindStatus || '').trim().toLowerCase() === 'active'
+        && String(this.settlementAccountForm.huifuId || '').trim() !== ''
     },
     visibleSections() {
       return this.canAccessFeedback
@@ -746,6 +759,7 @@ export default {
       this.loadMessageData()
     } else if (this.activeSection === 'published') {
       this.loadMyListingsData()
+      this.checkSettlementAccountStatus()
     } else if (this.activeSection === 'wallet') {
       this.loadSettlementData()
     } else if (this.activeSection === 'invite') {
@@ -901,6 +915,7 @@ export default {
         this.loadMessageData()
       } else if (normalizedSectionKey === 'published') {
         this.loadMyListingsData()
+        this.checkSettlementAccountStatus()
       } else if (normalizedSectionKey === 'wallet') {
         this.loadSettlementData()
       } else if (normalizedSectionKey === 'invite') {
@@ -1015,6 +1030,13 @@ export default {
         this.settlementError = error.message || '收款配置加载失败'
       } finally {
         this.settlementLoading = false
+      }
+    },
+    async checkSettlementAccountStatus() {
+      try {
+        await this.fetchSettlementAccount()
+      } catch {
+        // 静默失败，不影响"我发布的"页面正常展示
       }
     },
     applyInvitePayload(data = {}) {
@@ -1278,6 +1300,7 @@ export default {
     async fetchSettlementAccount() {
       const data = await apiFetch('/api/settlement-account')
       const account = data.settlement_account || {}
+      this.merchantPortalUrl = String(data.merchant_portal_url || '').trim()
       this.settlementAccountForm = {
         provider: String(account.provider || 'mock_payment').trim() || 'mock_payment',
         accountType: String(account.account_type || 'person').trim() || 'person',
@@ -1685,6 +1708,49 @@ export default {
 .profile-panel-card {
   background: #fff;
   border-radius: 16px;
+}
+
+.profile-onboarding-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  border: 1px solid #fcd34d;
+  border-radius: 14px;
+  background: #fffbeb;
+}
+
+.profile-onboarding-alert-content strong {
+  display: block;
+  color: #92400e;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.profile-onboarding-alert-content p {
+  margin: 0;
+  color: #b45309;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.profile-onboarding-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 960px) {
+  .profile-onboarding-alert {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-onboarding-btn {
+    align-self: stretch;
+    text-align: center;
+  }
 }
 
 .profile-user-card {

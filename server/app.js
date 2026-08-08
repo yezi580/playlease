@@ -2482,6 +2482,7 @@ registerPaymentRoutes({
   normalizeOrderMoneyFields,
   paymentProvider,
   paymentService,
+  huifuMerchantPortalUrl: process.env.HUIFU_MERCHANT_PORTAL_URL || '',
   yuanToCent,
   createUserNotificationSafely
 })

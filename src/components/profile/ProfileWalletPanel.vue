@@ -1,7 +1,7 @@
 <template>
   <div v-if="!isLoggedIn" class="profile-placeholder-card">
     <h4>收款设置</h4>
-    <p>登录后可配置卖家收款账号，并查看平台发起的余额支付结算记录。</p>
+    <p>登录后可完成个人进件（配置卖家收款账号），并查看平台发起的余额支付结算记录。</p>
     <button type="button" class="profile-login-btn" @click="$emit('login')">立即登录</button>
   </div>
   <div v-else class="profile-panel-card">
@@ -20,12 +20,41 @@
       </div>
     </div>
 
+    <div v-if="!isAccountReady" class="wallet-onboarding-guide">
+      <div class="wallet-onboarding-header">
+        <h4>个人进件引导</h4>
+        <p>完成个人进件后，订单结算时才能正常收到打款。未完成进件的卖家在客服分账时会被拦截。</p>
+      </div>
+      <ol class="wallet-onboarding-steps">
+        <li>
+          <div class="wallet-onboarding-step-content">
+            <strong>前往汇付后台完成进件</strong>
+            <p>在汇付商户平台完成个人商户进件（实名认证 + 绑定结算卡），获取您的汇付 ID。</p>
+          </div>
+          <a
+            v-if="merchantPortalUrl"
+            :href="merchantPortalUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="order-action-btn primary wallet-onboarding-link"
+          >前往汇付后台</a>
+          <span v-else class="wallet-onboarding-hint">请联系平台客服获取汇付后台地址</span>
+        </li>
+        <li>
+          <div class="wallet-onboarding-step-content">
+            <strong>返回此处填写收款账号</strong>
+            <p>将汇付后台返回的汇付 ID 和收款人信息填入下方表单，绑定状态设为"已启用"并保存。</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+
     <div class="wallet-action-card">
       <div class="wallet-action-header">
         <div>
-          <h4>收款账号配置</h4>
-          <p>余额支付会直接打到这里。买家退款走原路退回，不再经过站内钱包。</p>
-        </div>
+        <h4>个人进件 · 收款账号配置</h4>
+        <p>余额支付会直接打到这里。买家退款走原路退回，不再经过站内钱包。未完成进件的卖家在客服分账时会被拦截。</p>
+      </div>
         <button type="button" class="order-action-btn ghost" :disabled="loading || submitting" @click="$emit('refresh')">
           刷新状态
         </button>
@@ -164,6 +193,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 defineOptions({
   name: 'ProfileWalletPanel'
 })
@@ -174,6 +205,7 @@ const props = defineProps({
   error: { type: String, default: '' },
   submitting: { type: Boolean, default: false },
   payoutList: { type: Array, default: () => [] },
+  merchantPortalUrl: { type: String, default: '' },
   accountForm: {
     type: Object,
     default: () => ({
@@ -192,6 +224,11 @@ const props = defineProps({
   formatOrderDate: { type: Function, default: (value) => value || '--' },
   getBindStatusText: { type: Function, default: (value) => value || '--' },
   getPayoutStatusText: { type: Function, default: (value) => value || '--' }
+})
+
+const isAccountReady = computed(() => {
+  return String(props.accountForm.bindStatus || '').trim().toLowerCase() === 'active'
+    && String(props.accountForm.huifuId || '').trim() !== ''
 })
 
 const emit = defineEmits(['login', 'refresh', 'submit', 'update:settlement-account-form'])
@@ -312,6 +349,86 @@ function updateForm(field, value) {
 
 .wallet-action-card {
   margin-bottom: 24px;
+}
+
+.wallet-onboarding-guide {
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid #fcd34d;
+  border-radius: 14px;
+  background: #fffbeb;
+}
+
+.wallet-onboarding-header h4 {
+  margin: 0 0 6px;
+  color: #92400e;
+  font-size: 16px;
+}
+
+.wallet-onboarding-header p {
+  margin: 0;
+  color: #b45309;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.wallet-onboarding-steps {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  list-style: decimal;
+}
+
+.wallet-onboarding-steps li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.wallet-onboarding-steps li + li {
+  border-top: 1px dashed #fde68a;
+}
+
+.wallet-onboarding-step-content strong {
+  display: block;
+  color: #92400e;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.wallet-onboarding-step-content p {
+  margin: 0;
+  color: #b45309;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wallet-onboarding-link {
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallet-onboarding-hint {
+  color: #92400e;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 960px) {
+  .wallet-onboarding-steps li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .wallet-onboarding-link {
+    align-self: stretch;
+  }
 }
 
 .wallet-action-header {

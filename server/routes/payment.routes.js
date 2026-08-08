@@ -92,7 +92,8 @@ export function registerPaymentRoutes(deps) {
     orderWriteLimiter,
     normalizeOrderMoneyFields,
     paymentProvider,
-    paymentService
+    paymentService,
+    huifuMerchantPortalUrl
   } = deps
 
   app.post('/api/pay/create', authRequired, orderWriteLimiter, async (req, res) => {
@@ -186,7 +187,8 @@ export function registerPaymentRoutes(deps) {
         userId: req.auth.userId
       })
       res.json({
-        settlement_account: serializeSettlementAccount(account)
+        settlement_account: serializeSettlementAccount(account),
+        merchant_portal_url: String(huifuMerchantPortalUrl || '').trim()
       })
     } catch (error) {
       handlePaymentServiceError(error, res, '获取收款账号配置失败')
