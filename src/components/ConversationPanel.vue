@@ -374,12 +374,14 @@ export default {
           || 0
         )
         this.messages = this.normalizeMessages(history.list)
+        this.loading = false
 
         await this.tryMarkConversationRead()
         if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
         await nextTick()
         if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
         this.scrollToBottom()
+        this.scrollToBottomDelayed()
         this.setupSocket()
       } catch (error) {
         if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
@@ -427,6 +429,7 @@ export default {
         this.messages.push(normalizedMessage)
         await nextTick()
         this.scrollToBottom()
+        this.scrollToBottomDelayed()
         this.tryMarkConversationRead(message.id)
       })
 
@@ -503,6 +506,7 @@ export default {
 
         await nextTick()
         this.scrollToBottom()
+        this.scrollToBottomDelayed()
         await this.tryMarkConversationRead(lastMessageId)
       } catch (error) {
         this.error = error.message || '发送失败，请稍后重试'
@@ -658,6 +662,12 @@ export default {
       const container = this.$refs.messageListRef
       if (!container) return
       container.scrollTop = container.scrollHeight
+    },
+    scrollToBottomDelayed() {
+      const delays = [50, 150, 300]
+      delays.forEach((delay) => {
+        setTimeout(() => this.scrollToBottom(), delay)
+      })
     },
     formatTime(value) {
       if (!value) return '--:--'
