@@ -9,9 +9,7 @@
     "dev:server": "node --watch server/index.js",
     "build": "vite build",
     "build:all": "vite build",
-    "preview": "vite preview",
-    "load:chat:http": "node scripts/chat-http-load.mjs",
-    "load:chat:socket": "node scripts/chat-socket-load.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "echarts": "^6.1.0",

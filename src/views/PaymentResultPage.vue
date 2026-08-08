@@ -124,7 +124,7 @@ export default {
       if (this.paymentMethod) return this.paymentMethod
       const channel = String(this.transaction?.channel || this.returnContext?.paymentChannel || '').trim().toLowerCase()
       if (channel === 'alipay_h5') return '支付宝支付'
-      if (channel === 'cashier_pc') return '微信/支付宝收银台'
+      if (channel === 'cashier_pc') return '支付宝支付'
       return '-'
     },
     displayTotalAmount() {

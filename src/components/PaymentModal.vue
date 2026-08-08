@@ -193,7 +193,7 @@ export default {
         ]
       }
       return [
-        { key: 'cashier_pc', name: '微信/支付宝收银台', icon: 'C' }
+        { key: 'cashier_pc', name: '支付宝支付', icon: 'A' }
       ]
     },
     buyerRentLabel() {
