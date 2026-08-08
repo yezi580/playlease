@@ -17,7 +17,7 @@
           <div v-else-if="error" class="conversation-state conversation-state--error">{{ error }}</div>
 
           <template v-else>
-            <div ref="messageListRef" class="conversation-messages">
+            <div ref="messageListRef" class="conversation-messages" :class="{ 'conversation-messages--hidden': !messagesReady }">
               <div v-if="!messages.length" class="conversation-empty">
                 请输入消息或图片，按Enter发送
               </div>
@@ -202,7 +202,8 @@ export default {
       joinedConversation: false,
       conversationRequestId: 0,
       pageVisible: true,
-      windowFocused: true
+      windowFocused: true,
+      messagesReady: false
     }
   },
   computed: {
@@ -373,6 +374,7 @@ export default {
           || conversation.current_user_id
           || 0
         )
+        this.messagesReady = false
         this.messages = this.normalizeMessages(history.list)
         this.loading = false
 
@@ -381,6 +383,7 @@ export default {
         await nextTick()
         if (!this.isLatestConversationRequest(requestId, targetConversationKey)) return
         this.scrollToBottom()
+        this.messagesReady = true
         this.scrollToBottomDelayed()
         this.setupSocket()
       } catch (error) {
@@ -449,6 +452,7 @@ export default {
       this.draft = ''
       this.closeImagePreview()
       this.clearPendingImages()
+      this.messagesReady = false
     },
     async markConversationRead(lastReadMessageId) {
       const conversationId = Number(this.conversation?.id || 0)
@@ -756,6 +760,10 @@ export default {
   flex-direction: column;
   gap: 14px;
   background: #f8fafc;
+}
+
+.conversation-messages--hidden {
+  visibility: hidden;
 }
 
 .conversation-message {
