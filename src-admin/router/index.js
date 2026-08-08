@@ -7,7 +7,6 @@ import AdminSecurityCenter from '../components/AdminSecurityCenter.vue'
 import ListingReviewCenter from '../components/ListingReviewCenter.vue'
 import AdminBusinessSettingsCenter from '../components/AdminBusinessSettingsCenter.vue'
 import OperationLogCenter from '../components/OperationLogCenter.vue'
-import AdminWithdrawCenter from '../components/AdminWithdrawCenter.vue'
 import AdminFeedbackCenter from '../components/AdminFeedbackCenter.vue'
 
 export const adminSections = [
@@ -50,14 +49,6 @@ export const adminSections = [
     label: '商品审核',
     description: '审核新发布或重新提交的商品内容',
     component: ListingReviewCenter
-  },
-  {
-    key: 'withdraws',
-    routeName: 'admin-withdraws',
-    path: '/withdraws',
-    label: '提现审核',
-    description: '审核钱包提现申请、查看打款状态与处理记录',
-    component: AdminWithdrawCenter
   },
   {
     key: 'feedback',

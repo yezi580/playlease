@@ -38,14 +38,6 @@ function createUnsupportedPaymentProvider(providerName = 'unknown') {
         message: `支付服务商 ${providerName} 尚未接入关单能力`
       }
     },
-    async createWithdrawal() {
-      return {
-        ok: false,
-        provider: providerName,
-        reason: 'provider_not_implemented',
-        message: `代付服务商 ${providerName} 尚未接入`
-      }
-    },
     async createRefund() {
       return {
         ok: false,
@@ -787,14 +779,6 @@ function createHuifuCashierProvider(config = {}) {
     async createPaymentOrder(payload = {}) {
       return createPaymentOrder(payload)
     },
-    async createWithdrawal() {
-      return {
-        ok: false,
-        provider: 'huifu_cashier',
-        reason: 'provider_not_implemented',
-        message: '汇付统一收银台暂未接入代付能力'
-      }
-    },
     async createRefund() {
       const issues = getActionConfigIssues('refund')
       if (issues.length) {
@@ -1158,26 +1142,6 @@ function createMockPaymentProvider(config = {}) {
         }
       }
     },
-    async createWithdrawal(payload = {}) {
-      const requestNo = String(payload.requestNo || '').trim()
-      const status = withdrawImmediateSuccess ? 'success' : 'processing'
-      return {
-        ok: true,
-        provider: 'mock_payment',
-        requestNo,
-        providerRequestId: createMockBusinessNo('MWD'),
-        status,
-        rawResponse: {
-          mock: true,
-          requestNo,
-          status,
-          channel: String(payload.channel || 'bank').trim().toLowerCase() || 'bank',
-          message: withdrawImmediateSuccess
-            ? '演示环境：提现审核通过后立即标记成功'
-            : '演示环境：提现审核通过后进入处理中'
-        }
-      }
-    },
     async createRefund(payload = {}) {
       const refundNo = String(payload.refundNo || '').trim()
       const transactionNo = String(payload.transactionNo || '').trim()
@@ -1335,9 +1299,6 @@ export function createPaymentProvider(config = {}) {
     withdrawMode: withdrawProvider.mode,
     async createPaymentOrder(payload = {}) {
       return paymentProvider.createPaymentOrder(payload)
-    },
-    async createWithdrawal(payload = {}) {
-      return withdrawProvider.createWithdrawal(payload)
     },
     async createRefund(payload = {}) {
       if (typeof paymentProvider.createRefund !== 'function') {

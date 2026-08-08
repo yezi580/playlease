@@ -107,8 +107,6 @@ const ACTION_LABELS = Object.freeze({
   deactivate_listing: '下架商品',
   approve_listing: '审核通过',
   reject_listing: '审核驳回',
-  approve_withdraw: '提现通过',
-  reject_withdraw: '提现驳回',
   delete_passkey: '删除 Passkey',
   trust_current_device: '信任当前设备',
   revoke_trusted_device: '移除受信任设备',
