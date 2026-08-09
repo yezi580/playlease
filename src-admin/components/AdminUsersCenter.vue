@@ -254,6 +254,7 @@ export default {
       const days = Number(this.banDaysDrafts[item.id] || 0)
       if (Boolean(this.banSubmittingMap[item.id])) return false
       if (Number(item.id) === Number(this.currentUser?.id || 0)) return false
+      if (String(item.role || '').trim() === 'admin') return false
       return Number.isInteger(days) && days >= 1 && days <= 3650
     },
     async saveUserRole(item) {

@@ -1814,6 +1814,10 @@ app.put(
       return res.status(404).json({ message: '用户不存在' })
     }
 
+    if (String(rows[0].role || '').trim() === 'admin') {
+      return res.status(403).json({ message: '不能封禁管理员账号' })
+    }
+
     await pool.query(
       `UPDATE users
        SET banned_until = DATE_ADD(NOW(), INTERVAL ${days} DAY)
