@@ -20,10 +20,23 @@
       </div>
     </div>
 
-    <!-- 已完成入驻：显示提现提示 -->
+    <!-- 已完成入驻：显示余额和提现入口 -->
     <div v-if="isAccountReady" class="wallet-cashout-notice">
-      <p>结算打款和邀新返现已自动到账至您的汇付账户，如需提现请前往汇付后台操作。</p>
-      <a v-if="merchantPortalUrl" :href="merchantPortalUrl" target="_blank" rel="noopener noreferrer" class="order-action-btn primary">前往汇付后台提现</a>
+      <div class="wallet-cashout-info">
+        <p>结算打款和邀新返现已自动到账至您的汇付账户，您可以直接在此提现到绑定的银行卡。</p>
+        <p class="wallet-cashout-balance">账户可用余额：<strong>{{ balance || '0.00' }}</strong> 元</p>
+        <p class="wallet-cashout-hint">提示：D1到账（次自然日），手续费率 0.05%。</p>
+      </div>
+      <form class="wallet-cashout-form" @submit.prevent="handleEncashment">
+        <input v-model="encashmentForm.amount" type="number" step="0.01" min="0.01" :max="balance || undefined" placeholder="提现金额（元）" :disabled="encashing" class="wallet-cashout-input">
+        <button type="submit" class="order-action-btn primary" :disabled="encashing || !balance || Number(balance) <= 0">
+          {{ encashing ? '处理中...' : '提现' }}
+        </button>
+      </form>
+      <div v-if="encashmentError" class="wallet-form-error">{{ encashmentError }}</div>
+      <div v-if="encashmentResult" class="wallet-form-success">
+        {{ encashmentResult }}
+      </div>
     </div>
 
     <!-- 未完成入驻：显示两步入驻流程 -->
@@ -103,11 +116,17 @@
           </label>
           <label class="wallet-form-field">
             <span>银行所在省</span>
-            <input v-model="bindCardForm.provId" type="text" maxlength="6" placeholder="地区编码，如310000" :disabled="binding">
+            <select v-model="bindCardForm.provId" :disabled="binding" @change="onProvChange">
+              <option value="">请选择省份</option>
+              <option v-for="prov in areaCodes" :key="prov.code" :value="prov.code">{{ prov.name }}</option>
+            </select>
           </label>
           <label class="wallet-form-field">
             <span>银行所在市</span>
-            <input v-model="bindCardForm.areaId" type="text" maxlength="6" placeholder="地区编码，如310100" :disabled="binding">
+            <select v-model="bindCardForm.areaId" :disabled="binding || !bindCardForm.provId">
+              <option value="">请选择城市</option>
+              <option v-for="city in currentCities" :key="city.code" :value="city.code">{{ city.name }}</option>
+            </select>
           </label>
           <label class="wallet-form-field">
             <span>身份证号</span>
@@ -198,6 +217,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { apiFetch } from '../../utils/api.js'
+import areaCodes from '../../utils/area-codes.json'
 
 defineOptions({
   name: 'ProfileWalletPanel'
@@ -209,6 +229,7 @@ const props = defineProps({
   error: { type: String, default: '' },
   submitting: { type: Boolean, default: false },
   payoutList: { type: Array, default: () => [] },
+  balance: { type: String, default: '' },
   merchantPortalUrl: { type: String, default: '' },
   accountForm: {
     type: Object,
@@ -305,6 +326,46 @@ const bindCardForm = reactive({
   mobileNo: ''
 })
 
+const currentCities = computed(() => {
+  const prov = areaCodes.find(p => p.code === bindCardForm.provId)
+  return prov ? prov.cities : []
+})
+
+function onProvChange() {
+  bindCardForm.areaId = ''
+}
+
+// 步骤三：提现
+const encashing = ref(false)
+const encashmentError = ref('')
+const encashmentResult = ref('')
+const encashmentForm = reactive({ amount: '' })
+
+async function handleEncashment() {
+  encashmentError.value = ''
+  encashmentResult.value = ''
+  const amt = Number(encashmentForm.amount || 0)
+  if (!amt || amt <= 0) {
+    encashmentError.value = '请输入有效的提现金额'
+    return
+  }
+  encashing.value = true
+  try {
+    const res = await apiFetch('/api/settlement-account/encashment', {
+      method: 'POST',
+      body: JSON.stringify({ cash_amt: amt.toFixed(2) })
+    })
+    const statText = res.trans_stat === 'S' ? '成功' : res.trans_stat === 'P' ? '处理中' : '失败'
+    encashmentResult.value = `提现${statText}，金额 ${res.cash_amt} 元，流水号 ${res.hf_seq_id || res.req_seq_id || '-'}`
+    encashmentForm.amount = ''
+    emit('refresh')
+  } catch (err) {
+    encashmentError.value = err?.body?.message || err?.message || '提现失败，请稍后重试'
+  } finally {
+    encashing.value = false
+  }
+}
+
 async function handleBindCard() {
   bindCardError.value = ''
   if (!bindCardForm.cardName.trim() || !bindCardForm.cardNo.trim()) {
@@ -389,21 +450,58 @@ async function handleBindCard() {
 
 .wallet-cashout-notice {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 16px;
   margin-bottom: 16px;
   background: #fff7ed;
   border: 1px solid #fed7aa;
   border-radius: 8px;
 }
 
-.wallet-cashout-notice p {
+.wallet-cashout-info p {
   margin: 0;
   color: #9a3412;
   font-size: 14px;
   line-height: 1.5;
+}
+
+.wallet-cashout-hint {
+  font-size: 12px !important;
+  color: #c2410c !important;
+}
+
+.wallet-cashout-balance {
+  font-size: 16px !important;
+  color: #15803d !important;
+}
+
+.wallet-cashout-balance strong {
+  font-size: 20px;
+}
+
+.wallet-cashout-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.wallet-cashout-input {
+  flex: 1;
+  max-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.wallet-form-success {
+  color: #15803d;
+  font-size: 13px;
+  padding: 8px 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
 }
 
 /* 两步入驻 */

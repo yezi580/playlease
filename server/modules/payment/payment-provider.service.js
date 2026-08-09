@@ -334,6 +334,9 @@ function createHuifuCashierProvider(config = {}) {
     acctPaymentPayQueryUrl: resolveHuifuApiUrl(config.huifuAcctPaymentPayQueryUrl, config.huifuGatewayUrl, '/v2/trade/acctpayment/pay/query'),
     userRegisterUrl: resolveHuifuApiUrl(config.huifuUserRegisterUrl, config.huifuGatewayUrl, '/v2/user/basicdata/indv'),
     userBusiOpenUrl: resolveHuifuApiUrl(config.huifuUserBusiOpenUrl, config.huifuGatewayUrl, '/v2/user/busi/open'),
+    userQueryUrl: resolveHuifuApiUrl(config.huifuUserQueryUrl, config.huifuGatewayUrl, '/v2/user/basicdata/query'),
+    balanceQueryUrl: resolveHuifuApiUrl(config.huifuBalanceQueryUrl, config.huifuGatewayUrl, '/v2/trade/acctpayment/balance/query'),
+    encashmentUrl: resolveHuifuApiUrl(config.huifuEncashmentUrl, config.huifuGatewayUrl, '/v2/trade/settlement/encashment'),
     hostingCloseUrl: resolveHuifuApiUrl(config.huifuHostingCloseUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/close'),
     notifyUrl: String(config.huifuNotifyUrl || '').trim(),
     returnUrl: String(config.huifuReturnUrl || '').trim(),
@@ -1013,31 +1016,35 @@ function createHuifuCashierProvider(config = {}) {
       const reqSeqId = String(payload.reqSeqId || `RQ${Date.now()}${Math.random().toString(36).slice(2, 10)}`).trim()
       const now = new Date()
       const reqDate = String(now.getFullYear()) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
+      const cardInfo = {
+        card_type: '1',
+        card_name: String(payload.cardName || '').trim(),
+        card_no: String(payload.cardNo || '').trim(),
+        prov_id: String(payload.provId || '').trim(),
+        area_id: String(payload.areaId || '').trim(),
+        cert_type: '00',
+        cert_no: String(payload.certNo || '').trim(),
+        cert_validity_type: String(payload.certValidityType || '0').trim(),
+        cert_begin_date: String(payload.certBeginDate || '').trim(),
+        cert_end_date: payload.certValidityType === '1' ? '' : String(payload.certEndDate || '').trim(),
+        mp: String(payload.mobileNo || '').trim()
+      }
+      const cashConfig = [{
+        cash_type: 'D1',
+        fix_amt: '0.00',
+        fee_rate: '0.05',
+        weekday_fix_amt: '0.00',
+        weekday_fee_rate: '0.05'
+      }]
       const businessData = {
         huifu_id: huifuId,
         req_seq_id: reqSeqId,
         req_date: reqDate,
         upper_huifu_id: runtimeConfig.huifuId,
-        card_info: {
-          card_type: '2',
-          card_name: String(payload.cardName || '').trim(),
-          card_no: String(payload.cardNo || '').trim(),
-          prov_id: String(payload.provId || '').trim(),
-          area_id: String(payload.areaId || '').trim(),
-          cert_type: '00',
-          cert_no: String(payload.certNo || '').trim(),
-          cert_validity_type: String(payload.certValidityType || '0').trim(),
-          cert_begin_date: String(payload.certBeginDate || '').trim(),
-          cert_end_date: payload.certValidityType === '1' ? '' : String(payload.certEndDate || '').trim(),
-          mp: String(payload.mobileNo || '').trim()
-        },
-        cash_config: [{
-          cash_type: 'D0',
-          fix_amt: '0.00',
-          fee_rate: '0.00'
-        }]
+        card_info: JSON.stringify(cardInfo),
+        cash_config: JSON.stringify(cashConfig)
       }
-      if (!businessData.card_info.card_name || !businessData.card_info.card_no) {
+      if (!cardInfo.card_name || !cardInfo.card_no) {
         return { ok: false, provider: 'huifu_cashier', reason: 'invalid_params', message: '持卡人姓名和银行卡号不能为空' }
       }
       const response = await sendHuifuRequest(runtimeConfig.userBusiOpenUrl, businessData, { provider: 'huifu_cashier' })
@@ -1066,6 +1073,171 @@ function createHuifuCashierProvider(config = {}) {
         ok: true,
         provider: 'huifu_cashier',
         huifuId: huifuId,
+        tokenNo: String(responseData.token_no || '').trim(),
+        rawResponse: response.rawResponse
+      }
+    },
+    async createEncashment(payload = {}) {
+      const issues = getConfigIssueList()
+      if (issues.length) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'config_incomplete', message: `汇付配置不完整：${issues.join('；')}` }
+      }
+      if (!runtimeConfig.encashmentUrl) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'config_incomplete', message: '缺少取现接口地址' }
+      }
+      const huifuId = String(payload.huifuId || '').trim()
+      const tokenNo = String(payload.tokenNo || '').trim()
+      const cashAmt = String(payload.cashAmt || '').trim()
+      if (!huifuId || !tokenNo || !cashAmt) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'invalid_params', message: '汇付ID、取现卡序列号、取现金额不能为空' }
+      }
+      const reqSeqId = String(payload.reqSeqId || `EC${Date.now()}${Math.random().toString(36).slice(2, 10)}`).trim()
+      const now = new Date()
+      const reqDate = String(now.getFullYear()) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
+      const businessData = {
+        req_seq_id: reqSeqId,
+        req_date: reqDate,
+        huifu_id: huifuId,
+        cash_amt: cashAmt,
+        into_acct_date_type: String(payload.intoAcctDateType || 'D1').trim(),
+        token_no: tokenNo,
+        enchashment_channel: '00'
+      }
+      const response = await sendHuifuRequest(runtimeConfig.encashmentUrl, businessData, { provider: 'huifu_cashier' })
+      if (!response.ok) {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: response.reason || 'http_error',
+          message: response.message || `汇付取现请求失败（HTTP ${response.status}）`,
+          rawResponse: response.rawResponse
+        }
+      }
+      const responseData = response.responseData || {}
+      const respCode = String(responseData.resp_code || '').trim()
+      if (respCode !== '00000000') {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: 'provider_rejected',
+          message: String(responseData.resp_desc || '汇付取现失败'),
+          respCode,
+          rawResponse: response.rawResponse
+        }
+      }
+      return {
+        ok: true,
+        provider: 'huifu_cashier',
+        huifuId,
+        reqSeqId,
+        transStat: String(responseData.trans_stat || 'P').trim(),
+        hfSeqId: String(responseData.hf_seq_id || '').trim(),
+        rawResponse: response.rawResponse
+      }
+    },
+    async queryUserInfo(payload = {}) {
+      if (!runtimeConfig.userQueryUrl) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'config_incomplete', message: '缺少用户信息查询接口地址' }
+      }
+      const huifuId = String(payload.huifuId || '').trim()
+      if (!huifuId) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'invalid_params', message: '汇付ID不能为空' }
+      }
+      const reqSeqId = String(payload.reqSeqId || `QY${Date.now()}${Math.random().toString(36).slice(2, 10)}`).trim()
+      const now = new Date()
+      const reqDate = String(now.getFullYear()) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
+      const businessData = {
+        req_seq_id: reqSeqId,
+        req_date: reqDate,
+        huifu_id: huifuId
+      }
+      const response = await sendHuifuRequest(runtimeConfig.userQueryUrl, businessData, { provider: 'huifu_cashier' })
+      if (!response.ok) {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: response.reason || 'http_error',
+          message: response.message || `汇付查询请求失败（HTTP ${response.status}）`,
+          rawResponse: response.rawResponse
+        }
+      }
+      const responseData = response.responseData || {}
+      const respCode = String(responseData.resp_code || '').trim()
+      if (respCode !== '00000000') {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: 'provider_rejected',
+          message: String(responseData.resp_desc || '汇付查询失败'),
+          respCode,
+          rawResponse: response.rawResponse
+        }
+      }
+      return {
+        ok: true,
+        provider: 'huifu_cashier',
+        huifuId,
+        data: responseData,
+        rawResponse: response.rawResponse
+      }
+    },
+    async queryBalance(payload = {}) {
+      if (!runtimeConfig.balanceQueryUrl) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'config_incomplete', message: '缺少余额查询接口地址' }
+      }
+      const huifuId = String(payload.huifuId || '').trim()
+      if (!huifuId) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'invalid_params', message: '汇付ID不能为空' }
+      }
+      const reqSeqId = String(payload.reqSeqId || `BQ${Date.now()}${Math.random().toString(36).slice(2, 10)}`).trim()
+      const now = new Date()
+      const reqDate = String(now.getFullYear()) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
+      const businessData = {
+        req_seq_id: reqSeqId,
+        req_date: reqDate,
+        huifu_id: huifuId
+      }
+      const response = await sendHuifuRequest(runtimeConfig.balanceQueryUrl, businessData, { provider: 'huifu_cashier' })
+      if (!response.ok) {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: response.reason || 'http_error',
+          message: response.message || `汇付余额查询失败（HTTP ${response.status}）`,
+          rawResponse: response.rawResponse
+        }
+      }
+      const responseData = response.responseData || {}
+      const respCode = String(responseData.resp_code || '').trim()
+      if (respCode !== '00000000') {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: 'provider_rejected',
+          message: String(responseData.resp_desc || '汇付余额查询失败'),
+          respCode,
+          rawResponse: response.rawResponse
+        }
+      }
+      let acctList = responseData.acctInfo_list
+      if (typeof acctList === 'string') {
+        try { acctList = JSON.parse(acctList) } catch (_) { acctList = [] }
+      }
+      let avlBal = ''
+      for (const acct of acctList) {
+        if (acct.acct_type === '01' || acct.acct_type === '02') {
+          avlBal = String(acct.avl_bal || '0.00').trim()
+          if (Number(avlBal) > 0) break
+        }
+      }
+      if (!avlBal && acctList.length > 0) {
+        avlBal = String(acctList[0].avl_bal || '0.00').trim()
+      }
+      return {
+        ok: true,
+        provider: 'huifu_cashier',
+        huifuId,
+        avlBal,
         rawResponse: response.rawResponse
       }
     },
@@ -1561,6 +1733,61 @@ export function createPaymentProvider(config = {}) {
         return null
       }
       return paymentProvider.parsePaymentCallback(payload)
+    },
+    async registerPersonalUser(payload = {}) {
+      if (typeof paymentProvider.registerPersonalUser !== 'function') {
+        return {
+          ok: false,
+          provider: paymentProvider.mode || 'unknown',
+          reason: 'provider_not_implemented',
+          message: `支付服务商 ${paymentProvider.mode || 'unknown'} 尚未接入个人用户开户能力`
+        }
+      }
+      return paymentProvider.registerPersonalUser(payload)
+    },
+    async openUserBusiness(payload = {}) {
+      if (typeof paymentProvider.openUserBusiness !== 'function') {
+        return {
+          ok: false,
+          provider: paymentProvider.mode || 'unknown',
+          reason: 'provider_not_implemented',
+          message: `支付服务商 ${paymentProvider.mode || 'unknown'} 尚未接入用户业务入驻能力`
+        }
+      }
+      return paymentProvider.openUserBusiness(payload)
+    },
+    async createEncashment(payload = {}) {
+      if (typeof paymentProvider.createEncashment !== 'function') {
+        return {
+          ok: false,
+          provider: paymentProvider.mode || 'unknown',
+          reason: 'provider_not_implemented',
+          message: `支付服务商 ${paymentProvider.mode || 'unknown'} 尚未接入取现能力`
+        }
+      }
+      return paymentProvider.createEncashment(payload)
+    },
+    async queryUserInfo(payload = {}) {
+      if (typeof paymentProvider.queryUserInfo !== 'function') {
+        return {
+          ok: false,
+          provider: paymentProvider.mode || 'unknown',
+          reason: 'provider_not_implemented',
+          message: `支付服务商 ${paymentProvider.mode || 'unknown'} 尚未接入用户信息查询能力`
+        }
+      }
+      return paymentProvider.queryUserInfo(payload)
+    },
+    async queryBalance(payload = {}) {
+      if (typeof paymentProvider.queryBalance !== 'function') {
+        return {
+          ok: false,
+          provider: paymentProvider.mode || 'unknown',
+          reason: 'provider_not_implemented',
+          message: `支付服务商 ${paymentProvider.mode || 'unknown'} 尚未接入余额查询能力`
+        }
+      }
+      return paymentProvider.queryBalance(payload)
     }
   }
 }

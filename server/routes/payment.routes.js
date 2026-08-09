@@ -186,9 +186,17 @@ export function registerPaymentRoutes(deps) {
       const account = await paymentService.getSettlementAccount({
         userId: req.auth.userId
       })
+      let balance = null
+      if (account?.huifu_id) {
+        const balResult = await paymentProvider.queryBalance({ huifuId: account.huifu_id })
+        if (balResult.ok) {
+          balance = balResult.avlBal || '0.00'
+        }
+      }
       res.json({
         settlement_account: serializeSettlementAccount(account),
-        merchant_portal_url: String(huifuMerchantPortalUrl || '').trim()
+        merchant_portal_url: String(huifuMerchantPortalUrl || '').trim(),
+        balance
       })
     } catch (error) {
       handlePaymentServiceError(error, res, '获取收款账号配置失败')
@@ -241,10 +249,12 @@ export function registerPaymentRoutes(deps) {
       })
 
       if (!result.ok) {
+        console.error('[huifu register] failed:', JSON.stringify(result, null, 2))
         return res.status(400).json({
           message: result.message || '汇付个人用户开户失败',
           reason: result.reason,
-          resp_code: result.respCode
+          resp_code: result.respCode,
+          raw_response: result.rawResponse?.response_body || null
         })
       }
 
@@ -318,6 +328,7 @@ export function registerPaymentRoutes(deps) {
         accountType: 'person',
         bindStatus: 'active',
         huifuId,
+        acctId: result.tokenNo || '',
         accountName: cardName,
         mobile: mobileNo || existingAccount?.mobile || '',
         idCardMasked: existingAccount?.id_card_masked || '',
@@ -329,6 +340,90 @@ export function registerPaymentRoutes(deps) {
       })
     } catch (error) {
       handlePaymentServiceError(error, res, '汇付用户业务入驻失败')
+    }
+  })
+
+  app.post('/api/settlement-account/encashment', authRequired, authenticatedWriteLimiter, async (req, res) => {
+    try {
+      const account = await paymentService.getSettlementAccount({ userId: req.auth.userId })
+      const huifuId = String(account?.huifu_id || '').trim()
+      const tokenNo = String(account?.acct_id || '').trim()
+      if (!huifuId || !tokenNo) {
+        return res.status(400).json({ message: '请先完成开户和绑卡' })
+      }
+
+      const cashAmt = Number(req.body?.cash_amt || 0)
+      if (!cashAmt || cashAmt <= 0) {
+        return res.status(400).json({ message: '取现金额必须大于0' })
+      }
+      const cashAmtStr = cashAmt.toFixed(2)
+
+      const result = await paymentProvider.createEncashment({
+        huifuId,
+        tokenNo,
+        cashAmt: cashAmtStr,
+        intoAcctDateType: 'D1'
+      })
+
+      if (!result.ok) {
+        console.error('[huifu encashment] failed:', JSON.stringify(result, null, 2))
+        return res.status(400).json({
+          message: result.message || '汇付取现失败',
+          reason: result.reason,
+          resp_code: result.respCode
+        })
+      }
+
+      res.json({
+        trans_stat: result.transStat,
+        hf_seq_id: result.hfSeqId,
+        req_seq_id: result.reqSeqId,
+        cash_amt: cashAmtStr
+      })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '汇付取现失败')
+    }
+  })
+
+  app.get('/api/settlement-account/query-huifu', authRequired, async (req, res) => {
+    try {
+      const account = await paymentService.getSettlementAccount({ userId: req.auth.userId })
+      const huifuId = String(account?.huifu_id || '').trim()
+      if (!huifuId) {
+        return res.status(400).json({ message: '请先完成开户' })
+      }
+      const result = await paymentProvider.queryUserInfo({ huifuId })
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message, reason: result.reason })
+      }
+      const data = result.data || {}
+      let tokenNo = ''
+      let cashCardList = data.qry_cash_card_info_list
+      if (typeof cashCardList === 'string') {
+        try { cashCardList = JSON.parse(cashCardList) } catch (_) { cashCardList = [] }
+      }
+      if (Array.isArray(cashCardList)) {
+        for (const card of cashCardList) {
+          if (card.token_no) { tokenNo = String(card.token_no).trim(); break }
+        }
+      }
+      if (tokenNo && account.acct_id !== tokenNo) {
+        await paymentService.upsertSettlementAccount({
+          userId: req.auth.userId,
+          provider: 'huifu_cashier',
+          accountType: 'person',
+          bindStatus: 'active',
+          huifuId,
+          acctId: tokenNo,
+          accountName: account.account_name || '',
+          mobile: account.mobile || '',
+          idCardMasked: account.id_card_masked || '',
+          remark: 'API查询补全token_no'
+        })
+      }
+      res.json({ token_no: tokenNo, raw: data })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '查询汇付用户信息失败')
     }
   })
 

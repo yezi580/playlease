@@ -336,6 +336,7 @@
           :submitting="settlementSubmitting"
           :account-form="settlementAccountForm"
           :payout-list="settlementPayoutList"
+          :balance="settlementBalance"
           :merchant-portal-url="merchantPortalUrl"
           :format-money="formatMoney"
           :format-order-date="formatOrderDate"
@@ -684,6 +685,7 @@ export default {
       settlementError: '',
       settlementPayoutList: [],
       merchantPortalUrl: '',
+      settlementBalance: '',
       settlementAccountForm: createSettlementAccountForm(),
       inviteLoading: false,
       inviteSubmitting: false,
@@ -1371,6 +1373,7 @@ export default {
       const data = await apiFetch('/api/settlement-account')
       const account = data.settlement_account || {}
       this.merchantPortalUrl = String(data.merchant_portal_url || '').trim()
+      this.settlementBalance = String(data.balance || '').trim()
       this.settlementAccountForm = {
         huifuId: String(account.huifu_id || '').trim(),
         accountName: String(account.account_name || '').trim(),
