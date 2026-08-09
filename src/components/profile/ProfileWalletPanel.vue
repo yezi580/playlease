@@ -451,33 +451,34 @@ async function handleBindCard() {
 .wallet-cashout-notice {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px 16px;
   margin-bottom: 16px;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
 }
 
 .wallet-cashout-info p {
   margin: 0;
-  color: #9a3412;
-  font-size: 14px;
-  line-height: 1.5;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .wallet-cashout-hint {
   font-size: 12px !important;
-  color: #c2410c !important;
+  color: #6b7280 !important;
 }
 
 .wallet-cashout-balance {
-  font-size: 16px !important;
-  color: #15803d !important;
+  font-size: 14px !important;
+  color: #374151 !important;
 }
 
 .wallet-cashout-balance strong {
-  font-size: 20px;
+  font-size: 18px;
+  color: #111827;
 }
 
 .wallet-cashout-form {
@@ -489,9 +490,9 @@ async function handleBindCard() {
 .wallet-cashout-input {
   flex: 1;
   max-width: 200px;
-  padding: 8px 12px;
+  padding: 7px 12px;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 14px;
 }
 
