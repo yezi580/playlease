@@ -73,15 +73,15 @@
           </label>
           <label v-if="registerForm.certValidityType === '0'" class="wallet-form-field">
             <span>有效期起始日期</span>
-            <input v-model="registerForm.certBeginDate" type="text" maxlength="8" placeholder="格式：yyyyMMdd" :disabled="registering">
+            <input v-model="registerForm.certBeginDate" type="date" :disabled="registering">
           </label>
           <label v-if="registerForm.certValidityType === '0'" class="wallet-form-field">
             <span>有效期截止日期</span>
-            <input v-model="registerForm.certEndDate" type="text" maxlength="8" placeholder="格式：yyyyMMdd" :disabled="registering">
+            <input v-model="registerForm.certEndDate" type="date" :disabled="registering">
           </label>
           <label v-if="registerForm.certValidityType === '1'" class="wallet-form-field">
             <span>有效期起始日期</span>
-            <input v-model="registerForm.certBeginDate" type="text" maxlength="8" placeholder="格式：yyyyMMdd" :disabled="registering">
+            <input v-model="registerForm.certBeginDate" type="date" :disabled="registering">
           </label>
           <div v-if="registerError" class="wallet-form-error wallet-form-field--full">{{ registerError }}</div>
           <div class="wallet-form-actions wallet-form-field--full">
@@ -145,15 +145,15 @@
           </label>
           <label v-if="bindCardForm.certValidityType === '0'" class="wallet-form-field">
             <span>有效期起始日期</span>
-            <input v-model="bindCardForm.certBeginDate" type="text" maxlength="8" placeholder="格式：yyyyMMdd" :disabled="binding">
+            <input v-model="bindCardForm.certBeginDate" type="date" :disabled="binding">
           </label>
           <label v-if="bindCardForm.certValidityType === '0'" class="wallet-form-field">
             <span>有效期截止日期</span>
-            <input v-model="bindCardForm.certEndDate" type="text" maxlength="8" placeholder="格式：yyyyMMdd" :disabled="binding">
+            <input v-model="bindCardForm.certEndDate" type="date" :disabled="binding">
           </label>
           <label v-if="bindCardForm.certValidityType === '1'" class="wallet-form-field">
             <span>有效期起始日期</span>
-            <input v-model="bindCardForm.certBeginDate" type="text" maxlength="8" placeholder="格式：yyyyMMdd" :disabled="binding">
+            <input v-model="bindCardForm.certBeginDate" type="date" :disabled="binding">
           </label>
           <div v-if="bindCardError" class="wallet-form-error wallet-form-field--full">{{ bindCardError }}</div>
           <div class="wallet-form-actions wallet-form-field--full">
@@ -286,8 +286,8 @@ async function handleRegister() {
         cert_no: registerForm.certNo.trim(),
         mobile_no: registerForm.mobileNo.trim(),
         cert_validity_type: registerForm.certValidityType,
-        cert_begin_date: registerForm.certBeginDate.trim(),
-        cert_end_date: registerForm.certValidityType === '1' ? '' : registerForm.certEndDate.trim()
+        cert_begin_date: registerForm.certBeginDate.trim().replace(/-/g, ''),
+        cert_end_date: registerForm.certValidityType === '1' ? '' : registerForm.certEndDate.trim().replace(/-/g, '')
       })
     })
     if (res.huifu_id) {
@@ -383,8 +383,8 @@ async function handleBindCard() {
         area_id: bindCardForm.areaId.trim(),
         cert_no: bindCardForm.certNo.trim(),
         cert_validity_type: bindCardForm.certValidityType,
-        cert_begin_date: bindCardForm.certBeginDate.trim(),
-        cert_end_date: bindCardForm.certValidityType === '1' ? '' : bindCardForm.certEndDate.trim(),
+        cert_begin_date: bindCardForm.certBeginDate.trim().replace(/-/g, ''),
+        cert_end_date: bindCardForm.certValidityType === '1' ? '' : bindCardForm.certEndDate.trim().replace(/-/g, ''),
         mobile_no: bindCardForm.mobileNo.trim()
       })
     })
