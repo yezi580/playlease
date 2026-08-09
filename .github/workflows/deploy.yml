@@ -41,7 +41,7 @@ jobs:
           username: root
           key: ${{ secrets.PROD_SSH_KEY }}
           source: "my-app-prod-deploy.tar.gz"
-          target: "/tmp/my-app-deploy-package.tar.gz"
+          target: "/tmp"
           overwrite: true
 
       - name: Deploy on server
@@ -57,8 +57,9 @@ jobs:
             cp -a /opt/my-app/deploy/nginx/certs /tmp/my-app-certs.bak
             cp -a /opt/my-app/server/uploads /tmp/my-app-uploads.bak
 
-            # 解压部署包
-            tar -xzf /tmp/my-app-deploy-package.tar.gz -C /opt/my-app
+            # 解压部署包（先清理旧 dist 避免残留旧 hash 文件）
+            rm -rf /opt/my-app/dist/assets
+            tar -xzf /tmp/my-app-prod-deploy.tar.gz -C /opt/my-app
 
             # 恢复生产配置和数据
             cp /tmp/my-app-prod.env.bak /opt/my-app/deploy/env/prod.env
@@ -70,7 +71,8 @@ jobs:
             docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml up -d --build
 
             # 清理临时文件
-            rm -f /tmp/my-app-deploy-package.tar.gz
+            rm -f /tmp/my-app-prod-deploy.tar.gz
+            rm -rf /tmp/my-app-deploy-package.tar.gz
             rm -f /tmp/my-app-prod.env.bak
             rm -rf /tmp/my-app-certs.bak
             rm -rf /tmp/my-app-uploads.bak
