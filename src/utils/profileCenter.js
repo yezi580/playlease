@@ -113,7 +113,8 @@ export function createMyListingsStatsData() {
 export function createSettlementAccountForm() {
   return {
     huifuId: '',
-    accountName: ''
+    accountName: '',
+    bindStatus: ''
   }
 }
 

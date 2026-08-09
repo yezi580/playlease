@@ -1373,7 +1373,8 @@ export default {
       this.merchantPortalUrl = String(data.merchant_portal_url || '').trim()
       this.settlementAccountForm = {
         huifuId: String(account.huifu_id || '').trim(),
-        accountName: String(account.account_name || '').trim()
+        accountName: String(account.account_name || '').trim(),
+        bindStatus: String(account.bind_status || '').trim()
       }
     },
     async fetchSettlementPayoutList() {

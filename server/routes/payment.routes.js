@@ -217,6 +217,121 @@ export function registerPaymentRoutes(deps) {
     }
   })
 
+  app.post('/api/settlement-account/register', authRequired, authenticatedWriteLimiter, async (req, res) => {
+    try {
+      const name = String(req.body?.name || '').trim()
+      const certNo = String(req.body?.cert_no || '').trim()
+      const mobileNo = String(req.body?.mobile_no || '').trim()
+      const certValidityType = String(req.body?.cert_validity_type || '0').trim()
+      const certBeginDate = String(req.body?.cert_begin_date || '').trim()
+      const certEndDate = String(req.body?.cert_end_date || '').trim()
+
+      if (!name || !certNo || !mobileNo) {
+        return res.status(400).json({ message: '姓名、身份证号、手机号不能为空' })
+      }
+
+      const result = await paymentProvider.registerPersonalUser({
+        name,
+        certType: '00',
+        certNo,
+        certValidityType,
+        certBeginDate,
+        certEndDate,
+        mobileNo
+      })
+
+      if (!result.ok) {
+        return res.status(400).json({
+          message: result.message || '汇付个人用户开户失败',
+          reason: result.reason,
+          resp_code: result.respCode
+        })
+      }
+
+      const account = await paymentService.upsertSettlementAccount({
+        userId: req.auth.userId,
+        provider: 'huifu_cashier',
+        accountType: 'person',
+        bindStatus: 'pending',
+        huifuId: result.huifuId,
+        accountName: name,
+        mobile: mobileNo,
+        idCardMasked: certNo.length >= 14 ? certNo.slice(0, 6) + '****' + certNo.slice(-4) : certNo,
+        remark: 'API自动开户'
+      })
+
+      res.json({
+        settlement_account: serializeSettlementAccount(account),
+        huifu_id: result.huifuId
+      })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '汇付个人用户开户失败')
+    }
+  })
+
+  app.post('/api/settlement-account/bind-card', authRequired, authenticatedWriteLimiter, async (req, res) => {
+    try {
+      const existingAccount = await paymentService.getSettlementAccount({ userId: req.auth.userId })
+      const huifuId = String(existingAccount?.huifu_id || '').trim()
+      if (!huifuId) {
+        return res.status(400).json({ message: '请先完成个人用户开户' })
+      }
+
+      const cardName = String(req.body?.card_name || '').trim()
+      const cardNo = String(req.body?.card_no || '').trim()
+      const provId = String(req.body?.prov_id || '').trim()
+      const areaId = String(req.body?.area_id || '').trim()
+      if (!cardName || !cardNo) {
+        return res.status(400).json({ message: '持卡人姓名和银行卡号不能为空' })
+      }
+
+      const certNo = String(req.body?.cert_no || '').trim()
+      const certValidityType = String(req.body?.cert_validity_type || '0').trim()
+      const certBeginDate = String(req.body?.cert_begin_date || '').trim()
+      const certEndDate = String(req.body?.cert_end_date || '').trim()
+      const mobileNo = String(req.body?.mobile_no || '').trim()
+
+      const result = await paymentProvider.openUserBusiness({
+        huifuId,
+        cardName,
+        cardNo,
+        provId,
+        areaId,
+        certNo,
+        certValidityType,
+        certBeginDate,
+        certEndDate,
+        mobileNo
+      })
+
+      if (!result.ok) {
+        return res.status(400).json({
+          message: result.message || '汇付用户业务入驻失败',
+          reason: result.reason,
+          resp_code: result.respCode
+        })
+      }
+
+      const account = await paymentService.upsertSettlementAccount({
+        userId: req.auth.userId,
+        provider: 'huifu_cashier',
+        accountType: 'person',
+        bindStatus: 'active',
+        huifuId,
+        accountName: cardName,
+        mobile: mobileNo || existingAccount?.mobile || '',
+        idCardMasked: existingAccount?.id_card_masked || '',
+        remark: 'API自动绑卡'
+      })
+
+      res.json({
+        settlement_account: serializeSettlementAccount(account)
+      })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '汇付用户业务入驻失败')
+    }
+  })
+
   app.get('/api/settlement/payouts', authRequired, authenticatedReadLimiter, async (req, res) => {
     try {
       const list = await paymentService.getUserSettlementPayoutList({
