@@ -178,8 +178,8 @@
       <section v-else-if="activeSection === 'published'" :key="'published'" class="profile-panel profile-panel--published">
         <div v-if="isLoggedIn && !settlementAccountReady" class="profile-onboarding-alert">
           <div class="profile-onboarding-alert-content">
-            <strong>个人进件未完成</strong>
-            <p>完成个人进件（收款账号配置）后，订单结算时才能正常收到打款。未完成的卖家在客服分账时会被拦截。</p>
+            <strong>收款账号未入驻</strong>
+            <p>完成收款账号入驻后，订单结算时才能正常收到打款。未入驻的卖家在客服分账时会被拦截。</p>
           </div>
           <button type="button" class="order-action-btn primary profile-onboarding-btn" @click="switchSection('wallet')">去配置</button>
         </div>

@@ -1,13 +1,13 @@
 <template>
   <div v-if="!isLoggedIn" class="profile-placeholder-card">
     <h4>收款设置</h4>
-    <p>登录后可完成个人进件（配置收款账号），并查看平台发起的余额支付结算记录。</p>
+    <p>登录后可完成收款账号入驻，并查看平台发起的结算打款记录。</p>
     <button type="button" class="profile-login-btn" @click="$emit('login')">立即登录</button>
   </div>
   <div v-else class="profile-panel-card">
     <div class="wallet-summary-grid">
       <div>
-        <span class="wallet-summary-caption">进件状态</span>
+        <span class="wallet-summary-caption">入驻状态</span>
         <strong class="wallet-summary-minor">{{ onboardingStatusText }}</strong>
       </div>
       <div>
@@ -20,13 +20,13 @@
       </div>
     </div>
 
-    <!-- 已完成进件：显示提现提示 -->
+    <!-- 已完成入驻：显示提现提示 -->
     <div v-if="isAccountReady" class="wallet-cashout-notice">
       <p>结算打款和邀新返现已自动到账至您的汇付账户，如需提现请前往汇付后台操作。</p>
       <a v-if="merchantPortalUrl" :href="merchantPortalUrl" target="_blank" rel="noopener noreferrer" class="order-action-btn primary">前往汇付后台提现</a>
     </div>
 
-    <!-- 未完成进件：显示两步进件流程 -->
+    <!-- 未完成入驻：显示两步入驻流程 -->
     <div v-else class="wallet-onboarding-section">
       <!-- 步骤一：个人用户开户 -->
       <div class="wallet-step-card" :class="{ 'wallet-step-card--done': hasHuifuId }">
@@ -406,7 +406,7 @@ async function handleBindCard() {
   line-height: 1.5;
 }
 
-/* 两步进件 */
+/* 两步入驻 */
 .wallet-onboarding-section {
   display: flex;
   flex-direction: column;
