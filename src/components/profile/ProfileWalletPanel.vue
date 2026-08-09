@@ -23,9 +23,8 @@
     <!-- 已完成入驻：显示余额和提现入口 -->
     <div v-if="isAccountReady" class="wallet-cashout-notice">
       <div class="wallet-cashout-info">
-        <p>结算打款和邀新返现已自动到账至您的汇付账户，您可以直接在此提现到绑定的银行卡。</p>
+        <p>结算打款和邀新返现已自动到账至您的汇付账户，您可以直接在此提现到绑定的银行卡。提现D1到账（次自然日），工作日提现免手续费，节假日提现手续费率0.05%。</p>
         <p class="wallet-cashout-balance">账户可用余额：<strong>{{ balance || '0.00' }}</strong> 元</p>
-        <p class="wallet-cashout-hint">提示：D1到账（次自然日），手续费率 0.05%。</p>
       </div>
       <form class="wallet-cashout-form" @submit.prevent="handleEncashment">
         <input v-model="encashmentForm.amount" type="number" step="0.01" min="0.01" :max="balance || undefined" placeholder="提现金额（元）" :disabled="encashing" class="wallet-cashout-input">

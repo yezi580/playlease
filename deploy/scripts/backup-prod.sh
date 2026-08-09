@@ -43,7 +43,12 @@ require_command tar
 require_command find
 require_command grep
 require_command cut
-require_command coscmd
+
+# coscmd 是可选的，缺失时跳过 COS 上传但不影响本地备份和清理
+COSCMD_AVAILABLE=0
+if command -v coscmd >/dev/null 2>&1; then
+  COSCMD_AVAILABLE=1
+fi
 
 [ -f "${ENV_FILE}" ] || fail "Environment file not found: ${ENV_FILE}"
 [ -f "${COMPOSE_FILE}" ] || fail "Compose file not found: ${COMPOSE_FILE}"
@@ -86,53 +91,57 @@ docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec -T mysql \
 log "Backing up uploads directory"
 tar -czf "${UPLOADS_BACKUP_FILE}" -C "${PROJECT_ROOT}/server" uploads
 
-# --- 3. 上传 MySQL 备份到 COS ---
-COS_SECRET_ID="$(read_env_value COS_SECRET_ID)"
-COS_SECRET_KEY="$(read_env_value COS_SECRET_KEY)"
-COS_BUCKET="$(read_env_value COS_BUCKET)"
-COS_REGION="$(read_env_value COS_REGION)"
-
-coscmd config -a "${COS_SECRET_ID}" -s "${COS_SECRET_KEY}" -b "${COS_BUCKET}" -r "${COS_REGION}" >/dev/null 2>&1
-
-COS_MYSQL_KEY="${COS_BACKUP_PREFIX}/mysql/$(basename "${MYSQL_BACKUP_FILE}")"
-log "Uploading MySQL backup to COS: ${COS_MYSQL_KEY}"
-if coscmd upload "${MYSQL_BACKUP_FILE}" "${COS_MYSQL_KEY}" >/dev/null 2>&1; then
-  log "MySQL backup uploaded to COS OK"
-else
-  log "WARNING: Failed to upload MySQL backup to COS (local backup still available)"
-fi
-
-COS_UPLOADS_KEY="${COS_BACKUP_PREFIX}/uploads/$(basename "${UPLOADS_BACKUP_FILE}")"
-log "Uploading uploads backup to COS: ${COS_UPLOADS_KEY}"
-if coscmd upload "${UPLOADS_BACKUP_FILE}" "${COS_UPLOADS_KEY}" >/dev/null 2>&1; then
-  log "Uploads backup uploaded to COS OK"
-else
-  log "WARNING: Failed to upload uploads backup to COS (local backup still available)"
-fi
-
-# --- 4. 清理本地过期备份 ---
+# --- 3. 清理本地过期备份（先清理，避免 COS 不可用时旧备份堆积） ---
 log "Removing expired local backups (older than ${LOCAL_RETENTION_DAYS} days)"
 find "${MYSQL_BACKUP_DIR}" -type f -name 'db_*.sql.gz' -mtime +"$((LOCAL_RETENTION_DAYS - 1))" -delete
 find "${UPLOADS_BACKUP_DIR}" -type f -name 'uploads_*.tar.gz' -mtime +"$((LOCAL_RETENTION_DAYS - 1))" -delete
 
-# --- 5. 清理 COS 过期备份 ---
-log "Removing expired COS backups (older than ${COS_RETENTION_DAYS} days)"
-CUTOFF_DATE="$(date -d "-${COS_RETENTION_DAYS} days" +%F)"
+# --- 4. 上传备份到 COS（coscmd 不可用时跳过，不影响本地备份） ---
+if [ "${COSCMD_AVAILABLE}" -eq 0 ]; then
+  log "WARNING: coscmd not found, skipping COS upload (local backups still available)"
+else
+  COS_SECRET_ID="$(read_env_value COS_SECRET_ID)"
+  COS_SECRET_KEY="$(read_env_value COS_SECRET_KEY)"
+  COS_BUCKET="$(read_env_value COS_BUCKET)"
+  COS_REGION="$(read_env_value COS_REGION)"
 
-for sub_dir in mysql uploads; do
-  coscmd list "${COS_BACKUP_PREFIX}/${sub_dir}/" 2>/dev/null | awk '{print $NF}' | while read -r file_key; do
-    [ -z "${file_key}" ] && continue
-    [ "${file_key}" = "Key" ] && continue
+  coscmd config -a "${COS_SECRET_ID}" -s "${COS_SECRET_KEY}" -b "${COS_BUCKET}" -r "${COS_REGION}" >/dev/null 2>&1
 
-    file_date="$(echo "${file_key}" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)"
-    [ -z "${file_date}" ] && continue
+  COS_MYSQL_KEY="${COS_BACKUP_PREFIX}/mysql/$(basename "${MYSQL_BACKUP_FILE}")"
+  log "Uploading MySQL backup to COS: ${COS_MYSQL_KEY}"
+  if coscmd upload "${MYSQL_BACKUP_FILE}" "${COS_MYSQL_KEY}" >/dev/null 2>&1; then
+    log "MySQL backup uploaded to COS OK"
+  else
+    log "WARNING: Failed to upload MySQL backup to COS (local backup still available)"
+  fi
 
-    if [[ "${file_date}" < "${CUTOFF_DATE}" ]]; then
-      log "Deleting expired COS backup: ${file_key}"
-      coscmd delete "${file_key}" >/dev/null 2>&1 || true
-    fi
+  COS_UPLOADS_KEY="${COS_BACKUP_PREFIX}/uploads/$(basename "${UPLOADS_BACKUP_FILE}")"
+  log "Uploading uploads backup to COS: ${COS_UPLOADS_KEY}"
+  if coscmd upload "${UPLOADS_BACKUP_FILE}" "${COS_UPLOADS_KEY}" >/dev/null 2>&1; then
+    log "Uploads backup uploaded to COS OK"
+  else
+    log "WARNING: Failed to upload uploads backup to COS (local backup still available)"
+  fi
+
+  # --- 5. 清理 COS 过期备份 ---
+  log "Removing expired COS backups (older than ${COS_RETENTION_DAYS} days)"
+  CUTOFF_DATE="$(date -d "-${COS_RETENTION_DAYS} days" +%F)"
+
+  for sub_dir in mysql uploads; do
+    coscmd list "${COS_BACKUP_PREFIX}/${sub_dir}/" 2>/dev/null | awk '{print $NF}' | while read -r file_key; do
+      [ -z "${file_key}" ] && continue
+      [ "${file_key}" = "Key" ] && continue
+
+      file_date="$(echo "${file_key}" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)"
+      [ -z "${file_date}" ] && continue
+
+      if [[ "${file_date}" < "${CUTOFF_DATE}" ]]; then
+        log "Deleting expired COS backup: ${file_key}"
+        coscmd delete "${file_key}" >/dev/null 2>&1 || true
+      fi
+    done
   done
-done
+fi
 
 log "Backup finished"
 log "MySQL backup: ${MYSQL_BACKUP_FILE}"

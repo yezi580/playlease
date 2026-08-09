@@ -354,8 +354,8 @@
           <div v-if="inviteLoading" class="profile-empty">正在加载邀新数据...</div>
           <div v-else-if="inviteError" class="profile-empty profile-error">{{ inviteError }}</div>
           <div v-else class="invite-panel">
-            <article class="invite-rule-card">
-              <p>{{ inviteRewardRuleText }}</p>
+            <article class="invite-intro-card">
+              <p>订单结算时，平台从买家服务费中按 {{ inviteRewardRatePercent }}% 抽成作为返现给卖家的邀请人。邀请人已绑定收款账号的，返现直接打款到其收款账户；未绑定收款账号的，返现暂存平台钱包余额，绑定后即可提现。</p>
             </article>
 
             <div v-if="invitedRewardTotal > 0" class="invite-cashout-notice">
@@ -704,6 +704,10 @@ export default {
   computed: {
     inviteRewardRuleText() {
       return getInviteRewardRuleText(this.businessSettings)
+    },
+    inviteRewardRatePercent() {
+      const normalized = this.businessSettings || {}
+      return Number(normalized.inviteReward?.buyerServiceFeeRewardRatePercent || 0)
     },
     feedbackSelectStyle() {
       const maxLabelLength = this.feedbackCategories.reduce((max, item) => {
@@ -2114,6 +2118,20 @@ export default {
 
 .invite-rule-card {
   padding: 0 4px;
+}
+
+.invite-intro-card {
+  padding: 12px 16px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+}
+
+.invite-intro-card p {
+  margin: 0;
+  color: #1e40af;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .invite-rule-card p {
