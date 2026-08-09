@@ -48,6 +48,11 @@
         </button>
       </div>
 
+      <div v-if="isAccountReady" class="wallet-cashout-notice">
+        <p>结算打款和邀新返现将自动到账至您的汇付账户，如需提现请前往汇付后台操作。</p>
+        <a v-if="merchantPortalUrl" :href="merchantPortalUrl" target="_blank" rel="noopener noreferrer" class="order-action-btn primary">前往汇付后台提现</a>
+      </div>
+
       <form class="wallet-form-grid" @submit.prevent="$emit('submit')">
         <label class="wallet-form-field">
           <span>汇付ID</span>
@@ -263,6 +268,25 @@ function updateForm(field, value) {
 
 .wallet-action-card {
   margin-bottom: 24px;
+}
+
+.wallet-cashout-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+}
+
+.wallet-cashout-notice p {
+  margin: 0;
+  color: #9a3412;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .wallet-onboarding-guide {

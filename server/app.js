@@ -1792,6 +1792,55 @@ function buildRandomInviteCode(length = 8) {
   return result
 }
 
+async function ensureWalletSchema() {
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS wallet_accounts (
+      user_id INT PRIMARY KEY COMMENT '用户ID',
+      balance BIGINT NOT NULL DEFAULT 0 COMMENT '钱包余额（分）',
+      frozen_balance BIGINT NOT NULL DEFAULT 0 COMMENT '提现冻结金额（分）',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS wallet_ledger (
+      id INT AUTO_INCREMENT PRIMARY KEY COMMENT '钱包流水ID',
+      user_id INT NOT NULL COMMENT '用户ID',
+      order_id INT DEFAULT NULL COMMENT '关联订单ID',
+      business_type VARCHAR(50) NOT NULL DEFAULT 'order' COMMENT '业务类型',
+      direction ENUM('credit', 'debit') NOT NULL DEFAULT 'credit' COMMENT '流水方向',
+      amount BIGINT NOT NULL DEFAULT 0 COMMENT '变动金额（分）',
+      balance_before BIGINT NOT NULL DEFAULT 0 COMMENT '变动前余额（分）',
+      balance_after BIGINT NOT NULL DEFAULT 0 COMMENT '变动后余额（分）',
+      remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
+      INDEX idx_wallet_ledger_user_created (user_id, created_at, id),
+      INDEX idx_wallet_ledger_order_id (order_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+
+  const databaseName = process.env.DB_NAME || 'game_rental'
+  const [walletColumnRows] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'wallet_accounts'
+       AND COLUMN_NAME = 'frozen_balance'
+     LIMIT 1`,
+    [databaseName]
+  )
+  if (!walletColumnRows.length) {
+    await pool.execute(
+      `ALTER TABLE wallet_accounts
+       ADD COLUMN frozen_balance BIGINT NOT NULL DEFAULT 0 COMMENT '提现冻结金额（分）' AFTER balance`
+    )
+  }
+}
+
 async function ensureInviteSchema() {
   const databaseName = process.env.DB_NAME || 'game_rental'
   const userColumns = [
@@ -1890,6 +1939,50 @@ async function ensureInviteSchema() {
        SET invite_code = ?
        WHERE id = ?`,
       [inviteCode, Number(row.id)]
+    )
+  }
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS invite_rewards (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '邀请返现记录ID',
+      order_id INT NOT NULL COMMENT '关联订单ID',
+      inviter_user_id INT NOT NULL COMMENT '邀请人用户ID',
+      invitee_user_id INT NOT NULL COMMENT '被邀请人用户ID',
+      reward_rate_percent DECIMAL(5,2) NOT NULL DEFAULT 30.00 COMMENT '返现比例',
+      platform_fee_amount BIGINT NOT NULL DEFAULT 0 COMMENT '买家服务费（分）',
+      reward_amount BIGINT NOT NULL DEFAULT 0 COMMENT '返现金额（分）',
+      payout_status ENUM('pending', 'paid', 'failed', 'wallet_credited') NOT NULL DEFAULT 'pending' COMMENT '打款状态',
+      payout_no VARCHAR(40) DEFAULT NULL COMMENT '汇付打款单号',
+      awarded_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '返现发放时间',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (inviter_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (invitee_user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE INDEX uk_invite_rewards_order_id (order_id),
+      INDEX idx_invite_rewards_inviter (inviter_user_id, awarded_at, id),
+      INDEX idx_invite_rewards_invitee (invitee_user_id, awarded_at, id),
+      INDEX idx_invite_rewards_payout_status (payout_status, id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+
+  const [inviteRewardsPayoutColumnRows] = await pool.execute(
+    `SELECT COLUMN_NAME
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = 'invite_rewards'
+       AND COLUMN_NAME = 'payout_status'
+     LIMIT 1`,
+    [databaseName]
+  )
+  if (!inviteRewardsPayoutColumnRows.length) {
+    await pool.execute(
+      `ALTER TABLE invite_rewards
+       ADD COLUMN payout_status ENUM('pending', 'paid', 'failed', 'wallet_credited') NOT NULL DEFAULT 'pending' COMMENT '打款状态' AFTER reward_amount,
+       ADD COLUMN payout_no VARCHAR(40) DEFAULT NULL COMMENT '汇付打款单号' AFTER payout_status`
+    )
+    await pool.execute(
+      `CREATE INDEX idx_invite_rewards_payout_status ON invite_rewards (payout_status, id)`
     )
   }
 }
@@ -2557,6 +2650,7 @@ export function createApp() {
     ensureOrderWorkflowSchema,
     ensureSupportEventSchema,
     ensureInviteSchema,
+    ensureWalletSchema,
     ensureSmsSecuritySchema,
     ensureUploadQuotaSchema,
     ensurePaymentChannelSchema,

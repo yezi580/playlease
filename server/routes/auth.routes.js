@@ -5,6 +5,7 @@
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { getSmsSecurityThresholds } from '../modules/business-settings/runtime.js'
+import { normalizeCentAmount } from '../utils/money.js'
 
 function readPositiveIntEnv(name, fallback, minimum = 1) {
   const parsedValue = Number(process.env[name] || fallback)
@@ -152,6 +153,24 @@ async function ensureUserInviteCode(executor, userId) {
     [inviteCode, safeUserId]
   )
   return inviteCode
+}
+
+function serializeInviteRewardRow(row = {}) {
+  return {
+    order_id: Number(row.order_id || 0),
+    order_no: String(row.order_no || '').trim(),
+    listing_title: String(row.listing_title || '').trim(),
+    seller_name: String(row.seller_name || '').trim(),
+    invitee_username: String(row.invitee_username || '').trim(),
+    inviter_username: String(row.inviter_username || '').trim(),
+    seller_rent_amount: normalizeCentAmount(row.seller_rent_amount) ?? 0,
+    buyer_rent_amount: normalizeCentAmount(row.amount) ?? 0,
+    platform_fee_amount: normalizeCentAmount(row.platform_fee_amount) ?? 0,
+    reward_amount: normalizeCentAmount(row.reward_amount) ?? 0,
+    status: String(row.status || '').trim(),
+    finished_at: row.finished_at || null,
+    awarded_at: row.awarded_at || null
+  }
 }
 
 function getRequestIp(req) {
@@ -849,6 +868,55 @@ export function registerAuthRoutes(deps) {
         [req.auth.userId]
       )
 
+      const [inviterRows] = await pool.execute(
+        `SELECT
+          ir.order_id,
+          ir.platform_fee_amount,
+          ir.reward_amount,
+          ir.awarded_at,
+          o.order_no,
+          o.listing_title,
+          o.seller_name,
+          o.seller_rent_amount,
+          o.amount,
+          o.status,
+          o.finished_at,
+          invitee.username AS invitee_username
+         FROM invite_rewards ir
+         INNER JOIN orders o ON o.id = ir.order_id
+         LEFT JOIN users invitee ON invitee.id = ir.invitee_user_id
+         WHERE ir.inviter_user_id = ?
+         ORDER BY ir.awarded_at DESC, ir.id DESC
+         LIMIT 100`,
+        [req.auth.userId]
+      )
+
+      const [inviteeRows] = await pool.execute(
+        `SELECT
+          ir.order_id,
+          ir.platform_fee_amount,
+          ir.reward_amount,
+          ir.awarded_at,
+          o.order_no,
+          o.listing_title,
+          o.seller_name,
+          o.seller_rent_amount,
+          o.amount,
+          o.status,
+          o.finished_at,
+          inviter.username AS inviter_username
+         FROM invite_rewards ir
+         INNER JOIN orders o ON o.id = ir.order_id
+         LEFT JOIN users inviter ON inviter.id = ir.inviter_user_id
+         WHERE ir.invitee_user_id = ?
+         ORDER BY ir.awarded_at DESC, ir.id DESC
+         LIMIT 100`,
+        [req.auth.userId]
+      )
+
+      const inviterOrderList = inviterRows.map(serializeInviteRewardRow)
+      const inviteeOrderList = inviteeRows.map(serializeInviteRewardRow)
+
       res.json({
         own_invite_code: ownInviteCode,
         bound_invite_code: String(userRow?.bound_invite_code || userRow?.inviter_invite_code || '').trim(),
@@ -858,7 +926,11 @@ export function registerAuthRoutes(deps) {
             username: String(userRow.inviter_username || '').trim(),
             invite_code: String(userRow.inviter_invite_code || '').trim()
           }
-          : null
+          : null,
+        invited_reward_total: inviterOrderList.reduce((sum, item) => sum + Number(item.reward_amount || 0), 0),
+        contributed_reward_total: inviteeOrderList.reduce((sum, item) => sum + Number(item.reward_amount || 0), 0),
+        inviter_order_list: inviterOrderList,
+        invitee_order_list: inviteeOrderList
       })
     } catch (_error) {
       res.status(500).json({ message: '加载邀新数据失败' })

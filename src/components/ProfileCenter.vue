@@ -354,8 +354,13 @@
           <div v-else-if="inviteError" class="profile-empty profile-error">{{ inviteError }}</div>
           <div v-else class="invite-panel">
             <article class="invite-rule-card">
-              <p>邀请码仅用于建立邀请关系，当前不再提供邀请返现入账。</p>
+              <p>{{ inviteRewardRuleText }}</p>
             </article>
+
+            <div v-if="invitedRewardTotal > 0" class="invite-cashout-notice">
+              <p>返现已自动到账至您的汇付账户，请前往汇付后台提现。</p>
+              <a v-if="merchantPortalUrl" :href="merchantPortalUrl" target="_blank" rel="noopener noreferrer" class="order-action-btn primary">前往汇付后台提现</a>
+            </div>
 
             <div class="invite-summary-grid">
               <article class="invite-summary-card">
@@ -392,17 +397,70 @@
               </article>
 
               <article class="invite-summary-card invite-summary-card--full">
-                <span class="invite-summary-label">邀请关系</span>
-                <template v-if="inviterInfo">
-                  <div class="invite-summary-stack">
-                    <strong>{{ inviterInfo.username || '已绑定邀请人' }}</strong>
-                    <span>邀请码：{{ inviterInfo.inviteCode || '--' }}</span>
+                <div class="invite-order-section-header invite-summary-card-header">
+                  <div class="invite-summary-title">
+                    <h4>累计返现</h4>
                   </div>
-                </template>
-                <template v-else>
-                  <strong>当前未绑定邀请人</strong>
-                </template>
+                </div>
+                <strong>￥{{ formatMoney(invitedRewardTotal) }}</strong>
               </article>
+            </div>
+
+            <div class="invite-order-section">
+              <div class="invite-order-section-header">
+                <h4>我赚的</h4>
+                <span>{{ inviterOrderList.length }} 条</span>
+              </div>
+              <div v-if="!inviterOrderList.length" class="invite-order-list">
+                <article class="invite-order-card invite-order-card--empty">
+                  <div class="profile-empty">暂时还没有通过我的邀请码产生返现的订单</div>
+                </article>
+              </div>
+              <div v-else class="invite-order-list">
+                <article v-for="order in inviterOrderList" :key="`inviter-${order.order_id}`" class="invite-order-card">
+                  <div>
+                    <h4>{{ order.listing_title || '订单' }}</h4>
+                    <p>订单编号：{{ order.order_no || '-' }}</p>
+                    <p>出号用户：{{ order.invitee_username || order.seller_name || '未知用户' }}</p>
+                    <p>订单完成：{{ formatOrderDate(order.finished_at) }}</p>
+                  </div>
+                  <div class="invite-order-amounts">
+                    <strong>￥{{ formatMoney(order.reward_amount) }}</strong>
+                    <span>到账时间 {{ formatOrderDate(order.awarded_at) }}</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div class="invite-order-section">
+              <div class="invite-order-section-header">
+                <h4>TA赚的</h4>
+                <span>{{ inviteeOrderList.length }} 条</span>
+              </div>
+              <div v-if="!boundInviteCode" class="invite-order-list">
+                <article class="invite-order-card invite-order-card--empty">
+                  <div class="profile-empty">当前还未绑定邀请码</div>
+                </article>
+              </div>
+              <div v-else-if="!inviteeOrderList.length" class="invite-order-list">
+                <article class="invite-order-card invite-order-card--empty">
+                  <div class="profile-empty">当前还没有因我出号而给邀请人产生返现的订单</div>
+                </article>
+              </div>
+              <div v-else class="invite-order-list">
+                <article v-for="order in inviteeOrderList" :key="`invitee-${order.order_id}`" class="invite-order-card">
+                  <div>
+                    <h4>{{ order.listing_title || '订单' }}</h4>
+                    <p>订单编号：{{ order.order_no || '-' }}</p>
+                    <p>邀请人：{{ order.inviter_username || inviterInfo?.username || '未知用户' }}</p>
+                    <p>订单完成：{{ formatOrderDate(order.finished_at) }}</p>
+                  </div>
+                  <div class="invite-order-amounts">
+                    <strong>￥{{ formatMoney(order.reward_amount) }}</strong>
+                    <span>到账时间 {{ formatOrderDate(order.awarded_at) }}</span>
+                  </div>
+                </article>
+              </div>
             </div>
           </div>
         </div>
@@ -491,6 +549,7 @@ import {
   calculateCompensationFeeAmount,
   fetchBusinessSettings,
   getCachedBusinessSettings,
+  getInviteRewardRuleText,
   getPendingPaymentTimeoutMinutes
 } from '../utils/businessSettings.js'
 import {
@@ -633,10 +692,17 @@ export default {
       ownInviteCode: '',
       boundInviteCode: '',
       inviterInfo: null,
+      invitedRewardTotal: 0,
+      contributedRewardTotal: 0,
+      inviterOrderList: [],
+      inviteeOrderList: [],
       businessSettings: getCachedBusinessSettings()
     }
   },
   computed: {
+    inviteRewardRuleText() {
+      return getInviteRewardRuleText(this.businessSettings)
+    },
     feedbackSelectStyle() {
       const maxLabelLength = this.feedbackCategories.reduce((max, item) => {
         return Math.max(max, String(item?.label || '').trim().length)
@@ -1049,6 +1115,10 @@ export default {
           inviteCode: String(data.inviter.invite_code || '').trim()
         }
         : null
+      this.invitedRewardTotal = Number(data.invited_reward_total || 0)
+      this.contributedRewardTotal = Number(data.contributed_reward_total || 0)
+      this.inviterOrderList = Array.isArray(data.inviter_order_list) ? data.inviter_order_list : []
+      this.inviteeOrderList = Array.isArray(data.invitee_order_list) ? data.invitee_order_list : []
       if (this.boundInviteCode) {
         this.inviteCodeInput = ''
       }
@@ -2049,6 +2119,24 @@ export default {
   line-height: 1.6;
 }
 
+.invite-cashout-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+}
+
+.invite-cashout-notice p {
+  margin: 0;
+  color: #9a3412;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 @media (min-width: 961px) {
   .invite-rule-card {
     padding: 14px 20px;
@@ -2092,6 +2180,23 @@ export default {
 
 .invite-summary-card--full {
   grid-column: 1 / -1;
+}
+
+.invite-summary-card-header {
+  margin-bottom: 0;
+}
+
+.invite-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.invite-summary-title h4 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
 }
 
 .invite-summary-label {

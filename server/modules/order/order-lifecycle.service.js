@@ -220,6 +220,8 @@ export function createOrderLifecycleService({
         : inferSellerRentFromBuyerRent(buyerRentAmount))
     const businessSettings = await loadBusinessSettings(executor)
     const sellerServiceFeeRatePercent = businessSettings.platformCommission?.sellerServiceFeeRatePercent
+    const buyerServiceFeeAmount = calculateBuyerServiceFeeAmount(buyerRentAmount, sellerRentAmount)
+    const inviteRewardRatePercent = Math.max(0, Number(businessSettings.inviteReward?.buyerServiceFeeRewardRatePercent || 0))
     const platformFeeAmount = calculateServiceFeeFromSellerRent(
       sellerRentAmount,
       sellerServiceFeeRatePercent
@@ -241,6 +243,8 @@ export function createOrderLifecycleService({
       sellerRentAmount,
       depositAmount,
       usedItemsAmount,
+      buyerServiceFeeAmount,
+      inviteRewardRatePercent,
       platformFeeAmount,
       sellerIncomeAmount,
       buyerRefundAmount
@@ -309,6 +313,8 @@ export function createOrderLifecycleService({
       sellerRentAmount: rentAmount,
       depositAmount,
       usedItemsAmount: 0,
+      buyerServiceFeeAmount: 0,
+      inviteRewardRatePercent: 0,
       platformFeeAmount: 0,
       sellerIncomeAmount: 0,
       buyerRefundAmount: buyerRentAmount + depositAmount
@@ -324,9 +330,173 @@ export function createOrderLifecycleService({
       sellerRentAmount: buyerRentAmount,
       depositAmount,
       usedItemsAmount: 0,
+      buyerServiceFeeAmount: 0,
+      inviteRewardRatePercent: 0,
       platformFeeAmount: buyerRentAmount,
       sellerIncomeAmount: 0,
       buyerRefundAmount: depositAmount
+    }
+  }
+
+  async function ensureWalletAccount(executor, userId) {
+    await executor.execute(
+      `INSERT INTO wallet_accounts (user_id, balance)
+       VALUES (?, 0)
+       ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)`,
+      [userId]
+    )
+  }
+
+  async function creditWallet(executor, userId, amount, orderId, remark, businessType = 'order_settlement') {
+    const safeAmount = Number(amount || 0)
+    if (safeAmount <= 0) return
+
+    await ensureWalletAccount(executor, userId)
+    const [[accountRow]] = await executor.execute(
+      `SELECT balance
+       FROM wallet_accounts
+       WHERE user_id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [userId]
+    )
+    const balanceBefore = Number(accountRow?.balance || 0)
+    const balanceAfter = balanceBefore + safeAmount
+    await executor.execute(
+      `UPDATE wallet_accounts
+       SET balance = ?
+       WHERE user_id = ?`,
+      [balanceAfter, userId]
+    )
+    await executor.execute(
+      `INSERT INTO wallet_ledger (
+        user_id, order_id, business_type, direction, amount, balance_before, balance_after, remark
+      ) VALUES (?, ?, ?, 'credit', ?, ?, ?, ?)`,
+      [userId, orderId, businessType, safeAmount, balanceBefore, balanceAfter, remark || null]
+    )
+  }
+
+  async function awardInviteRewardForSettlement(executor, order, preview) {
+    const sellerUserId = Number(order?.seller_id || 0)
+    const orderId = Number(order?.id || 0)
+    const buyerServiceFeeAmount = Math.max(0, Number(preview?.buyerServiceFeeAmount || 0))
+    const rewardRatePercent = Math.max(0, Number(preview?.inviteRewardRatePercent || 0))
+    if (!sellerUserId || !orderId || buyerServiceFeeAmount <= 0 || rewardRatePercent <= 0) {
+      return null
+    }
+
+    const [[inviteeRow]] = await executor.execute(
+      `SELECT inviter_user_id
+       FROM users
+       WHERE id = ?
+       LIMIT 1`,
+      [sellerUserId]
+    )
+    const inviterUserId = Number(inviteeRow?.inviter_user_id || 0)
+    if (!inviterUserId || inviterUserId === sellerUserId) {
+      return null
+    }
+
+    const [[existingReward]] = await executor.execute(
+      `SELECT id
+       FROM invite_rewards
+       WHERE order_id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [orderId]
+    )
+    if (existingReward?.id) {
+      return null
+    }
+
+    const rewardAmount = Math.floor(buyerServiceFeeAmount * rewardRatePercent / 100)
+    if (rewardAmount <= 0) {
+      return null
+    }
+
+    const [insertResult] = await executor.execute(
+      `INSERT INTO invite_rewards (
+        order_id, inviter_user_id, invitee_user_id, reward_rate_percent, platform_fee_amount, reward_amount, payout_status
+      ) VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+      [
+        orderId,
+        inviterUserId,
+        sellerUserId,
+        rewardRatePercent,
+        buyerServiceFeeAmount,
+        rewardAmount
+      ]
+    )
+
+    return {
+      rewardId: Number(insertResult.insertId || 0),
+      inviterUserId,
+      orderId,
+      rewardAmount,
+      rewardRatePercent,
+      buyerServiceFeeAmount
+    }
+  }
+
+  async function processInviteRewardPayout(rewardInfo) {
+    if (!rewardInfo || !rewardInfo.rewardId || !rewardInfo.inviterUserId) return
+
+    const { rewardId, inviterUserId, orderId, rewardAmount } = rewardInfo
+
+    const [[accountRow]] = await pool.execute(
+      `SELECT huifu_id, bind_status
+       FROM user_settlement_accounts
+       WHERE user_id = ?
+       LIMIT 1`,
+      [inviterUserId]
+    )
+    if (!accountRow || String(accountRow.bind_status || '').trim() !== 'active' || !String(accountRow.huifu_id || '').trim()) {
+      await creditWallet(
+        pool,
+        inviterUserId,
+        rewardAmount,
+        orderId,
+        `邀新返现入账（邀请人未完成进件，暂存余额）`,
+        'invite_reward'
+      )
+      await pool.execute(
+        `UPDATE invite_rewards SET payout_status = 'wallet_credited' WHERE id = ?`,
+        [rewardId]
+      )
+      return
+    }
+
+    try {
+      const payoutResult = await createSettlementPayout({
+        orderId,
+        payeeUserId: inviterUserId,
+        amount: rewardAmount,
+        remark: '邀新返现自动打款'
+      })
+
+      const payoutNo = String(payoutResult?.payoutNo || payoutResult?.payout_no || '').trim()
+      const payoutStatus = String(payoutResult?.status || 'processing').trim()
+      const finalPayoutStatus = payoutStatus === 'success' ? 'paid' : 'pending'
+
+      await pool.execute(
+        `UPDATE invite_rewards
+         SET payout_status = ?, payout_no = ?
+         WHERE id = ?`,
+        [finalPayoutStatus, payoutNo || null, rewardId]
+      )
+    } catch (error) {
+      await creditWallet(
+        pool,
+        inviterUserId,
+        rewardAmount,
+        orderId,
+        `邀新返现入账（自动打款失败，暂存余额）`,
+        'invite_reward'
+      )
+      await pool.execute(
+        `UPDATE invite_rewards SET payout_status = 'wallet_credited' WHERE id = ?`,
+        [rewardId]
+      )
     }
   }
 
@@ -1227,9 +1397,13 @@ export function createOrderLifecycleService({
         }
 
         const finalizeConn = await pool.getConnection()
+        let pendingRewardInfo = null
         try {
           await finalizeConn.beginTransaction()
           await upsertSettlement(finalizeConn, orderId, preview, 'executed', supportUserId)
+          if (!isFrozenSettlement) {
+            pendingRewardInfo = await awardInviteRewardForSettlement(finalizeConn, order, preview)
+          }
           await finalizeConn.execute(
             `UPDATE orders
              SET status = 'completed',
@@ -1261,6 +1435,14 @@ export function createOrderLifecycleService({
           throw error
         } finally {
           finalizeConn.release()
+        }
+
+        if (pendingRewardInfo) {
+          try {
+            await processInviteRewardPayout(pendingRewardInfo)
+          } catch (_payoutError) {
+            // 返现打款失败不影响订单完成
+          }
         }
 
         if (Number(order.listing_id || 0) > 0 && typeof invalidateListingDetailCache === 'function') {
