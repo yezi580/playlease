@@ -34,21 +34,35 @@
               v-model.trim="loginForm.phone"
               type="text"
               maxlength="11"
+              inputmode="numeric"
               autocomplete="username"
               placeholder="请输入管理员手机号"
+              :disabled="loginSubmitting || codeSending"
               @keydown.enter.prevent="handleLogin"
             >
           </label>
 
           <label class="admin-field">
-            <span>密码</span>
-            <input
-              v-model="loginForm.password"
-              type="password"
-              autocomplete="current-password"
-              placeholder="请输入密码"
-              @keydown.enter.prevent="handleLogin"
-            >
+            <span>验证码</span>
+            <div class="admin-code-group">
+              <input
+                v-model.trim="loginForm.code"
+                type="text"
+                maxlength="8"
+                inputmode="numeric"
+                placeholder="请输入验证码"
+                :disabled="loginSubmitting"
+                @keydown.enter.prevent="handleLogin"
+              >
+              <button
+                type="button"
+                class="admin-code-btn"
+                :disabled="loginSubmitting || codeSending || captchaLoading || captchaScriptLoading || codeCountdown > 0"
+                @click="sendSmsCode"
+              >
+                {{ codeButtonText }}
+              </button>
+            </div>
           </label>
 
           <p v-if="loginError" class="admin-error-text">{{ loginError }}</p>
@@ -124,10 +138,21 @@ export default {
       loginError: '',
       loginForm: {
         phone: '',
-        password: ''
+        code: ''
       },
       currentUser: null,
-      healthStatus: null
+      healthStatus: null,
+      codeSending: false,
+      captchaLoading: false,
+      captchaConfigLoaded: false,
+      captchaEnabled: false,
+      captchaAppId: '',
+      captchaJsUrl: '',
+      captchaUserLanguage: 'zh-cn',
+      captchaScriptLoading: false,
+      captchaScriptLoaded: false,
+      codeCountdown: 0,
+      codeTimer: null
     }
   },
   computed: {
@@ -164,11 +189,21 @@ export default {
         return '服务正常'
       }
       return '服务异常'
+    },
+    codeButtonText() {
+      if (this.captchaLoading || this.captchaScriptLoading) return '加载验证中...'
+      if (this.codeSending) return '发送中...'
+      if (this.codeCountdown > 0) return `${this.codeCountdown}s 后重发`
+      return '获取验证码'
     }
   },
   async mounted() {
     await this.fetchHealthStatus()
     await this.initializeAuth()
+    this.restoreCodeCountdown()
+  },
+  beforeUnmount() {
+    this.clearCodeTimer()
   },
   methods: {
     async initializeAuth() {
@@ -205,8 +240,19 @@ export default {
       this.currentUser = null
     },
     async handleLogin() {
-      if (!this.loginForm.phone || !this.loginForm.password) {
-        this.loginError = '手机号和密码不能为空'
+      const phone = String(this.loginForm.phone || '').trim()
+      const code = String(this.loginForm.code || '').trim()
+
+      if (!phone || !code) {
+        this.loginError = '手机号和验证码不能为空'
+        return
+      }
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        this.loginError = '手机号格式不正确'
+        return
+      }
+      if (!/^\d{4,8}$/.test(code)) {
+        this.loginError = '验证码格式不正确'
         return
       }
 
@@ -215,10 +261,7 @@ export default {
       try {
         const data = await apiFetch('/api/admin/login', {
           method: 'POST',
-          body: JSON.stringify({
-            phone: this.loginForm.phone,
-            password: this.loginForm.password
-          })
+          body: JSON.stringify({ phone, code })
         })
 
         if (String(data?.user?.role || '') !== 'admin') {
@@ -235,6 +278,187 @@ export default {
         this.loginSubmitting = false
       }
     },
+    clearCodeTimer() {
+      if (this.codeTimer) {
+        clearInterval(this.codeTimer)
+        this.codeTimer = null
+      }
+    },
+    restoreCodeCountdown() {
+      const scene = 'login'
+      const expireTimeStr = localStorage.getItem(`sms_countdown_${scene}`)
+      if (expireTimeStr) {
+        const expireTime = parseInt(expireTimeStr, 10)
+        const now = Date.now()
+        if (expireTime > now) {
+          const remainSeconds = Math.ceil((expireTime - now) / 1000)
+          this.startCodeCountdown(remainSeconds)
+        } else {
+          localStorage.removeItem(`sms_countdown_${scene}`)
+        }
+      }
+    },
+    startCodeCountdown(seconds) {
+      this.clearCodeTimer()
+      this.codeCountdown = Math.max(0, Number(seconds || 0) || 0)
+      if (this.codeCountdown > 0) {
+        const expireTime = Date.now() + this.codeCountdown * 1000
+        localStorage.setItem('sms_countdown_login', expireTime.toString())
+      }
+      if (this.codeCountdown <= 0) return
+      this.codeTimer = setInterval(() => {
+        if (this.codeCountdown <= 1) {
+          this.codeCountdown = 0
+          localStorage.removeItem('sms_countdown_login')
+          this.clearCodeTimer()
+          return
+        }
+        this.codeCountdown -= 1
+      }, 1000)
+    },
+    async ensureCaptchaConfig() {
+      if (this.captchaConfigLoaded) {
+        if (!this.captchaEnabled) {
+          throw new Error('腾讯云验证码未配置完成，请联系管理员')
+        }
+        return
+      }
+      this.captchaLoading = true
+      try {
+        const data = await apiFetch('/api/auth/captcha/config')
+        this.captchaConfigLoaded = true
+        this.captchaEnabled = Boolean(data.enabled)
+        this.captchaAppId = String(data.captcha_app_id || '').trim()
+        this.captchaJsUrl = String(data.js_url || '').trim()
+        this.captchaUserLanguage = String(data.user_language || 'zh-cn').trim() || 'zh-cn'
+        if (!this.captchaEnabled || !this.captchaAppId || !this.captchaJsUrl) {
+          throw new Error('腾讯云验证码未配置完成，请联系管理员')
+        }
+      } finally {
+        this.captchaLoading = false
+      }
+    },
+    async ensureTencentCaptchaScript() {
+      if (this.captchaScriptLoaded && typeof window.TencentCaptcha === 'function') {
+        return
+      }
+      await this.ensureCaptchaConfig()
+      if (typeof window.TencentCaptcha === 'function') {
+        this.captchaScriptLoaded = true
+        return
+      }
+
+      if (window.__tencentCaptchaScriptPromise) {
+        this.captchaScriptLoading = true
+        try {
+          await window.__tencentCaptchaScriptPromise
+          this.captchaScriptLoaded = typeof window.TencentCaptcha === 'function'
+          if (!this.captchaScriptLoaded) {
+            throw new Error('腾讯云验证码脚本加载失败')
+          }
+          return
+        } finally {
+          this.captchaScriptLoading = false
+        }
+      }
+
+      this.captchaScriptLoading = true
+      window.__tencentCaptchaScriptPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = this.captchaJsUrl
+        script.async = true
+        script.onload = () => resolve()
+        script.onerror = () => reject(new Error('腾讯云验证码脚本加载失败'))
+        document.head.appendChild(script)
+      })
+
+      try {
+        await window.__tencentCaptchaScriptPromise
+        this.captchaScriptLoaded = typeof window.TencentCaptcha === 'function'
+        if (!this.captchaScriptLoaded) {
+          throw new Error('腾讯云验证码脚本加载失败')
+        }
+      } finally {
+        this.captchaScriptLoading = false
+      }
+    },
+    async openTencentCaptcha() {
+      await this.ensureTencentCaptchaScript()
+      const CaptchaCtor = window.TencentCaptcha
+      if (typeof CaptchaCtor !== 'function') {
+        throw new Error('腾讯云验证码初始化失败')
+      }
+
+      return new Promise((resolve, reject) => {
+        try {
+          const captcha = new CaptchaCtor(this.captchaAppId, (res) => {
+            if (Number(res?.ret) === 2) {
+              resolve(null)
+              return
+            }
+            if (Number(res?.ret) === 0 && res?.ticket && res?.randstr) {
+              resolve({
+                ticket: String(res.ticket || '').trim(),
+                randstr: String(res.randstr || '').trim()
+              })
+              return
+            }
+            reject(new Error('验证码校验未通过，请重试'))
+          }, {
+            userLanguage: this.captchaUserLanguage
+          })
+          captcha.show()
+        } catch (error) {
+          reject(error)
+        }
+      })
+    },
+    async sendSmsCode() {
+      const phone = String(this.loginForm.phone || '').trim()
+      if (!phone) {
+        this.loginError = '请输入手机号'
+        return
+      }
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        this.loginError = '手机号格式不正确'
+        return
+      }
+      this.loginError = ''
+
+      let captchaResult = null
+      try {
+        this.captchaLoading = true
+        captchaResult = await this.openTencentCaptcha()
+      } catch (error) {
+        this.loginError = error.message || '拉起腾讯云验证码失败'
+        return
+      } finally {
+        this.captchaLoading = false
+      }
+
+      if (!captchaResult?.ticket || !captchaResult?.randstr) {
+        return
+      }
+
+      this.codeSending = true
+      try {
+        const data = await apiFetch('/api/auth/sms/send', {
+          method: 'POST',
+          body: JSON.stringify({
+            phone,
+            scene: 'login',
+            captcha_ticket: captchaResult.ticket,
+            captcha_randstr: captchaResult.randstr
+          })
+        })
+        const retryAfterSeconds = Math.max(0, Number(data.retry_after_seconds || 60) || 60)
+        this.startCodeCountdown(retryAfterSeconds)
+      } catch (error) {
+        this.loginError = error?.data?.message || error?.message || '发送验证码失败'
+      } finally {
+        this.codeSending = false
+      }
+    },
     selectSection(section) {
       if (!section?.routeName || this.$route.name === section.routeName) {
         return
@@ -243,7 +467,7 @@ export default {
     },
     handleLogout() {
       this.handleLocalLogout()
-      this.loginForm.password = ''
+      this.loginForm.code = ''
       if (this.$route.name !== 'admin-overview') {
         this.$router.replace({ name: 'admin-overview' })
       }
@@ -455,6 +679,40 @@ export default {
 .admin-error-text {
   margin: 0 0 12px;
   color: #b91c1c;
+}
+
+.admin-code-group {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-code-group input {
+  flex: 1;
+}
+
+.admin-code-btn {
+  min-width: 120px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid #dbe3ee;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  white-space: nowrap;
+}
+
+.admin-code-btn:hover:not(:disabled) {
+  background: #dbeafe;
+  transform: translateY(-1px);
+}
+
+.admin-code-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .admin-shell {

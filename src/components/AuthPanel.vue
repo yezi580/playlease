@@ -1,13 +1,8 @@
 <template>
   <div class="auth-wrap">
     <div class="auth-card">
-      <div class="auth-header" v-if="viewMode !== 'reset_password'">
-        <div class="tab-item" :class="{ active: viewMode === 'login' }" @click="switchView('login')">登录</div>
-        <div class="tab-item" :class="{ active: viewMode === 'register' }" @click="switchView('register')">注册</div>
-      </div>
-      <div class="auth-header single" v-else>
-        <div class="tab-item active">重置密码</div>
-        <button class="back-btn" @click="switchView('login')">返回登录</button>
+      <div class="auth-header">
+        <div class="tab-item active">登录</div>
       </div>
 
       <div class="auth-body">
@@ -23,7 +18,7 @@
           />
         </div>
 
-        <div class="input-group code-group" v-if="showCodeInput">
+        <div class="input-group code-group">
           <input
             v-model.trim="form.code"
             type="text"
@@ -43,28 +38,7 @@
           </button>
         </div>
 
-        <div class="input-group" v-if="showPasswordInput">
-          <input
-            v-model.trim="form.password"
-            type="password"
-            :placeholder="passwordPlaceholder"
-            :disabled="submitting"
-            @blur="handlePasswordBlur"
-            @keyup.enter="submitAuth"
-          />
-        </div>
-
-        <div class="input-group" v-if="showConfirmPasswordInput">
-          <input
-            v-model.trim="form.confirmPassword"
-            type="password"
-            :placeholder="confirmPasswordPlaceholder"
-            :disabled="submitting"
-            @keyup.enter="submitAuth"
-          />
-        </div>
-
-        <div v-if="viewMode === 'register'" class="input-group">
+        <div class="input-group">
           <input
             v-model.trim="form.inviteCode"
             type="text"
@@ -74,23 +48,14 @@
             @input="form.inviteCode = String(form.inviteCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '')"
             @keyup.enter="submitAuth"
           />
-          <p class="input-tip">如有邀请码，请在注册时填写；注册后仍可在邀新赚钱中绑定一次。</p>
-        </div>
-
-        <div class="aux-links" v-if="viewMode === 'login'">
-          <span class="link" @click="toggleLoginType">
-            {{ loginType === 'sms' ? '密码登录' : '验证码登录' }}
-          </span>
-          <span class="link" v-if="loginType === 'password'" @click="switchView('reset_password')">
-            忘记密码？
-          </span>
+          <p class="input-tip">新用户填写邀请码可绑定推荐人；已有账号无需填写。</p>
         </div>
 
         <button class="submit-btn" :disabled="submitting" @click="submitAuth">
           {{ submitText }}
         </button>
 
-        <div class="agreement-wrap" v-if="viewMode !== 'reset_password'">
+        <div class="agreement-wrap">
           <label class="agreement-label">
             <input type="checkbox" v-model="agreement" :disabled="submitting" />
             <span class="checkmark"></span>
@@ -145,15 +110,15 @@ const AGREEMENT_CONTENTS = {
       {
         heading: '1. 导言与协议接受',
         paragraphs: [
-          '1.1 本《用户服务协议》（以下简称“本协议”）是您（以下或称“用户”）与本租号平台（以下简称“本平台”）之间关于注册、登录、使用本平台服务所订立的具有法律效力的契约。',
-          '1.2 在您勾选同意或以其他方式确认接受本协议之前，请务必审慎阅读、充分理解各条款内容。您一旦完成注册流程或开始使用本平台提供的任何服务，即视为您已完全理解并同意接受本协议的全部约束。'
+          '1.1 本《用户服务协议》（以下简称"本协议"）是您（以下或称"用户"）与本租号平台（以下简称"本平台"）之间关于注册、登录、使用本平台服务所订立的具有法律效力的契约。',
+          '1.2 在您勾选同意或以其他方式确认接受本协议之前，请务必审慎阅读、充分理解各条款内容。您一旦完成登录流程或开始使用本平台提供的任何服务，即视为您已完全理解并同意接受本协议的全部约束。'
         ]
       },
       {
         heading: '2. 账号管理与使用规范',
         paragraphs: [
           '2.1 您承诺以真实、合法、有效的身份信息及手机号码注册本平台账号，并对您账号下发生的所有活动和事件承担全部法律责任。',
-          '2.2 您应妥善保管账号密码及验证码，不得将账号出借、赠与、出租、转让或售卖给任何第三方。因您保管不善导致的账号被盗、虚拟财产流失或引发的其他纠纷，本平台不承担赔偿责任。',
+          '2.2 您应妥善保管账号及验证码，不得将账号出借、赠与、出租、转让或售卖给任何第三方。因您保管不善导致的账号被盗、虚拟财产流失或引发的其他纠纷，本平台不承担赔偿责任。',
           '2.3 为保障平台交易秩序与账号安全，您应确保注册信息真实、合法、有效，并配合平台在必要时完成身份核验或风险排查。'
         ]
       },
@@ -187,8 +152,8 @@ const AGREEMENT_CONTENTS = {
       {
         heading: '1. 个人信息的收集范围',
         paragraphs: [
-          '1.1 业务必要信息：为实现注册、登录、支付、订单履约、风控安全审查及客户服务等核心功能，我们会依法收集您的手机号码、网络身份标识信息以及支付流转记录。',
-          '1.2 安全保障信息：当您使用验证码登录、注册或进行敏感操作时，我们将记录您的操作日志、设备硬件信息及IP地址，以预防欺诈并保障您的账号安全。'
+          '1.1 业务必要信息：为实现登录、支付、订单履约、风控安全审查及客户服务等核心功能，我们会依法收集您的手机号码、网络身份标识信息以及支付流转记录。',
+          '1.2 安全保障信息：当您使用验证码登录或进行敏感操作时，我们将记录您的操作日志、设备硬件信息及IP地址，以预防欺诈并保障您的账号安全。'
         ]
       },
       {
@@ -226,10 +191,6 @@ const AGREEMENT_CONTENTS = {
 export default {
   name: 'AuthPanel',
   props: {
-    mode: {
-      type: String,
-      default: 'login'
-    },
     tip: {
       type: String,
       default: ''
@@ -238,8 +199,6 @@ export default {
   emits: ['auth-success'],
   data() {
     return {
-      viewMode: this.mode === 'register' ? 'register' : 'login',
-      loginType: 'password', // 'sms' or 'password'
       submitting: false,
       codeSending: false,
       captchaLoading: false,
@@ -251,41 +210,21 @@ export default {
       captchaScriptLoading: false,
       captchaScriptLoaded: false,
       codeCountdown: 0,
-      codeCountdownScene: '',
+      codeCountdownScene: 'login',
       codeTimer: null,
       agreement: false,
       agreementDialogType: '',
       agreementDialogVisible: false,
       form: {
         phone: '',
-        password: '',
         code: '',
-        confirmPassword: '',
         inviteCode: ''
       }
     }
   },
   computed: {
-    showCodeInput() {
-      return this.viewMode === 'register' || this.viewMode === 'reset_password' || (this.viewMode === 'login' && this.loginType === 'sms')
-    },
-    showPasswordInput() {
-      return this.viewMode === 'register' || this.viewMode === 'reset_password' || (this.viewMode === 'login' && this.loginType === 'password')
-    },
-    showConfirmPasswordInput() {
-      return this.viewMode === 'register' || this.viewMode === 'reset_password'
-    },
-    passwordPlaceholder() {
-      if (this.viewMode === 'register') return '请设置登录密码（8 位且至少包含两种字符）'
-      if (this.viewMode === 'reset_password') return '请设置新密码（8 位且至少包含两种字符）'
-      return '请输入密码'
-    },
-    confirmPasswordPlaceholder() {
-      return this.viewMode === 'reset_password' ? '请再次输入新密码' : '请再次输入密码'
-    },
     currentSmsScene() {
-      if (this.viewMode === 'register') return 'register'
-      return this.viewMode === 'reset_password' ? 'reset_password' : 'login'
+      return 'login'
     },
     isCurrentSceneCountingDown() {
       return this.codeCountdown > 0 && this.codeCountdownScene === this.currentSmsScene
@@ -300,20 +239,10 @@ export default {
       return AGREEMENT_CONTENTS[this.agreementDialogType] || AGREEMENT_CONTENTS.userAgreement
     },
     submitText() {
-      if (this.submitting) {
-        if (this.viewMode === 'register') return '注册中...'
-        if (this.viewMode === 'reset_password') return '重置中...'
-        return '登录中...'
-      }
-      if (this.viewMode === 'register') return '注册并登录'
-      if (this.viewMode === 'reset_password') return '确认重置'
-      return '登录'
+      return this.submitting ? '登录中...' : '登录'
     }
   },
   watch: {
-    mode(value) {
-      this.switchView(value === 'register' ? 'register' : 'login')
-    },
     tip(value) {
       const message = String(value || '').trim()
       if (message) {
@@ -326,21 +255,18 @@ export default {
     if (message) {
       showWarningToast(message)
     }
-    
+
     // 恢复验证码倒计时
-    const scenes = ['login', 'register', 'reset_password']
-    for (const scene of scenes) {
-      const expireTimeStr = localStorage.getItem(`sms_countdown_${scene}`)
-      if (expireTimeStr) {
-        const expireTime = parseInt(expireTimeStr, 10)
-        const now = Date.now()
-        if (expireTime > now) {
-          const remainSeconds = Math.ceil((expireTime - now) / 1000)
-          this.startCodeCountdown(remainSeconds, scene)
-          break // 只恢复当前正在倒计时的场景
-        } else {
-          localStorage.removeItem(`sms_countdown_${scene}`)
-        }
+    const scene = 'login'
+    const expireTimeStr = localStorage.getItem(`sms_countdown_${scene}`)
+    if (expireTimeStr) {
+      const expireTime = parseInt(expireTimeStr, 10)
+      const now = Date.now()
+      if (expireTime > now) {
+        const remainSeconds = Math.ceil((expireTime - now) / 1000)
+        this.startCodeCountdown(remainSeconds, scene)
+      } else {
+        localStorage.removeItem(`sms_countdown_${scene}`)
       }
     }
   },
@@ -348,16 +274,6 @@ export default {
     this.clearCodeTimer()
   },
   methods: {
-    isStrongPassword(password) {
-      const safePassword = String(password || '')
-      if (safePassword.length < 8) return false
-
-      let typeCount = 0
-      if (/[A-Za-z]/.test(safePassword)) typeCount += 1
-      if (/\d/.test(safePassword)) typeCount += 1
-      if (/[^A-Za-z\d]/.test(safePassword)) typeCount += 1
-      return typeCount >= 2
-    },
     alertMessage(message = '') {
       const text = String(message || '').trim()
       if (!text) return
@@ -403,7 +319,7 @@ export default {
       this.clearCodeTimer()
       this.codeCountdown = Math.max(0, Number(seconds || 0) || 0)
       this.codeCountdownScene = scene
-      
+
       if (this.codeCountdown > 0) {
         const expireTime = Date.now() + this.codeCountdown * 1000
         localStorage.setItem(`sms_countdown_${scene}`, expireTime.toString())
@@ -421,31 +337,12 @@ export default {
         this.codeCountdown -= 1
       }, 1000)
     },
-    resetForm() {
-      this.form.phone = ''
-      this.form.password = ''
-      this.form.code = ''
-      this.form.confirmPassword = ''
-      this.form.inviteCode = ''
-    },
     openAgreementDialog(type) {
       this.agreementDialogType = type
       this.agreementDialogVisible = true
     },
     closeAgreementDialog() {
       this.agreementDialogVisible = false
-    },
-    switchView(mode) {
-      this.viewMode = mode
-      if (mode === 'login') {
-        this.loginType = 'password'
-      }
-      this.resetForm()
-    },
-    toggleLoginType() {
-      this.loginType = this.loginType === 'sms' ? 'password' : 'sms'
-      this.form.password = ''
-      this.form.code = ''
     },
     validatePhone(phone) {
       if (!phone) {
@@ -457,23 +354,6 @@ export default {
         return false
       }
       return true
-    },
-    validateStrongPassword(password, { showAlert = true } = {}) {
-      if (!this.isStrongPassword(password)) {
-        if (showAlert) {
-          this.alertMessage('密码需至少 8 位，且包含数字、英文、符号中的至少两种')
-        }
-        return false
-      }
-      return true
-    },
-    handlePasswordBlur() {
-      if (!(this.viewMode === 'register' || this.viewMode === 'reset_password')) {
-        return
-      }
-      const password = String(this.form.password || '')
-      if (!password) return
-      this.validateStrongPassword(password, { showAlert: true })
     },
     async ensureCaptchaConfig() {
       if (this.captchaConfigLoaded) {
@@ -605,9 +485,7 @@ export default {
         const retryAfterSeconds = Math.max(0, Number(data.retry_after_seconds || 60) || 60)
         this.startCodeCountdown(retryAfterSeconds, this.currentSmsScene)
         const durationText = this.formatDurationText(retryAfterSeconds)
-        const successMessage = this.viewMode === 'register'
-          ? '注册验证码已发送，请注意查收'
-          : '验证码已发送，请注意查收'
+        const successMessage = '验证码已发送，请注意查收'
         this.alertMessage(durationText ? `${successMessage}，${durationText} 后可重新获取` : successMessage)
       } catch (error) {
         this.alertMessage(this.buildSmsErrorMessage(error, '发送验证码失败'))
@@ -617,82 +495,28 @@ export default {
     },
     async submitAuth() {
       const phone = String(this.form.phone || '').trim()
-      const password = String(this.form.password || '')
       const code = String(this.form.code || '').trim()
-      const confirmPassword = String(this.form.confirmPassword || '')
       const inviteCode = String(this.form.inviteCode || '').trim().toUpperCase()
 
-      if (this.viewMode !== 'reset_password' && !this.agreement) {
+      if (!this.agreement) {
         this.alertMessage('请先阅读并同意用户协议与隐私政策')
         return
       }
 
       if (!this.validatePhone(phone)) return
 
-      if (this.showPasswordInput) {
-        if (!password) {
-          this.alertMessage(this.viewMode === 'reset_password' ? '请输入新密码' : '请输入密码')
-          return
-        }
-        if ((this.viewMode === 'register' || this.viewMode === 'reset_password') && !this.validateStrongPassword(password)) {
-          return
-        }
-      }
-
-      if (this.showConfirmPasswordInput) {
-        if (!confirmPassword) {
-          this.alertMessage(this.viewMode === 'reset_password' ? '请再次输入新密码' : '请再次输入密码')
-          return
-        }
-        if (password !== confirmPassword) {
-          this.alertMessage(this.viewMode === 'reset_password' ? '两次输入的新密码不一致' : '两次输入的密码不一致')
-          return
-        }
-      }
-
-      if (this.showCodeInput) {
-        if (!/^\d{4,8}$/.test(code)) {
-          this.alertMessage('请输入正确的验证码')
-          return
-        }
+      if (!/^\d{4,8}$/.test(code)) {
+        this.alertMessage('请输入正确的验证码')
+        return
       }
 
       this.submitting = true
 
       try {
-        let data = null
-
-        if (this.viewMode === 'register') {
-          await apiFetch('/api/register', {
-            method: 'POST',
-            body: JSON.stringify({ phone, code, password, invite_code: inviteCode || undefined })
-          })
-          data = await apiFetch('/api/login', {
-            method: 'POST',
-            body: JSON.stringify({ phone, password })
-          })
-        } else if (this.viewMode === 'reset_password') {
-          await apiFetch('/api/auth/password/reset-by-sms', {
-            method: 'POST',
-            body: JSON.stringify({ phone, code, new_password: password })
-          })
-          data = await apiFetch('/api/login', {
-            method: 'POST',
-            body: JSON.stringify({ phone, password })
-          })
-        } else {
-          if (this.loginType === 'password') {
-            data = await apiFetch('/api/login', {
-              method: 'POST',
-              body: JSON.stringify({ phone, password })
-            })
-          } else {
-            data = await apiFetch('/api/auth/sms/login', {
-              method: 'POST',
-              body: JSON.stringify({ phone, code })
-            })
-          }
-        }
+        const data = await apiFetch('/api/auth/sms/login', {
+          method: 'POST',
+          body: JSON.stringify({ phone, code, invite_code: inviteCode || undefined })
+        })
 
         this.$emit('auth-success', {
           username: data.user?.username || data.user?.phone || phone,
@@ -701,10 +525,7 @@ export default {
         })
       } catch (error) {
         this.alertMessage(
-          this.buildSmsErrorMessage(
-            error,
-            this.viewMode === 'register' ? '注册失败，请稍后重试' : '操作失败，请稍后重试'
-          )
+          this.buildSmsErrorMessage(error, '登录失败，请稍后重试')
         )
       } finally {
         this.submitting = false
@@ -742,27 +563,13 @@ export default {
   border-bottom: 1px solid transparent;
 }
 
-.auth-header.single {
-  justify-content: space-between;
-  border-bottom: 1px solid #f1f5f9;
-  padding-bottom: 16px;
-  margin-top: 24px;
-}
-
 .tab-item {
-  font-size: 18px;
-  font-weight: 500;
-  color: #64748b;
-  cursor: pointer;
-  position: relative;
-  padding-bottom: 8px;
-  transition: all 0.3s;
-}
-
-.tab-item.active {
   font-size: 22px;
   font-weight: 600;
   color: #0f172a;
+  position: relative;
+  padding-bottom: 8px;
+  transition: all 0.3s;
 }
 
 .tab-item.active::after {
@@ -775,20 +582,6 @@ export default {
   height: 4px;
   background: #3b82f6;
   border-radius: 2px;
-}
-
-.back-btn {
-  background: none;
-  border: none;
-  color: #64748b;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-.back-btn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
 }
 
 .auth-body {
@@ -869,24 +662,6 @@ export default {
   color: #94a3b8;
   background: #f1f5f9;
   cursor: not-allowed;
-}
-
-.aux-links {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: -4px;
-}
-
-.aux-links .link {
-  font-size: 14px;
-  color: #64748b;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.aux-links .link:hover {
-  color: #3b82f6;
 }
 
 .submit-btn {
@@ -1074,7 +849,7 @@ export default {
 
 .paragraph-prefix {
   flex-shrink: 0;
-  width: 2.2em; /* 固定宽度，大约等于 "1.1 " 两个数字加一个点的宽度 */
+  width: 2.2em;
   font-weight: 500;
 }
 

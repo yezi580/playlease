@@ -172,8 +172,6 @@ function createTencentSmsProvider(config = {}) {
       if (!smsSdkAppId) configIssues.push('缺少 TENCENT_SMS_SDK_APP_ID')
       if (!signName) configIssues.push('缺少 TENCENT_SMS_SIGN_NAME')
       if (!(templateIds.default || templateIds.login)) configIssues.push('缺少登录短信模板 ID')
-      if (!(templateIds.default || templateIds.register)) configIssues.push('缺少注册短信模板 ID')
-      if (!(templateIds.default || templateIds.resetPassword)) configIssues.push('缺少改密短信模板 ID')
       if (!(templateIds.default || templateIds.adminPasskeyRegister)) configIssues.push('缺少管理员 Passkey 绑定短信模板 ID')
       return {
         enabled: isConfigured,

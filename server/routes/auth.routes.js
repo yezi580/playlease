@@ -38,7 +38,7 @@ function isValidPhone(value = '') {
 }
 
 function isValidSmsScene(value = '') {
-  return ['login', 'register', 'reset_password'].includes(String(value || '').trim())
+  return ['login'].includes(String(value || '').trim())
 }
 
 function isStrongPassword(value = '') {
@@ -382,45 +382,25 @@ export function registerAuthRoutes(deps) {
     })
   })
 
-  app.post('/api/register', authLimiter, async (req, res) => {
+  app.post('/api/register', authLimiter, (_req, res) => {
+    res.status(410).json({ message: '注册功能已下线，请使用验证码直接登录' })
+  })
+
+  app.post('/api/admin/login', authLimiter, async (req, res) => {
     const phone = String(req.body?.phone || '').trim()
     const code = String(req.body?.code || '').trim()
-    const password = String(req.body?.password || '')
-    const inviteCode = normalizeInviteCode(req.body?.invite_code || '')
-    // 注册接口不接受前端角色，统一写死 user，管理员账号仅允许受控渠道创建。
-    const role = 'user'
 
-    if (!phone || !code || !password) {
-      return res.status(400).json({ message: '手机号、验证码和密码不能为空' })
-    }
-
-    if (!isValidPhone(phone)) {
-      return res.status(400).json({ message: '请输入正确的11位手机号' })
-    }
-
-    if (!/^\d{4,8}$/.test(code)) {
-      return res.status(400).json({ message: '请输入正确的验证码' })
-    }
-
-    if (!isStrongPassword(password)) {
-      return res.status(400).json({ message: '密码需至少 8 位，且包含数字、英文、符号中的至少两种' })
-    }
-    if (inviteCode && !INVITE_CODE_REGEX.test(inviteCode)) {
-      return res.status(400).json({ message: '邀请码格式不正确' })
+    if (!isValidPhone(phone) || !/^\d{4,8}$/.test(code)) {
+      return res.status(400).json({ message: '手机号或验证码格式不正确' })
     }
 
     try {
       const businessSettings = typeof loadBusinessSettings === 'function' ? await loadBusinessSettings(pool) : null
       const smsSecurityThresholds = businessSettings ? getSmsSecurityThresholds(businessSettings) : buildDefaultSmsSecurityThresholds()
-      const existsUser = await findUserByPhone(pool, phone)
-      if (existsUser?.id) {
-        return res.status(409).json({ message: '该手机号已注册' })
-      }
-
       const verifyResult = await smsCodeService.verifyCode({
         phone,
         code,
-        scene: 'register',
+        scene: 'login',
         consume: true
       })
       if (!verifyResult?.ok) {
@@ -428,92 +408,20 @@ export function registerAuthRoutes(deps) {
         return res.status(errorResponse.status).json(errorResponse.body)
       }
 
-      const conn = await pool.getConnection()
-      try {
-        await conn.beginTransaction()
-        const existsUserInTx = await findUserByPhone(conn, phone)
-        if (existsUserInTx?.id) {
-          await conn.rollback()
-          return res.status(409).json({ message: '该手机号已注册' })
-        }
-
-        let inviterUser = null
-        if (inviteCode) {
-          inviterUser = await findUserByInviteCode(conn, inviteCode)
-          if (!inviterUser?.id) {
-            await conn.rollback()
-            return res.status(400).json({ message: '邀请码不存在，请核对后重试' })
-          }
-        }
-
-        const username = maskPhoneAsUsername(phone)
-        const passwordHash = await bcrypt.hash(password, 10)
-        const [insertResult] = await conn.execute(
-          `INSERT INTO users (
-            username, password_hash, phone, role, inviter_user_id, bound_invite_code, invite_bound_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            username,
-            passwordHash,
-            phone,
-            role,
-            inviterUser?.id ? Number(inviterUser.id) : null,
-            inviterUser?.invite_code || null,
-            inviterUser?.id ? new Date() : null
-          ]
-        )
-        const userInviteCode = await ensureUserInviteCode(conn, insertResult.insertId)
-        await conn.commit()
-
-        res.status(201).json({
-          message: '注册成功',
-          user: {
-            id: insertResult.insertId,
-            username,
-            phone,
-            role,
-            invite_code: userInviteCode,
-            bound_invite_code: inviterUser?.invite_code || ''
-          }
-        })
-      } catch (error) {
-        await conn.rollback()
-        throw error
-      } finally {
-        conn.release()
-      }
-    } catch (_error) {
-      res.status(500).json({ message: '注册失败' })
-    }
-  })
-
-  app.post('/api/admin/login', authLimiter, async (req, res) => {
-    const phone = String(req.body?.phone || '').trim()
-    const password = String(req.body?.password || '')
-
-    if (!phone || !password) {
-      return res.status(400).json({ message: '手机号和密码不能为空' })
-    }
-
-    try {
       const user = await findUserByPhone(pool, phone)
       if (!user) {
-        return res.status(401).json({ message: '手机号或密码错误' })
+        return res.status(401).json({ message: '该手机号未注册' })
       }
       if (!isAdminRole(user.role)) {
         return res.status(403).json({ message: '当前账号不是管理员，无法进入后台' })
       }
-      const isPassOk = await bcrypt.compare(password, user.password_hash)
-      if (!isPassOk) {
-        return res.status(401).json({ message: '手机号或密码错误' })
-      }
       if (isUserCurrentlyBanned(user)) {
         return res.status(403).json({ message: buildBannedUserMessage(user) })
       }
 
       const { token, tokenMaxAgeMs } = await issueAuthSession(req, user, {
-        authLevel: 'password',
-        amr: ['pwd']
+        authLevel: 'sms',
+        amr: ['sms']
       })
       setAuthCookie(req, res, token, { maxAgeMs: tokenMaxAgeMs })
       res.json({
@@ -529,46 +437,8 @@ export function registerAuthRoutes(deps) {
     }
   })
 
-  app.post('/api/login', authLimiter, async (req, res) => {
-    const phone = String(req.body?.phone || '').trim()
-    const password = String(req.body?.password || '')
-
-    if (!phone || !password) {
-      return res.status(400).json({ message: '手机号和密码不能为空' })
-    }
-
-    try {
-      const user = await findUserByPhone(pool, phone)
-      if (!user) {
-        return res.status(401).json({ message: '手机号或密码错误' })
-      }
-      if (isAdminRole(user.role)) {
-        return res.status(403).json({ message: buildAdminPortalOnlyMessage() })
-      }
-      const isPassOk = await bcrypt.compare(password, user.password_hash)
-      if (!isPassOk) {
-        return res.status(401).json({ message: '手机号或密码错误' })
-      }
-      if (isUserCurrentlyBanned(user)) {
-        return res.status(403).json({ message: buildBannedUserMessage(user) })
-      }
-
-      const { token, tokenMaxAgeMs } = await issueAuthSession(req, user, {
-        authLevel: 'password',
-        amr: ['pwd']
-      })
-      setAuthCookie(req, res, token, { maxAgeMs: tokenMaxAgeMs })
-      res.json({
-        user: {
-          id: user.id,
-          username: user.username,
-          phone: user.phone,
-          role: user.role
-        }
-      })
-    } catch (_error) {
-      res.status(500).json({ message: '登录失败' })
-    }
+  app.post('/api/login', authLimiter, (_req, res) => {
+    res.status(410).json({ message: '密码登录已下线，请使用验证码登录' })
   })
 
   app.post('/api/auth/sms/send', authLimiter, async (req, res) => {
@@ -590,18 +460,6 @@ export function registerAuthRoutes(deps) {
     try {
       const businessSettings = typeof loadBusinessSettings === 'function' ? await loadBusinessSettings(pool) : null
       const smsSecurityThresholds = businessSettings ? getSmsSecurityThresholds(businessSettings) : buildDefaultSmsSecurityThresholds()
-      if (scene !== 'register') {
-        const existsUser = await findUserByPhone(pool, phone)
-        if (isAdminRole(existsUser?.role)) {
-          return res.status(403).json({ message: buildAdminPortalOnlyMessage() })
-        }
-      }
-      if (scene === 'register') {
-        const existsUser = await findUserByPhone(pool, phone)
-        if (existsUser?.id) {
-          return res.status(409).json({ message: '该手机号已注册，请直接登录' })
-        }
-      }
 
       const captchaVerifyResult = await captchaProvider.verifyTicket({
         ticket: captchaTicket,
@@ -708,9 +566,13 @@ export function registerAuthRoutes(deps) {
   app.post('/api/auth/sms/login', authLimiter, async (req, res) => {
     const phone = String(req.body?.phone || '').trim()
     const code = String(req.body?.code || '').trim()
+    const inviteCode = normalizeInviteCode(req.body?.invite_code || '')
 
     if (!isValidPhone(phone) || !/^\d{4,8}$/.test(code)) {
       return res.status(400).json({ message: '手机号或验证码格式不正确' })
+    }
+    if (inviteCode && !INVITE_CODE_REGEX.test(inviteCode)) {
+      return res.status(400).json({ message: '邀请码格式不正确' })
     }
 
     try {
@@ -730,25 +592,56 @@ export function registerAuthRoutes(deps) {
       let user = await findUserByPhone(pool, phone)
       let isNewUser = false
       if (!user) {
-        const username = maskPhoneAsUsername(phone)
-        const passwordHash = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10)
-        const [insertResult] = await pool.execute(
-          'INSERT INTO users (username, password_hash, phone, role) VALUES (?, ?, ?, ?)',
-          [username, passwordHash, phone, 'user']
-        )
-        const inviteCode = await ensureUserInviteCode(pool, insertResult.insertId)
-        user = {
-          id: insertResult.insertId,
-          username,
-          phone,
-          role: 'user',
-          banned_until: null,
-          invite_code: inviteCode,
-          inviter_user_id: null,
-          bound_invite_code: '',
-          invite_bound_at: null
+        const conn = await pool.getConnection()
+        try {
+          await conn.beginTransaction()
+
+          let inviterUser = null
+          if (inviteCode) {
+            inviterUser = await findUserByInviteCode(conn, inviteCode)
+            if (!inviterUser?.id) {
+              await conn.rollback()
+              return res.status(400).json({ message: '邀请码不存在，请核对后重试' })
+            }
+          }
+
+          const username = maskPhoneAsUsername(phone)
+          const passwordHash = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10)
+          const [insertResult] = await conn.execute(
+            `INSERT INTO users (
+              username, password_hash, phone, role, inviter_user_id, bound_invite_code, invite_bound_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              username,
+              passwordHash,
+              phone,
+              'user',
+              inviterUser?.id ? Number(inviterUser.id) : null,
+              inviterUser?.invite_code || null,
+              inviterUser?.id ? new Date() : null
+            ]
+          )
+          const userInviteCode = await ensureUserInviteCode(conn, insertResult.insertId)
+          await conn.commit()
+
+          user = {
+            id: insertResult.insertId,
+            username,
+            phone,
+            role: 'user',
+            banned_until: null,
+            invite_code: userInviteCode,
+            inviter_user_id: inviterUser?.id || null,
+            bound_invite_code: inviterUser?.invite_code || '',
+            invite_bound_at: inviterUser?.id ? new Date() : null
+          }
+          isNewUser = true
+        } catch (error) {
+          await conn.rollback()
+          throw error
+        } finally {
+          conn.release()
         }
-        isNewUser = true
       }
       if (isAdminRole(user.role)) {
         return res.status(403).json({ message: buildAdminPortalOnlyMessage() })
@@ -777,53 +670,8 @@ export function registerAuthRoutes(deps) {
     }
   })
 
-  app.post('/api/auth/password/reset-by-sms', authLimiter, async (req, res) => {
-    const phone = String(req.body?.phone || '').trim()
-    const code = String(req.body?.code || '').trim()
-    const newPassword = String(req.body?.new_password || '')
-
-    if (!isValidPhone(phone) || !/^\d{4,8}$/.test(code)) {
-      return res.status(400).json({ message: '手机号或验证码格式不正确' })
-    }
-    if (!isStrongPassword(newPassword)) {
-      return res.status(400).json({ message: '新密码需至少 8 位，且包含数字、英文、符号中的至少两种' })
-    }
-
-    try {
-      const businessSettings = typeof loadBusinessSettings === 'function' ? await loadBusinessSettings(pool) : null
-      const smsSecurityThresholds = businessSettings ? getSmsSecurityThresholds(businessSettings) : buildDefaultSmsSecurityThresholds()
-      const verifyResult = await smsCodeService.verifyCode({
-        phone,
-        code,
-        scene: 'reset_password',
-        consume: true
-      })
-      if (!verifyResult?.ok) {
-        const errorResponse = getSmsVerifyErrorResponse(verifyResult, smsSecurityThresholds)
-        return res.status(errorResponse.status).json(errorResponse.body)
-      }
-
-      const user = await findUserByPhone(pool, phone)
-      if (!user) {
-        return res.status(404).json({ message: '该手机号尚未注册' })
-      }
-      if (isAdminRole(user.role)) {
-        return res.status(403).json({ message: '管理员账号请在后台进行密码维护' })
-      }
-
-      const passwordHash = await bcrypt.hash(newPassword, 10)
-      await pool.execute(
-        'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [passwordHash, user.id]
-      )
-      if (typeof revokeAllLoginSessionsByUserId === 'function') {
-        await revokeAllLoginSessionsByUserId(user.id)
-      }
-
-      res.json({ success: true, message: '密码修改成功' })
-    } catch (_error) {
-      res.status(500).json({ message: '验证码修改密码失败' })
-    }
+  app.post('/api/auth/password/reset-by-sms', authLimiter, (_req, res) => {
+    res.status(410).json({ message: '密码重置功能已下线，请使用验证码登录' })
   })
 
   app.post('/api/logout', async (req, res) => {

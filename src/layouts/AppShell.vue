@@ -35,7 +35,6 @@
     <main class="main-content">
       <AuthPanel
         v-if="showAuth"
-        :mode="authMode"
         :tip="authTip"
         @auth-success="handleAuthSuccess"
       />
