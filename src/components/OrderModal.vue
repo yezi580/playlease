@@ -24,12 +24,12 @@
 
           <div class="contact-form">
             <label class="contact-field">
-              <span>联系微信</span>
+              <span>联系方式</span>
               <input
                 v-model.trim="buyerContactWechat"
                 type="text"
                 maxlength="20"
-                placeholder=""
+                placeholder="微信号或手机号"
               />
             </label>
           </div>
@@ -141,8 +141,8 @@ export default {
     },
     async handleSubmit() {
       if (!this.listing || this.submitting) return
-      if (!/^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(this.buyerContactWechat)) {
-        showErrorToast('请输入正确的微信号')
+      if (!/^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(this.buyerContactWechat) && !/^1[3-9]\d{9}$/.test(this.buyerContactWechat)) {
+        showErrorToast('请输入正确的微信号或手机号')
         return
       }
       this.submitting = true

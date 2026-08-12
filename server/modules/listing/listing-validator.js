@@ -47,6 +47,11 @@ const ALLOWED_DIVE_LEVELS = new Set(['0', '1', '2', '3'])
 const ALLOWED_DECONTAMINATION_CHAMBER_LEVELS = new Set(['0', '1', '2', '3'])
 const LOGIN_TIME_RANGE_REGEX = /^([01]\d|2[0-3]):00-([01]\d|2[0-3]):00$/
 const WECHAT_ID_REGEX = /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/
+const PHONE_REGEX = /^1[3-9]\d{9}$/
+function isValidContactValue(value = '') {
+  const v = String(value || '').trim()
+  return WECHAT_ID_REGEX.test(v) || PHONE_REGEX.test(v)
+}
 const VALID_REGION_TEXTS = new Set(
   REGION_OPTIONS.flatMap((item) => item.cities.map((city) => buildRegionText(item.province, city)))
 )
@@ -316,8 +321,8 @@ export function validateListingPayload(payload, options = {}) {
   }
 
   const sellerContactWechat = String(payload.sellerContactWechat || '').trim()
-  if (!WECHAT_ID_REGEX.test(sellerContactWechat)) {
-    return '鍗栧寰俊鍙锋牸寮忎笉姝ｇ‘'
+  if (!isValidContactValue(sellerContactWechat)) {
+    return '卖家联系方式格式不正确'
   }
 
   const rank = String(payload.rank || '').trim()

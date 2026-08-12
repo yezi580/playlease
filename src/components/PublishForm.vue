@@ -420,12 +420,12 @@
     <section class="publish-section">
       <div class="form-grid">
         <label>
-          <span>联系微信 <i class="required-star">*</i></span>
+          <span>联系方式 <i class="required-star">*</i></span>
           <input
             v-model.trim="publishForm.sellerContactWechat"
             type="text"
             maxlength="20"
-            placeholder=""
+            placeholder="微信号或手机号"
             @blur="handleFieldBlur('sellerContactWechat')"
           />
           <small v-if="fieldErrors.sellerContactWechat" class="field-hint error-field-hint">{{ fieldErrors.sellerContactWechat }}</small>
@@ -1024,8 +1024,8 @@ export default {
       const value = this.publishForm[field]
       switch (field) {
         case 'sellerContactWechat':
-          if (!value) return '联系微信为必填'
-          return /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(String(value).trim()) ? '' : '请输入正确的微信号'
+          if (!value) return '联系方式为必填'
+          return (/^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(String(value).trim()) || /^1[3-9]\d{9}$/.test(String(value).trim())) ? '' : '请输入正确的微信号或手机号'
         case 'loginMethod':
           return value ? '' : '上号方式为必填'
         case 'loginTimeRange':

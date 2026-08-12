@@ -151,8 +151,8 @@ app.post('/api/orders', authRequired, orderWriteLimiter, async (req, res) => {
   if (!listingId || !Number.isFinite(listingId) || listingId < 1) {
     return res.status(400).json({ message: '璇烽€夋嫨瑕佺鐢ㄧ殑鍟嗗搧' })
   }
-  if (!/^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(buyerContactWechat)) {
-    return res.status(400).json({ message: 'Invalid wechat id' })
+  if (!/^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/.test(buyerContactWechat) && !/^1[3-9]\d{9}$/.test(buyerContactWechat)) {
+    return res.status(400).json({ message: '请输入正确的微信号或手机号' })
   }
   if (!acceptBuyerAgreement || !acceptPaymentAgreement) {
     return res.status(400).json({ message: '涓嬪崟鍓嶈鍏堥槄璇诲苟鍚屾剰鏀粯鍓嶅崗璁笌绉熷鍗忚' })
