@@ -805,7 +805,7 @@ function createHuifuCashierProvider(config = {}) {
     async createPaymentOrder(payload = {}) {
       return createPaymentOrder(payload)
     },
-    async createRefund() {
+    async createRefund(payload = {}) {
       const issues = getActionConfigIssues('refund')
       if (issues.length) {
         return {
@@ -839,7 +839,7 @@ function createHuifuCashierProvider(config = {}) {
         rawResponse: response.rawResponse
       }
     },
-    async queryRefund() {
+    async queryRefund(payload = {}) {
       const issues = getActionConfigIssues('query_refund')
       if (issues.length) {
         return {

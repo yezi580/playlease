@@ -1357,6 +1357,14 @@ export function createOrderLifecycleService({
             })
           }
         } catch (error) {
+          console.error('[executeSettlement] funds processing failed:', {
+            orderId,
+            needsRefund,
+            needsPayout,
+            refundStatus: refundResult?.status,
+            payoutStatus: payoutResult?.status,
+            errorMessage: error?.body?.message || error?.message || String(error)
+          })
           await markOrderFundsProcessing({
             orderId,
             supportUserId,
