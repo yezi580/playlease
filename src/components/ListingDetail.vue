@@ -710,8 +710,12 @@ export default {
       return String(value)
     },
     formatTime(value) {
+      // 时间格式化：服务端返回的是带 Z 的 UTC 时间串，需按本地时区解析后再展示，否则偏 8 小时。
       if (!value) return '-'
-      return String(value).replace('T', ' ').slice(0, 19)
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return String(value).replace('T', ' ').slice(0, 19)
+      const pad = (n) => String(n).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
     },
     formatInsuranceLevel(value) {
       const normalized = String(value || '').trim()

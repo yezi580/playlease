@@ -297,9 +297,13 @@ export default {
       return '-'
     },
     formatTime(value) {
-      // 时间格式化：将ISO时间字符串转为可读格式
+      // 时间格式化：服务端返回的是带 Z 的 UTC 时间串（如 2026-08-12T11:15:00.000Z），
+      // 必须先用 new Date() 解析再取本地时区分量，否则会原样显示 UTC 时间（偏 8 小时）。
       if (!value) return '-'
-      return String(value).replace('T', ' ').slice(0, 19)
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return String(value).replace('T', ' ').slice(0, 19)
+      const pad = (n) => String(n).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
     },
     handleResize() {
       this.isMobile = window.innerWidth <= 960
