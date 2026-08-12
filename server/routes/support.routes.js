@@ -904,6 +904,7 @@ app.post('/api/support/orders/:id/reconcile-funds', authRequired, supportOnly, o
       payout: result?.payout || null
     })
   } catch (error) {
+    console.error('[reconcile-funds] error:', { orderId, errorMessage: error?.body?.message || error?.message || String(error), stack: error?.stack })
     const status = Number(error?.status || 0)
     if (status >= 400 && status < 600) {
       return res.status(status).json(error.body || { message: error.message || '同步资金状态失败' })
