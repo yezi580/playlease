@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS listings (
   reviewed_by INT DEFAULT NULL COMMENT '最后审核管理员ID',
   reviewed_at DATETIME DEFAULT NULL COMMENT '最后审核时间',
   review_reason VARCHAR(500) DEFAULT NULL COMMENT '审核备注或驳回原因',
+  review_assignee_id INT DEFAULT NULL COMMENT '派给的客服ID（商品审核工单）',
+  review_assigned_at DATETIME DEFAULT NULL COMMENT '派单时间',
   published_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发布时间（DATETIME格式）',
 
   -- 基础属性

@@ -6,12 +6,12 @@ import { startRecurringJobs } from './jobs.js'
 import { runBootstrapSchemaTasks } from './schema.js'
 
 export async function startServer(options) {
-  const { httpServer, port, expirePendingPaymentOrders, captureOnlinePresenceSnapshot } = options
+  const { httpServer, port, expirePendingPaymentOrders, captureOnlinePresenceSnapshot, reconcileProcessingFundsOrders } = options
 
   await runBootstrapSchemaTasks(options)
 
   httpServer.listen(port, () => {
     console.log(`API server running at http://localhost:${port}`)
-    startRecurringJobs({ expirePendingPaymentOrders, captureOnlinePresenceSnapshot })
+    startRecurringJobs({ expirePendingPaymentOrders, captureOnlinePresenceSnapshot, reconcileProcessingFundsOrders })
   })
 }

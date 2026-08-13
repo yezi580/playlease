@@ -1,6 +1,26 @@
 <template>
   <section class="support-console">
     <template v-if="canAccessOrderDesk">
+    <div class="desk-mode-bar">
+      <button
+        type="button"
+        class="desk-mode-btn"
+        :class="{ 'desk-mode-btn--active': deskMode === 'tickets' }"
+        @click="deskMode = 'tickets'"
+      >
+        客服工单
+      </button>
+      <button
+        type="button"
+        class="desk-mode-btn"
+        :class="{ 'desk-mode-btn--active': deskMode === 'review' }"
+        @click="switchToReviewDesk"
+      >
+        商品审核
+        <span v-if="reviewPendingCount > 0" class="desk-mode-dot">{{ reviewPendingCount }}</span>
+      </button>
+    </div>
+    <div v-show="deskMode === 'tickets'">
     <div class="toolbar">
       <div class="toolbar-search">
         <input
@@ -477,6 +497,8 @@
         </section>
       </div>
     </Transition>
+    </div>
+    <ListingReviewDesk v-if="deskMode === 'review'" @reviewed="fetchReviewPendingCount" />
     </template>
 
     <div v-else class="panel">
@@ -493,10 +515,11 @@ import { getSocketServerUrl } from '../utils/runtime.js'
 import { showErrorToast, showSuccessToast } from '../utils/toast.js'
 import { showConfirm } from '../utils/confirm.js'
 import ConversationPanel from './ConversationPanel.vue'
+import ListingReviewDesk from './support/ListingReviewDesk.vue'
 
 export default {
   name: 'SupportConsole',
-  components: { ConversationPanel },
+  components: { ConversationPanel, ListingReviewDesk },
   props: {
     currentUserRole: {
       type: String,
@@ -506,6 +529,9 @@ export default {
   data() {
     return {
       activeDesk: 'aftersale',
+      deskMode: 'tickets',
+      reviewPendingCount: 0,
+      reviewPollTimer: null,
       loading: false,
       error: '',
       keyword: '',
@@ -702,6 +728,10 @@ export default {
       this.fetchOrders()
       this.fetchSupportDeskUnreadSummary()
       this.setupRealtimeSupportDeskSocket()
+      this.fetchReviewPendingCount()
+      this.reviewPollTimer = window.setInterval(() => {
+        if (this.deskMode !== 'review') this.fetchReviewPendingCount()
+      }, 60 * 1000)
     }
     window.addEventListener('resize', this.refreshScrollbars)
   },
@@ -709,6 +739,10 @@ export default {
     this.clearScrollbarFadeTimer('orders')
     this.clearScrollbarFadeTimer('detail')
     this.teardownRealtimeSupportDeskSocket()
+    if (this.reviewPollTimer) {
+      window.clearInterval(this.reviewPollTimer)
+      this.reviewPollTimer = null
+    }
     window.removeEventListener('resize', this.refreshScrollbars)
   },
   methods: {
@@ -736,6 +770,19 @@ export default {
       } catch (_error) {
         // 红点拉取失败不阻断客服工作台主流程。
       }
+    },
+    async fetchReviewPendingCount() {
+      if (!this.canAccessOrderDesk) return
+      try {
+        const data = await apiFetch('/api/support/listing-reviews?status=pending&page=1&pageSize=1')
+        this.reviewPendingCount = Number(data?.total || 0)
+      } catch (_error) {
+        // 审核红点拉取失败不阻断工作台主流程。
+      }
+    },
+    switchToReviewDesk() {
+      this.deskMode = 'review'
+      this.fetchReviewPendingCount()
     },
     setupRealtimeSupportDeskSocket() {
       if (!this.canAccessOrderDesk || this.realtimeSocket) return
@@ -1347,6 +1394,61 @@ export default {
   border: 1px solid #e5e7eb;
   border-radius: 18px;
   background: #fff;
+}
+
+.desk-mode-bar {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: 8px;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.desk-mode-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 16px;
+  min-height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.desk-mode-btn:hover {
+  color: #334155;
+}
+
+.desk-mode-btn--active {
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.desk-mode-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .toolbar {

@@ -5,11 +5,12 @@
 export function canAccessProtectedBanMedia({
   isLoggedIn = false,
   isAdmin = false,
+  isSupport = false,
   isOwner = false,
   isBuyer = false,
   isActiveListing = false
 } = {}) {
   if (!isLoggedIn) return false
-  if (isAdmin || isOwner || isBuyer) return true
+  if (isAdmin || isSupport || isOwner || isBuyer) return true
   return Boolean(isActiveListing)
 }

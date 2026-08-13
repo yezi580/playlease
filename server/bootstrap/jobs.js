@@ -5,8 +5,10 @@
 export function startRecurringJobs({
   expirePendingPaymentOrders,
   captureOnlinePresenceSnapshot,
+  reconcileProcessingFundsOrders,
   intervalMs = 60_000,
-  onlineSnapshotIntervalMs = 60_000
+  onlineSnapshotIntervalMs = 60_000,
+  fundsReconcileIntervalMs = 120_000
 }) {
   const runExpiredOrderCleanup = async () => {
     try {
@@ -32,14 +34,31 @@ export function startRecurringJobs({
     }
   }
 
+  const runProcessingFundsReconcile = async () => {
+    if (typeof reconcileProcessingFundsOrders !== 'function') return
+    try {
+      const summary = await reconcileProcessingFundsOrders()
+      if (summary && summary.scanned > 0) {
+        console.log(
+          `[资金对账] 扫描 ${summary.scanned} 个资金处理中订单：完成 ${summary.finalized}，处理中 ${summary.pending}，跳过 ${summary.skipped}，失败 ${summary.errors}`
+        )
+      }
+    } catch (error) {
+      console.error('[资金对账] 执行失败:', error.message)
+    }
+  }
+
   runExpiredOrderCleanup()
   runOnlineSnapshotCapture()
+  runProcessingFundsReconcile()
 
   const cleanupInterval = setInterval(runExpiredOrderCleanup, intervalMs)
   const onlineSnapshotInterval = setInterval(runOnlineSnapshotCapture, onlineSnapshotIntervalMs)
+  const fundsReconcileInterval = setInterval(runProcessingFundsReconcile, fundsReconcileIntervalMs)
 
   return {
     cleanupInterval,
-    onlineSnapshotInterval
+    onlineSnapshotInterval,
+    fundsReconcileInterval
   }
 }

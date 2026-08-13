@@ -1282,15 +1282,18 @@ export function createOrderLifecycleService({
 
           if (isRegularSettlement && Number(order.seller_id || 0) > 0) {
             const [sellerAccounts] = await conn.execute(
-              `SELECT bind_status, huifu_id
+              `SELECT bind_status, huifu_id, acct_id
                FROM user_settlement_accounts
                WHERE user_id = ?
                LIMIT 1`,
               [Number(order.seller_id)]
             )
             const sellerAccount = sellerAccounts[0] || null
-            if (!sellerAccount || String(sellerAccount.bind_status || '').trim() !== 'active' || !String(sellerAccount.huifu_id || '').trim()) {
-              fail(400, { message: '卖家尚未完成个人进件（收款账号未配置或未启用），无法执行分账' })
+            if (!sellerAccount
+              || String(sellerAccount.bind_status || '').trim() !== 'active'
+              || !String(sellerAccount.huifu_id || '').trim()
+              || !String(sellerAccount.acct_id || '').trim()) {
+              fail(400, { message: '卖家尚未完成个人进件与绑卡（收款账号未配置或未启用），无法执行分账' })
             }
           }
 

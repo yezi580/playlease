@@ -1056,8 +1056,11 @@ export function createPaymentService(config = {}) {
     }
 
     const account = await fetchSettlementAccountByUserId(pool, payeeUserId)
-    if (!account || String(account.bind_status || '').trim() !== 'active' || !String(account.huifu_id || '').trim()) {
-      fail(400, { message: '卖家尚未完成收款账号配置，暂时不能执行余额支付' })
+    if (!account
+      || String(account.bind_status || '').trim() !== 'active'
+      || !String(account.huifu_id || '').trim()
+      || !String(account.acct_id || '').trim()) {
+      fail(400, { message: '卖家尚未完成收款账号配置或绑卡，暂时不能执行余额支付' })
     }
 
     const payoutNo = createBusinessNo('POT')
@@ -1244,6 +1247,44 @@ export function createPaymentService(config = {}) {
     }
   }
 
+  async function reconcileProcessingFundsOrders(options = {}) {
+    const lookbackHours = Math.max(1, Number(options?.lookbackHours ?? 24) || 24)
+    const limit = Math.min(200, Math.max(1, Number(options?.limit ?? 50) || 50))
+    const [rows] = await pool.execute(
+      `SELECT id, support_assignee_id
+       FROM orders
+       WHERE status = 'support_handling'
+         AND support_status = 'handling'
+         AND support_scene IN ('cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing')
+         AND updated_at > DATE_SUB(NOW(), INTERVAL ? HOUR)
+       ORDER BY updated_at ASC
+       LIMIT ?`,
+      [lookbackHours, limit]
+    )
+
+    const summary = { scanned: rows.length, finalized: 0, pending: 0, skipped: 0, errors: 0 }
+    for (const row of rows) {
+      const orderId = Number(row.id)
+      const supportUserId = Number(row.support_assignee_id || 0)
+      if (!orderId || !supportUserId) {
+        summary.skipped += 1
+        continue
+      }
+      try {
+        const result = await reconcileOrderFunds({ orderId, supportUserId })
+        if (result?.finalized) {
+          summary.finalized += 1
+        } else {
+          summary.pending += 1
+        }
+      } catch (error) {
+        summary.errors += 1
+        console.error('[资金对账] 订单', orderId, '对账失败:', error?.body?.message || error?.message || String(error))
+      }
+    }
+    return summary
+  }
+
   return {
     createOrderPayment,
     getPaymentTransactionDetail,
@@ -1254,6 +1295,7 @@ export function createPaymentService(config = {}) {
     getUserSettlementPayoutList,
     createOrderRefund,
     createSettlementPayout,
-    reconcileOrderFunds
+    reconcileOrderFunds,
+    reconcileProcessingFundsOrders
   }
 }

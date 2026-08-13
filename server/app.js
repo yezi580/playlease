@@ -95,6 +95,7 @@ import { registerUploadRoutes } from './routes/upload.routes.js'
 import { registerAdminRoutes } from './routes/admin.routes.js'
 import { registerFeedbackRoutes } from './routes/feedback.routes.js'
 import { registerSupportRoutes } from './routes/support.routes.js'
+import { registerSupportListingReviewRoutes } from './routes/support-listing-review.routes.js'
 import { registerNotificationRoutes } from './routes/notification.routes.js'
 import { registerConversationRoutes } from './routes/conversation.routes.js'
 import { registerMyListingsRoutes } from './routes/my-listings.routes.js'
@@ -769,6 +770,7 @@ async function canAccessBanImageByUrl(db, mediaUrl, auth) {
   return canAccessProtectedBanMedia({
     isLoggedIn: Boolean(auth?.userId),
     isAdmin: String(auth?.role || '') === 'admin',
+    isSupport: String(auth?.role || '') === 'support',
     isOwner,
     isBuyer: Number(row.has_buyer_order) === 1,
     isActiveListing: row.listing_status === 'active'
@@ -807,6 +809,7 @@ async function canAccessBanVideoByUrl(db, mediaUrl, auth) {
   return canAccessProtectedBanMedia({
     isLoggedIn: Boolean(auth?.userId),
     isAdmin: String(auth?.role || '') === 'admin',
+    isSupport: String(auth?.role || '') === 'support',
     isOwner,
     isBuyer: Number(row.has_buyer_order) === 1,
     isActiveListing: row.listing_status === 'active'
@@ -1349,6 +1352,16 @@ async function ensureListingReviewSchema() {
       name: 'review_reason',
       sql: `ALTER TABLE listings
             ADD COLUMN review_reason VARCHAR(500) DEFAULT NULL COMMENT '审核备注或驳回原因' AFTER reviewed_at`
+    },
+    {
+      name: 'review_assignee_id',
+      sql: `ALTER TABLE listings
+            ADD COLUMN review_assignee_id INT DEFAULT NULL COMMENT '派给的客服ID（商品审核工单）' AFTER review_reason`
+    },
+    {
+      name: 'review_assigned_at',
+      sql: `ALTER TABLE listings
+            ADD COLUMN review_assigned_at DATETIME DEFAULT NULL COMMENT '派单时间' AFTER review_assignee_id`
     }
   ]
 
@@ -2603,6 +2616,20 @@ registerSupportRoutes({
   paymentService
 })
 
+registerSupportListingReviewRoutes({
+  app,
+  pool,
+  authRequired,
+  supportOnly,
+  authenticatedReadLimiter,
+  orderWriteLimiter,
+  buildListingDetailPayload,
+  fetchListingBanImages,
+  getListingImagesOrderSql,
+  invalidateListingDetailCache: invalidateListingCacheSafely,
+  createUserNotificationSafely
+})
+
 
 registerNotificationRoutes({
   app,
@@ -2658,6 +2685,7 @@ export function createApp() {
     ensureSettlementPaymentSchema,
     refreshUploadSortOrderFlags,
     expirePendingPaymentOrders,
+    reconcileProcessingFundsOrders: () => paymentService?.reconcileProcessingFundsOrders?.() ?? { scanned: 0 },
     captureOnlinePresenceSnapshot
   }
 }

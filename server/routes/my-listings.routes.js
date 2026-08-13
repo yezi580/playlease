@@ -6,6 +6,7 @@ import {
   getSaleItemConfig,
   loadBusinessSettings
 } from '../modules/business-settings/runtime.js'
+import { assignListingReviewToLeastBusySupport } from '../modules/listing/listing-review.service.js'
 
 export function registerMyListingsRoutes(deps) {
   const {
@@ -404,6 +405,9 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
 
     await saveListingImages(conn, listingId, payload)
     await saveListingBanMedia(conn, listingId, payload)
+
+    // 重新进入待审即重新生成审核工单并派单
+    await assignListingReviewToLeastBusySupport(conn, listingId)
 
     await conn.commit()
     await invalidateListingDetailCache(listingId)

@@ -8,6 +8,7 @@ import {
   getSaleItemConfig,
   loadBusinessSettings
 } from '../modules/business-settings/runtime.js'
+import { assignListingReviewToLeastBusySupport } from '../modules/listing/listing-review.service.js'
 
 function parseRangeFilter(value) {
   if (!value || typeof value !== 'string') return null
@@ -336,6 +337,9 @@ export function registerListingRoutes(deps) {
 
       await saveListingImages(conn, listingId, payload)
       await saveListingBanMedia(conn, listingId, payload)
+
+      // 商品进入待审即生成审核工单，按最闲客服自动派单（与其他工单一致的分配模式）
+      await assignListingReviewToLeastBusySupport(conn, listingId)
 
       await conn.commit()
       await invalidateListingDetailCache(listingId)

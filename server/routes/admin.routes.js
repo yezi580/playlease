@@ -3,6 +3,11 @@
  */
 
 import { getSmsSecurityThresholds } from '../modules/business-settings/runtime.js'
+import {
+  createOperationLogService,
+  sanitizeRemark,
+  getListingSummaryById
+} from '../modules/audit/operation-log.service.js'
 
 export function registerAdminRoutes(deps) {
   const {
@@ -66,6 +71,11 @@ export function registerAdminRoutes(deps) {
   } = authModule
   const PASSKEY_SELF_SERVICE_ROLES = new Set(['admin'])
   const ADMIN_PASSKEY_REGISTER_SMS_SCENE = 'admin_passkey_register'
+
+  // 审计/审核摘要：与管理员、客服共用同一套实现（写入同一张 admin_operation_logs）
+  const { recordOperationSafely: recordAdminOperationSafely } = createOperationLogService({ pool })
+  const sanitizeAdminRemark = sanitizeRemark
+  const getAdminListingSummaryById = getListingSummaryById
 
   function resolvePolicyAllowedRoles(policy = {}) {
     const roles = Array.isArray(policy.allowedRoles) && policy.allowedRoles.length
@@ -191,10 +201,6 @@ function getAdminTrendBucketSql(granularity, columnSql) {
   return `DATE_FORMAT(${columnSql}, '%Y-%m-%d')`
 }
 
-function sanitizeAdminRemark(value, maxLength = 500) {
-  return String(value || '').trim().slice(0, maxLength)
-}
-
 function isValidAdminSmsCode(value = '') {
   return /^\d{4,8}$/.test(String(value || '').trim())
 }
@@ -277,15 +283,6 @@ function buildAdminSmsVerifyErrorResponse(result, thresholds = buildDefaultAdmin
   return {
     status: 400,
     body: { message: '验证码错误或已过期' }
-  }
-}
-
-function safeJsonStringify(value) {
-  if (value === undefined) return null
-  try {
-    return JSON.stringify(value)
-  } catch (_error) {
-    return JSON.stringify({ message: 'snapshot_serialize_failed' })
   }
 }
 
@@ -570,77 +567,6 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
       smsVerifyLockSeconds: normalizeAdminInteger(securitySource.smsVerifyLockSeconds, defaults.securityThresholds.smsVerifyLockSeconds, { min: 300, max: 86400 })
     }
   }
-}
-
-async function recordAdminOperation(payload = {}) {
-  const operatorUserId = Number(payload.operatorUserId || 0) || null
-  await pool.execute(
-    `INSERT INTO admin_operation_logs (
-      operator_user_id,
-      operator_name,
-      module,
-      action,
-      target_type,
-      target_id,
-      target_label,
-      before_snapshot,
-      after_snapshot,
-      remark
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      operatorUserId,
-      String(payload.operatorName || '').trim() || '管理员',
-      String(payload.module || '').trim(),
-      String(payload.action || '').trim(),
-      String(payload.targetType || '').trim(),
-      Number(payload.targetId || 0) || null,
-      String(payload.targetLabel || '').trim().slice(0, 255),
-      safeJsonStringify(payload.beforeSnapshot),
-      safeJsonStringify(payload.afterSnapshot),
-      sanitizeAdminRemark(payload.remark)
-    ]
-  )
-}
-
-async function recordAdminOperationSafely(payload = {}) {
-  try {
-    await recordAdminOperation(payload)
-  } catch (error) {
-    console.error('[admin] record operation log failed', error)
-  }
-}
-
-async function getAdminListingSummaryById(db, listingId) {
-  const [rows] = await db.execute(
-    `SELECT
-       l.id,
-       l.listing_no,
-       l.owner_user_id,
-       COALESCE(NULLIF(owner.phone, ''), NULLIF(owner.username, ''), l.owner_name) AS owner_name,
-       owner.phone AS owner_phone,
-       l.listing_status,
-       l.review_status,
-       l.reviewed_by,
-       l.reviewed_at,
-       l.review_reason,
-       l.rent_price,
-       l.published_at,
-       reviewer.username AS reviewer_name,
-       TRIM(
-         CONCAT(
-           IFNULL(NULLIF(l.rank_name, ''), '未命名商品'),
-           ' / ',
-           IFNULL(NULLIF(l.login_method, ''), '未知方式')
-         )
-       ) AS title
-     FROM listings l
-     LEFT JOIN users owner ON owner.id = l.owner_user_id
-     LEFT JOIN users reviewer ON reviewer.id = l.reviewed_by
-     WHERE l.id = ?
-     LIMIT 1`,
-    [listingId]
-  )
-  return rows[0] || null
 }
 
 app.get('/api/admin/health', (_req, res) => {
@@ -2427,16 +2353,20 @@ app.put(
       })
     }
 
-    await pool.execute(
+    const [approveResult] = await pool.execute(
       `UPDATE listings
        SET listing_status = 'active',
            review_status = 'approved',
            reviewed_by = ?,
            reviewed_at = NOW(),
            review_reason = ?
-       WHERE id = ?`,
+       WHERE id = ?
+         AND review_status = 'pending'`,
       [req.auth.userId, remark || null, listingId]
     )
+    if (approveResult.affectedRows === 0) {
+      return res.status(409).json({ message: '该商品已被处理，请刷新列表' })
+    }
     await invalidateListingDetailCache(listingId)
 
     const updatedListing = await getAdminListingSummaryById(pool, listingId)
@@ -2488,16 +2418,20 @@ app.put(
       return res.status(400).json({ message: '当前商品状态不支持驳回' })
     }
 
-    await pool.execute(
+    const [rejectResult] = await pool.execute(
       `UPDATE listings
        SET listing_status = 'inactive',
            review_status = 'rejected',
            reviewed_by = ?,
            reviewed_at = NOW(),
            review_reason = ?
-       WHERE id = ?`,
+       WHERE id = ?
+         AND review_status = 'pending'`,
       [req.auth.userId, reason, listingId]
     )
+    if (rejectResult.affectedRows === 0) {
+      return res.status(409).json({ message: '该商品已被处理，请刷新列表' })
+    }
     await invalidateListingDetailCache(listingId)
 
     const updatedListing = await getAdminListingSummaryById(pool, listingId)
