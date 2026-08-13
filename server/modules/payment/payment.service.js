@@ -1250,7 +1250,7 @@ export function createPaymentService(config = {}) {
   async function reconcileProcessingFundsOrders(options = {}) {
     const lookbackHours = Math.max(1, Number(options?.lookbackHours ?? 24) || 24)
     const limit = Math.min(200, Math.max(1, Number(options?.limit ?? 50) || 50))
-    const [rows] = await pool.execute(
+    const [rows] = await pool.query(
       `SELECT id, support_assignee_id
        FROM orders
        WHERE status = 'support_handling'
