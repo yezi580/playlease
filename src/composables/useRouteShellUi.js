@@ -65,7 +65,7 @@ export function useRouteShellUi({
     return unref(isLoggedIn) && unref(currentUserRole) === 'support'
   })
 
-  const supportConsoleLabel = computed(() => '客服工作台')
+  const supportConsoleLabel = computed(() => '客服后台')
 
   return {
     routeName,

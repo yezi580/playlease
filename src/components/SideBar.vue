@@ -9,9 +9,40 @@
       </div>
     </div>
 
-    <div class="quick-actions">
-      <button class="action-btn" @click="$emit('invite')" aria-label="邀新赚钱">
-        <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <nav class="menu">
+      <!-- 1. 我要租号（原 资源号租赁） -->
+      <button
+        class="nav-item"
+        :class="{ active: !showAuth && currentPage === 'resource' }"
+        @click="handleNavigate('resource')"
+      >
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7" />
+          <line x1="16.65" y1="16.65" x2="21" y2="21" />
+        </svg>
+        <span>我要租号</span>
+      </button>
+
+      <!-- 2. 我要出号（原 发布账号） -->
+      <button class="nav-item" @click="$emit('publish')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        <span>我要出号</span>
+      </button>
+
+      <!-- 3. 售前咨询 -->
+      <button class="nav-item" @click="$emit('presale-consultation')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+        </svg>
+        <span>售前咨询</span>
+      </button>
+
+      <!-- 4. 邀新赚钱 -->
+      <button class="nav-item" @click="$emit('invite')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M8 5h8" />
           <path d="M10 2h4a1 1 0 0 1 1 1v2H9V3a1 1 0 0 1 1-1Z" />
           <path d="M8 5c-3.5 1.5-5 5-5 9a9 9 0 0 0 18 0c0-4-1.5-7.5-5-9" />
@@ -20,35 +51,38 @@
         </svg>
         <span>邀新赚钱</span>
       </button>
-      <button class="action-btn" @click="$emit('presale-consultation')" aria-label="售前咨询">
-        <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z" />
-          <path d="M21 16v2a4 4 0 0 1-4 4h-5" />
-        </svg>
-        <span>售前咨询</span>
-      </button>
-    </div>
 
-    <div class="menu">
+      <!-- 5. 改枪推荐（原 改枪码） -->
       <button
-        :class="{ active: !showAuth && currentPage === 'resource' }"
-        @click="handleNavigate('resource')"
-      >
-        <span>资源号租赁</span>
-      </button>
-      <button
+        class="nav-item"
         :class="{ active: !showAuth && currentPage === 'gun' }"
         @click="handleNavigate('gun')"
       >
-        <span>改枪码</span>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7.5h13a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H9" />
+          <path d="M3 7.5V10" />
+          <path d="M14 7.5V5.5h2.5v2" />
+          <path d="M9 12.5 7.5 21h4L13 12.5" />
+          <path d="M10 13a1.6 1.6 0 0 0 3 0" />
+        </svg>
+        <span>改枪推荐</span>
       </button>
+
+      <!-- 6. 帮我代肝（原 代肝） -->
       <button
+        class="nav-item"
         :class="{ active: !showAuth && currentPage === 'boost' }"
         @click="handleNavigate('boost')"
       >
-        <span>代肝</span>
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2" />
+          <path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01" />
+          <path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01" />
+          <path d="M8 16h8" />
+        </svg>
+        <span>帮我代肝</span>
       </button>
-    </div>
+    </nav>
 
     <div class="bottom-actions">
       <button
@@ -57,18 +91,22 @@
         :class="{ active: currentPage === 'support-console' }"
         @click="$emit('open-support-console')"
       >
-        {{ supportConsoleLabel }}
+        <svg class="bottom-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z" />
+          <path d="M21 16v2a4 4 0 0 1-4 4h-5" />
+        </svg>
+        <span>{{ supportConsoleLabel }}</span>
         <span v-if="hasSupportUnreadMessages" class="nav-red-dot" aria-hidden="true"></span>
       </button>
       <button v-if="isLoggedIn" class="bottom-btn profile" @click="$emit('profile')">
+        <svg class="bottom-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
         <span>个人中心</span>
         <span v-if="hasUnreadMessages" class="nav-red-dot" aria-hidden="true"></span>
       </button>
       <button v-else class="bottom-btn login" @click="$emit('login')">登录</button>
-      <button class="publish" @click="$emit('publish')">
-        <span class="publish-text">发布账号</span>
-        <span class="publish-icon">+</span>
-      </button>
     </div>
   </div>
 </template>
@@ -158,72 +196,47 @@ export default {
   font-weight: 700;
 }
 
-.quick-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #cbd5e1;
-  padding: 12px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.action-btn:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--brand-primary);
-}
-
-.action-icon {
-  width: 20px;
-  height: 20px;
-}
-
 .menu {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 20px;
 }
 
-.menu button {
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
   border: none;
   background: transparent;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   color: #cbd5e1;
-  padding: 12px 16px;
+  padding: 11px 14px;
   border-radius: 8px;
   transition: all 0.2s ease;
   text-align: left;
-  display: flex;
-  align-items: center;
 }
 
-.menu button:hover,
-.menu button:focus-visible {
+.nav-item:hover,
+.nav-item:focus-visible {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.06);
 }
 
-.menu button.active {
+.nav-item.active {
   color: #fff;
   background: var(--brand-primary);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .bottom-actions {
@@ -245,7 +258,8 @@ export default {
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 12px;
 }
 
 .bottom-btn:hover {
@@ -253,26 +267,10 @@ export default {
   color: var(--brand-primary);
 }
 
-.publish {
-  background: var(--brand-primary);
-  color: white;
-  border: none;
-  padding: 12px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s ease;
-}
-
-.publish:hover {
-  background: var(--brand-primary-dark);
-  transform: translateY(-1px);
+.bottom-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .nav-red-dot {
