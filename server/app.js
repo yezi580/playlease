@@ -867,9 +867,9 @@ const BAN_IMAGE_UPLOAD_URL_REGEX = /^\/api\/uploads\/files\/ban-images\/[A-Za-z0
 const BAN_VIDEO_UPLOAD_URL_REGEX = /^\/api\/uploads\/files\/ban-videos\/[A-Za-z0-9._-]+$/i
 const LISTING_ITEM_MODES = new Set(['sale', 'gift'])
 
-function validateListingPayloadWithDefaults(payload) {
+function validateListingPayloadWithDefaults(payload, overrides = {}) {
   return validateListingPayload(payload, {
-    saleItemConfig: SALE_ITEM_CONFIG,
+    saleItemConfig: overrides.saleItemConfig || SALE_ITEM_CONFIG,
     listingItemModes: LISTING_ITEM_MODES,
     maxListingImageCount: MAX_LISTING_IMAGE_COUNT,
     maxImageUrlLength: MAX_IMAGE_URL_LENGTH,
@@ -878,7 +878,8 @@ function validateListingPayloadWithDefaults(payload) {
     listingImageUploadUrlRegex: LISTING_IMAGE_UPLOAD_URL_REGEX,
     maxBanImageCount: MAX_BAN_IMAGE_COUNT,
     banImageUploadUrlRegex: BAN_IMAGE_UPLOAD_URL_REGEX,
-    banVideoUploadUrlRegex: BAN_VIDEO_UPLOAD_URL_REGEX
+    banVideoUploadUrlRegex: BAN_VIDEO_UPLOAD_URL_REGEX,
+    businessSettings: overrides.businessSettings
   })
 }
 
