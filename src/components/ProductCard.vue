@@ -28,6 +28,7 @@
           <span class="tag tag--mobile-login-method">{{ formatText(item.login_method) }}</span>
           <span class="tag tag--mobile-login-time">{{ formatText(item.login_time_range) }}</span>
           <span v-if="isSpecialOffer" class="tag tag--special tag--mobile-special">特惠</span>
+          <ShareListingButton v-if="isMobile" :item="item" />
         </div>
         <div class="tag-scroll-wrap">
           <div class="tag-list">
@@ -37,6 +38,7 @@
             <span class="tag">上号方式 {{ formatText(item.login_method) }}</span>
             <span class="tag">上号时间 {{ formatText(item.login_time_range) }}</span>
             <span v-if="isSpecialOffer" class="tag tag--special">特惠</span>
+            <ShareListingButton v-if="!isMobile" :item="item" />
           </div>
         </div>
       </div>
@@ -129,12 +131,14 @@ import { calculateBuyerRentFromSellerRent, formatMoneyInteger, parseAmount } fro
 import { fetchBusinessSettings, getCachedBusinessSettings } from '../utils/businessSettings.js'
 import CopyTextButton from './CopyTextButton.vue'
 import ProductIcon from './ProductIcon.vue'
+import ShareListingButton from './ShareListingButton.vue'
 
 export default {
   name: 'ProductCard',
   components: {
     CopyTextButton,
-    ProductIcon
+    ProductIcon,
+    ShareListingButton
   },
   emits: ['view-detail'],
   props: {

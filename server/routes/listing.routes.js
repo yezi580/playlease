@@ -569,6 +569,7 @@ export function registerListingRoutes(deps) {
           l.deposit, l.energy_level, l.secret_kd, l.character_level, l.daily_cost, l.login_time_range,
           l.face_verified, l.dive_level, l.decontamination_chamber_level,
           l.knife_skin, l.operator_appearance, l.gold_skin, l.weapon_skin,
+          l.remark,
           COALESCE(hot.recent_unique_click_7d, 0) AS recent_unique_click_7d,
           (
             SELECT quantity FROM listing_items li_item
