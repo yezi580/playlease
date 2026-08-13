@@ -1,8 +1,9 @@
 /**
  * 商品分享文案构造：把列表卡片上的关键字段拼成一段可复制的纯文本摘要。
+ * 各项目之间用黄色五角星 ⭐️ 分隔；等级字段做幂等处理（库里已带「级」则不再追加，避免「7级级」）。
  * 目标格式示例：
- *   编号:202608131234 租期5天 保险9格 哈夫币74M 体力7级 负重7级 QQ账密 区服广东深圳
- *   段位黑鹰 等级60级 六级防具8件 AWM子弹30发 KD0.7 刀皮暗星,处刑者 备注：不要整理医疗箱等信息
+ *   编号:202608131234 ⭐️ 租期5天 ⭐️ 保险9格 ⭐️ 哈夫币74M ⭐️ 体力7级 ⭐️ 负重7级 ⭐️ QQ账密 ⭐️
+ *   段位黑鹰 ⭐️ 六级防具8件 ⭐️ AWM子弹30发 ⭐️ KD0.7 ⭐️ 刀皮暗星,处刑者 ⭐️ 备注：不要整理医疗箱等信息
  */
 
 // 保险等级归一化为「N格」展示，兼容历史数据（如「顶级（3*3）」、「9」等写法）。
@@ -32,6 +33,13 @@ function normalizeInsurance(value) {
   return INSURANCE_LEVEL_MAP[raw] || raw
 }
 
+// 体力/负重等级在库里已带「级」字（如「7级」），这里幂等处理，避免拼出「7级级」。
+function withLevelSuffix(value) {
+  const text = toText(value)
+  if (!text) return ''
+  return /级$/.test(text) ? text : `${text}级`
+}
+
 function toPositiveNumber(value) {
   const num = Number(value)
   return Number.isFinite(num) && num > 0 ? num : 0
@@ -53,11 +61,11 @@ export function buildListingShareText(item) {
   const hafuCoin = toText(item.hafu_coin)
   if (hafuCoin) parts.push(`哈夫币${hafuCoin}M`)
 
-  const energyLevel = toText(item.energy_level)
-  if (energyLevel) parts.push(`体力${energyLevel}级`)
+  const energyLevel = withLevelSuffix(item.energy_level)
+  if (energyLevel) parts.push(`体力${energyLevel}`)
 
-  const weightLevel = toText(item.weight_level)
-  if (weightLevel) parts.push(`负重${weightLevel}级`)
+  const weightLevel = withLevelSuffix(item.weight_level)
+  if (weightLevel) parts.push(`负重${weightLevel}`)
 
   const loginMethod = toText(item.login_method)
   if (loginMethod) parts.push(loginMethod)
@@ -96,8 +104,7 @@ export function buildListingShareText(item) {
   const weaponSkin = toText(item.weapon_skin)
   if (weaponSkin) parts.push(`武器皮肤${weaponSkin}`)
 
-  let text = parts.join(' ')
   const remark = toText(item.remark)
-  if (remark) text += ` 备注：${remark}`
-  return text
+  if (remark) parts.push(`备注：${remark}`)
+  return parts.join(' ⭐️ ')
 }
