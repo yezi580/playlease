@@ -11,6 +11,7 @@
 */
 
 import crypto from 'crypto'
+import { loadBusinessSettings, getPendingPaymentTimeoutMinutes } from '../business-settings/runtime.js'
 
 export class PaymentServiceError extends Error {
   constructor(status, body) {
@@ -554,7 +555,7 @@ export function createPaymentService(config = {}) {
     try {
       await conn.beginTransaction()
       const [orders] = await conn.execute(
-        `SELECT id, order_no, buyer_id, listing_title, status, amount, deposit_amount
+        `SELECT id, order_no, buyer_id, listing_title, status, amount, deposit_amount, created_at
          FROM orders
          WHERE id = ?
          LIMIT 1
@@ -574,6 +575,19 @@ export function createPaymentService(config = {}) {
           message: '当前订单状态不允许重新拉起支付',
           currentStatus: order.status
         })
+      }
+
+      // 支付截止时间与前端“待支付倒计时”保持同一口径：订单创建时间 + 待支付超时分钟数，
+      // 并透传给汇付（time_expire），保证收银台展示的剩余时间与站内一致。
+      const orderCreatedAt = order.created_at instanceof Date ? order.created_at : new Date(order.created_at)
+      if (Number.isNaN(orderCreatedAt.getTime())) {
+        fail(400, { message: '订单创建时间异常，无法发起支付' })
+      }
+      const businessSettings = await loadBusinessSettings(conn)
+      const timeoutMinutes = getPendingPaymentTimeoutMinutes(businessSettings)
+      const expiresAt = new Date(orderCreatedAt.getTime() + timeoutMinutes * 60 * 1000)
+      if (expiresAt.getTime() <= Date.now()) {
+        fail(400, { message: `订单支付已超时（限 ${timeoutMinutes} 分钟），请重新下单` })
       }
 
       const [existingRows] = await conn.execute(
@@ -624,7 +638,8 @@ export function createPaymentService(config = {}) {
         orderId,
         subject: order.listing_title || order.order_no || `订单#${orderId}`,
         payerUserId: userId,
-        returnUrl
+        returnUrl,
+        expiresAt
       })
 
       if (!providerResult?.ok) {
@@ -659,7 +674,7 @@ export function createPaymentService(config = {}) {
           String(providerResult.status || 'pending').trim() || 'pending',
           String(providerResult.providerTradeNo || '').trim() || null,
           safeJsonStringify(providerResult),
-          providerResult.expiresAt || null
+          providerResult.expiresAt || expiresAt
         ]
       )
 

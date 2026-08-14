@@ -191,6 +191,43 @@ function createHuifuReqSeqId(prefix = 'HUIFU') {
   return `${String(prefix || 'HUIFU').trim().toUpperCase()}${datePart}${randomPart}`.slice(0, 64)
 }
 
+// 汇付要求 time_expire 为 yyyyMMddHHmmss（晚于当前时间才有效），无效或已过期时返回空串不下发
+function formatHuifuExpireTime(value) {
+  const date = parseHuifuExpireTime(value)
+  if (!date || date.getTime() <= Date.now()) {
+    return ''
+  }
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+    String(date.getHours()).padStart(2, '0'),
+    String(date.getMinutes()).padStart(2, '0'),
+    String(date.getSeconds()).padStart(2, '0')
+  ].join('')
+}
+
+// 兼容解析汇付回传的 yyyyMMddHHmmss 截止时间，其余格式交给 Date 解析
+function parseHuifuExpireTime(value) {
+  if (!value) return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  const normalized = String(value).trim()
+  const matched = normalized.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/)
+  if (matched) {
+    const date = new Date(
+      Number(matched[1]),
+      Number(matched[2]) - 1,
+      Number(matched[3]),
+      Number(matched[4]),
+      Number(matched[5]),
+      Number(matched[6])
+    )
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 function sanitizeHuifuObject(value = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -528,6 +565,11 @@ function createHuifuCashierProvider(config = {}) {
       multi_pay_way_flag: 'Y',
       hosting_data: JSON.stringify(hostingData)
     }
+    // 与站内待支付倒计时对齐：由业务层计算订单支付截止时间并透传，收银台按同一截止时间展示
+    const timeExpire = formatHuifuExpireTime(payload.expiresAt)
+    if (timeExpire) {
+      businessData.time_expire = timeExpire
+    }
     if (runtimeConfig.notifyUrl) {
       businessData.notify_url = runtimeConfig.notifyUrl
     }
@@ -640,7 +682,7 @@ function createHuifuCashierProvider(config = {}) {
           responseData?.hf_seq_id || responseData?.out_ord_id || responseData?.party_order_id || responseData?.bank_order_no || ''
         ).trim(),
         status: 'pending',
-        expiresAt: responseData?.time_expire || responseData?.expires_at || null,
+        expiresAt: parseHuifuExpireTime(responseData?.time_expire || responseData?.expires_at),
         jumpUrl,
         callbackUrl,
         cashierType: 'redirect',
@@ -1424,7 +1466,9 @@ function createMockPaymentProvider(config = {}) {
       const transactionNo = String(payload.transactionNo || '').trim()
       const amount = Math.max(0, Number(payload.amount || 0) || 0)
       const subject = String(payload.subject || transactionNo || '模拟支付订单').trim() || transactionNo
-      const expiresAt = new Date(Date.now() + paymentExpiresMinutes * 60 * 1000)
+      // 优先使用业务层传入的订单支付截止时间，保证演示收银台与站内倒计时一致
+      const expiresAt = parseHuifuExpireTime(payload.expiresAt)
+        || new Date(Date.now() + paymentExpiresMinutes * 60 * 1000)
       const record = {
         transactionNo,
         channel,
