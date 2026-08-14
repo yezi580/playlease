@@ -352,7 +352,7 @@ function createHuifuCashierProvider(config = {}) {
     refundRiskCheckData: parseJsonEnvObject(config.huifuRefundRiskCheckData, {}),
     refundTerminalDeviceData: parseJsonEnvObject(config.huifuRefundTerminalDeviceData, {}),
     balancePayRiskCheckData: parseJsonEnvObject(config.huifuBalancePayRiskCheckData, {
-      transfer_type: '04',
+      transfer_type: '05',
       sub_product: '1'
     }),
     balancePayNotifyUrl: String(config.huifuBalancePayNotifyUrl || config.huifuNotifyUrl || '').trim(),
@@ -704,21 +704,18 @@ function createHuifuCashierProvider(config = {}) {
       ...runtimeConfig.refundTerminalDeviceData,
       ...sanitizeHuifuObject(payload.terminalDeviceData)
     })
-    const extendInfos = sanitizeHuifuObject({
-      org_req_seq_id: String(payload.transactionNo || '').trim(),
-      org_hf_seq_id: String(payload.providerTradeNo || '').trim(),
-      remark: String(payload.reason || '').trim().slice(0, 84),
-      notify_url: runtimeConfig.notifyUrl || undefined
-    })
     return sanitizeHuifuObject({
       req_date: getReqDateFromTransactionNo(payload.refundNo),
       req_seq_id: String(payload.refundNo || '').trim(),
       huifu_id: runtimeConfig.huifuId,
       ord_amt: toCentAmountYuanString(payload.amount),
       org_req_date: orgReqDate,
+      org_req_seq_id: String(payload.transactionNo || '').trim(),
+      org_hf_seq_id: String(payload.providerTradeNo || '').trim(),
+      remark: String(payload.reason || '').trim().slice(0, 84),
+      notify_url: runtimeConfig.notifyUrl || undefined,
       risk_check_data: Object.keys(riskCheckData).length ? JSON.stringify(riskCheckData) : undefined,
-      terminal_device_data: Object.keys(terminalDeviceData).length ? JSON.stringify(terminalDeviceData) : undefined,
-      extend_infos: extendInfos
+      terminal_device_data: Object.keys(terminalDeviceData).length ? JSON.stringify(terminalDeviceData) : undefined
     })
   }
 
@@ -758,30 +755,27 @@ function createHuifuCashierProvider(config = {}) {
       sanitizeHuifuObject({
         div_amt: toCentAmountYuanString(payload.amount),
         huifu_id: String(payload.payeeHuifuId || '').trim(),
-        acct_id: String(payload.payeeAcctId || '').trim() || undefined
+        acct_id: /^F/i.test(String(payload.payeeAcctId || '')) ? String(payload.payeeAcctId).trim() : undefined
       })
     ]
     const riskCheckData = sanitizeHuifuObject({
       ...runtimeConfig.balancePayRiskCheckData,
       ...sanitizeHuifuObject(payload.riskCheckData)
     })
+    const acctSplitBunch = sanitizeHuifuObject({ acct_infos: acctInfos })
     return sanitizeHuifuObject({
       req_seq_id: String(payload.payoutNo || '').trim(),
       req_date: getReqDateFromTransactionNo(payload.payoutNo),
       out_huifu_id: String(payload.outHuifuId || runtimeConfig.huifuId).trim(),
       ord_amt: toCentAmountYuanString(payload.amount),
+      good_desc: String(payload.goodDesc || payload.accountName || payload.payoutNo || '订单结算').trim().slice(0, 128),
+      remark: String(payload.remark || '').trim().slice(0, 255) || undefined,
+      out_acct_id: String(payload.outAcctId || '').trim() || undefined,
+      acct_split_bunch: JSON.stringify(acctSplitBunch),
+      risk_check_data: JSON.stringify(riskCheckData),
       fund_type: String(payload.fundType || runtimeConfig.balancePayFundType || '').trim() || undefined,
       trans_fee_take_flag: String(payload.transFeeTakeFlag || runtimeConfig.balancePayTransFeeTakeFlag || 'OUT').trim().toUpperCase(),
-      extend_infos: sanitizeHuifuObject({
-        notify_url: String(payload.notifyUrl || runtimeConfig.balancePayNotifyUrl || '').trim() || undefined,
-        good_desc: String(payload.goodDesc || payload.accountName || payload.payoutNo || '订单结算').trim().slice(0, 128),
-        remark: String(payload.remark || '').trim().slice(0, 255) || undefined,
-        out_acct_id: String(payload.outAcctId || '').trim() || undefined,
-        acct_split_bunch: {
-          acct_infos: acctInfos
-        },
-        risk_check_data: Object.keys(riskCheckData).length ? riskCheckData : undefined
-      })
+      notify_url: String(payload.notifyUrl || runtimeConfig.balancePayNotifyUrl || '').trim() || undefined
     })
   }
 

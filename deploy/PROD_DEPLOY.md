@@ -57,6 +57,7 @@
 
 - 当前生产配置以 `deploy/env/prod.env` 为准；若启用汇付，请同步补齐支付查单、关单、退款、退款查单、余额支付、余额支付查单相关 `HUIFU_*` 变量
 - 生产环境已启用支付配置启动校验（`PAYMENT_PROVIDER_STRICT_STARTUP_CHECK=true`），汇付配置缺失将阻止应用启动
+- ⚠️ **汇付商户控台的「自动结算」必须保持未开启**：客服「冻结资金」功能依赖买家付款后资金停留在平台汇付账户（仅手动取现才流出）。一旦开启自动结算，资金会在 D1/T1 自动划到平台银行卡，导致冻结后给买家退押金（`htRefund`）时因汇付账户余额不足或风控而失败。当前商户为「标准结算 + 自动结算未开启」，请勿改动。详见 [`docs/freeze-funds-and-settlement.md`](../docs/freeze-funds-and-settlement.md)
 - 实名认证模块已从当前业务主链路移除，无需再维护相关 `KYC_*` 配置
 - 微信支付与腾讯云 FaceID 相关配置当前不再需要
 - 文件上传走腾讯云 COS 存储，`FILE_STORAGE_DRIVER=cos`，需补齐 `COS_*` 配置

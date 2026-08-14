@@ -1384,7 +1384,6 @@ export default {
 .support-console {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 .toolbar,

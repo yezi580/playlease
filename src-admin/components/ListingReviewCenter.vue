@@ -959,6 +959,11 @@ export default {
 .state-card--inner {
   box-shadow: none;
 }
+.detail-card > .state-card--inner {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
 
 .state-card--empty {
   flex: 1;

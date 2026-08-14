@@ -1498,7 +1498,7 @@ export default {
       return sectionKey === 'messages' && this.hasUnreadMessages
     },
     getOrderCounterpartyName(order) {
-      return order.seller_name || '骞冲彴鍗栧'
+      return order.seller_name || '平台卖家'
     },
     getOrderCount(statusKey) {
       if (statusKey === 'all') return this.orderStatsData.total || 0

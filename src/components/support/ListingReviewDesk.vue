@@ -647,15 +647,17 @@ export default {
 }
 .list-card {
   padding: 16px;
-  max-height: calc(100vh - 300px);
+  height: calc(100vh - 300px);
   display: flex;
   flex-direction: column;
+  overflow: auto;
 }
 .detail-card {
   padding: 16px;
-  max-height: calc(100vh - 300px);
+  height: calc(100vh - 300px);
   display: flex;
   flex-direction: column;
+  overflow: auto;
 }
 .state-card {
   padding: 18px;
@@ -669,6 +671,11 @@ export default {
 }
 .state-card--inner {
   box-shadow: none;
+}
+.detail-card > .state-card--inner {
+  flex: 1;
+  display: grid;
+  place-items: center;
 }
 .state-card--empty {
   flex: 1;
