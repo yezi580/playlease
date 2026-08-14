@@ -59,7 +59,8 @@ export function createOrderLifecycleService({
   emitSupportEvent,
   emitSupportDeskUpdate,
   createOrderRefund,
-  createSettlementPayout
+  createSettlementPayout,
+  closeOrderPayment
 }) {
   const createOrderNo = typeof generateOrderNo === 'function' ? generateOrderNo : buildDefaultOrderNo
 
@@ -1608,6 +1609,182 @@ export function createOrderLifecycleService({
     )
   }
 
+  async function safeEmitAdminOrderEvent(orderId, adminUserId, adminName, eventType, note) {
+    if (typeof emitSupportEvent !== 'function') return
+    try {
+      let orderConversation = null
+      if (typeof getOrderConversationAccess === 'function') {
+        try {
+          orderConversation = await getOrderConversationAccess(orderId, adminUserId, 'support')
+        } catch (_error) {
+          orderConversation = null
+        }
+      }
+      await emitSupportEvent({
+        orderId,
+        actorUserId: adminUserId,
+        actorRole: 'admin',
+        actorName: adminName || '管理员',
+        eventType,
+        note,
+        conversationOrder: orderConversation
+      })
+    } catch (_error) {
+      // 管理员关单事件推送失败不阻塞资金流转
+    }
+  }
+
+  async function finalizeAdminCloseRefund({ orderId }) {
+    const order = await fetchOrderById(pool, orderId)
+    if (!order) fail(404, { message: '订单不存在' })
+    const settlementPreview = buildFullRefundSettlementPreview(order)
+    const conn = await pool.getConnection()
+    let cancelledOrder = null
+    try {
+      await conn.beginTransaction()
+      await upsertSettlement(conn, orderId, settlementPreview, 'executed')
+      cancelledOrder = await transitionToCancelled(conn, orderId, { markSettlementExecuted: true })
+      await conn.commit()
+    } catch (error) {
+      await conn.rollback()
+      throw error
+    } finally {
+      conn.release()
+    }
+    if (Number(cancelledOrder?.listing_id || 0) > 0 && typeof invalidateListingDetailCache === 'function') {
+      await invalidateListingDetailCache(cancelledOrder.listing_id)
+    }
+    const finalized = await fetchOrderById(pool, orderId)
+    await safeEmitAdminOrderEvent(orderId, 0, '资金对账', 'cancelled', '原路退款已到账，订单已关闭。')
+    return finalized
+  }
+
+  async function markAdminCloseProcessing({ orderId, supportNote = null }) {
+    await pool.execute(
+      `UPDATE orders
+       SET status = 'support_handling',
+           support_scene = 'admin_close_refund_processing',
+           support_status = 'handling',
+           support_assignee_id = 0,
+           support_handling_at = COALESCE(support_handling_at, NOW()),
+           support_resolved_at = NULL,
+           support_note = ?
+       WHERE id = ?`,
+      [supportNote || null, orderId]
+    )
+  }
+
+  async function closeOrderAsAdmin({ orderId, adminUserId, adminName = '', reason = '' }) {
+    return runWithDistributedLock(
+      typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
+      '当前订单正在关闭，请稍后再试',
+      async () => {
+        let order = null
+        let isPaidOrder = false
+        let settlementPreview = null
+
+        const conn = await pool.getConnection()
+        try {
+          await conn.beginTransaction()
+          const [orders] = await conn.execute(
+            `SELECT id, status, amount, deposit_amount, buyer_id, listing_id
+             FROM orders
+             WHERE id = ?
+             LIMIT 1
+             FOR UPDATE`,
+            [orderId]
+          )
+          if (!orders.length) fail(404, { message: '订单不存在' })
+          order = orders[0]
+          if (['cancelled', 'completed', 'refunded'].includes(String(order.status || '').trim())) {
+            fail(400, { message: '已完成、已退款或已关闭的订单不支持后台关闭' })
+          }
+
+          const [paidRows] = await conn.execute(
+            `SELECT 1 FROM payment_transactions WHERE order_id = ? AND status = 'paid' LIMIT 1`,
+            [orderId]
+          )
+          isPaidOrder = paidRows.length > 0
+
+          if (isPaidOrder) {
+            settlementPreview = buildFullRefundSettlementPreview(order)
+            await upsertSettlement(conn, orderId, settlementPreview, 'draft')
+            await conn.execute(
+              `UPDATE orders
+               SET cancel_reason = COALESCE(NULLIF(cancel_reason, ''), ?)
+               WHERE id = ?`,
+              [reason || '管理员后台关单，原路退款买家', orderId]
+            )
+          }
+          await conn.commit()
+        } catch (error) {
+          await conn.rollback()
+          throw error
+        } finally {
+          conn.release()
+        }
+
+        if (!isPaidOrder) {
+          if (typeof closeOrderPayment !== 'function') {
+            fail(500, { message: '关单服务尚未就绪，请稍后重试' })
+          }
+          const closeResult = await closeOrderPayment({ orderId, operatorUserId: adminUserId })
+          const cancelledOrder = await transitionToCancelled(pool, orderId, { markSettlementExecuted: false })
+          if (Number(cancelledOrder?.listing_id || 0) > 0 && typeof invalidateListingDetailCache === 'function') {
+            await invalidateListingDetailCache(cancelledOrder.listing_id)
+          }
+          await safeEmitAdminOrderEvent(
+            orderId, adminUserId, adminName, 'cancelled',
+            closeResult?.skipped ? '管理员后台关闭订单。' : '管理员后台关闭订单，已通知汇付关单。'
+          )
+          return { order: await fetchOrderById(pool, orderId), outcome: 'closed', refundStatus: null }
+        }
+
+        const refundReason = '管理员后台关单-原路退款'
+        let refundResult = await fetchLatestRefundByReason(pool, orderId, refundReason)
+        try {
+          if (!(isFundsSuccessStatus(refundResult?.status) || isFundsProcessingStatus(refundResult?.status))) {
+            if (typeof createOrderRefund !== 'function') {
+              fail(500, { message: '退款服务尚未就绪，请稍后重试' })
+            }
+            refundResult = await createOrderRefund({
+              orderId,
+              userId: Number(order.buyer_id || 0),
+              amount: Number(settlementPreview?.buyerRefundAmount || 0),
+              refundType: 'full',
+              reason: refundReason
+            })
+          }
+        } catch (error) {
+          await markAdminCloseProcessing({
+            orderId,
+            supportNote: `原路退款发起失败：${error?.body?.message || error?.message || '请稍后重试'}`
+          })
+          throw error
+        }
+
+        if (!isFundsSuccessStatus(refundResult?.status)) {
+          await markAdminCloseProcessing({
+            orderId,
+            supportNote: '管理员后台关单，原路退款处理中，到账后自动取消订单。'
+          })
+          await safeEmitAdminOrderEvent(
+            orderId, adminUserId, adminName, 'note_updated',
+            '管理员后台关单，原路退款处理中，到账后自动取消订单。'
+          )
+          return { order: await fetchOrderById(pool, orderId), outcome: 'refund_processing', refundStatus: 'processing' }
+        }
+
+        const cancelledOrder = await finalizeAdminCloseRefund({ orderId })
+        await safeEmitAdminOrderEvent(
+          orderId, adminUserId, adminName, 'cancelled',
+          '管理员后台关单，已将款项原路退回买家。'
+        )
+        return { order: cancelledOrder, outcome: 'refund_success', refundStatus: 'success' }
+      }
+    )
+  }
+
   async function continueOrderBySupport({ orderId, supportUserId, note = '' }) {
     const conn = await pool.getConnection()
     try {
@@ -1854,6 +2031,8 @@ export function createOrderLifecycleService({
     reportMismatch,
     executeSettlement,
     cancelOrderBySupport,
+    closeOrderAsAdmin,
+    finalizeAdminCloseRefund,
     continueOrderBySupport,
     returnToSettlementBySupport,
     freezeFundsBySupport,

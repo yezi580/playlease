@@ -132,8 +132,13 @@ export default {
   },
   computed: {
     closeOrderConfirmMessage() {
-      if (!this.pendingCloseOrder) return ''
-      return `确认关闭订单 ${this.pendingCloseOrder.order_no || '--'} 吗？关闭后订单将不可继续正常流转。`
+      const order = this.pendingCloseOrder
+      if (!order) return ''
+      const isPaid = String(order.status || '') !== 'pending_payment'
+      if (isPaid) {
+        return `确认关闭订单 ${order.order_no || '--'} 吗？该订单已支付，关闭后将原路退款给买家（退款通常 1-2 个工作日到账）；若退款仍在处理中，订单将在到账后自动完成关闭。`
+      }
+      return `确认关闭订单 ${order.order_no || '--'} 吗？关闭后将通知汇付关闭未支付的支付单，商品将重新上架。`
     }
   },
   methods: {

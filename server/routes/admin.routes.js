@@ -31,7 +31,8 @@ export function registerAdminRoutes(deps) {
     invalidateListingDetailCache,
     smsCodeService,
     smsProvider,
-    loadBusinessSettings
+    loadBusinessSettings,
+    orderLifecycleService
   } = deps
   const {
     authRequired,
@@ -1882,22 +1883,19 @@ app.put(
       return res.status(400).json({ message: '已完成或已退款订单不支持后台关闭' })
     }
 
-    await pool.execute(
-      `UPDATE orders
-       SET status = 'cancelled', cancelled_at = NOW()
-       WHERE id = ?`,
-      [orderId]
-    )
+    const result = await orderLifecycleService.closeOrderAsAdmin({
+      orderId,
+      adminUserId: req.auth?.userId,
+      adminName: req.auth?.username,
+      reason: '管理员后台关闭订单'
+    })
 
-    if (currentOrder.listing_id) {
-      await pool.execute(
-        `UPDATE listings
-         SET listing_status = 'active'
-         WHERE id = ?
-           AND listing_status = 'rented'`,
-        [currentOrder.listing_id]
-      )
+    const messageMap = {
+      closed: '订单已关闭',
+      refund_success: '订单已关闭，款项已原路退回买家',
+      refund_processing: '已发起原路退款，退款处理中，到账后订单将自动关闭'
     }
+    const message = messageMap[result?.outcome] || '订单已关闭'
 
     const [updatedRows] = await pool.execute(
       `SELECT
@@ -1918,8 +1916,10 @@ app.put(
     )
 
     res.json({
-      message: '订单已关闭',
-      order: updatedRows[0]
+      message,
+      order: updatedRows[0],
+      outcome: result?.outcome || 'closed',
+      refundStatus: result?.refundStatus || null
     })
     await recordAdminOperationSafely({
       operatorUserId: req.auth?.userId,
@@ -1930,12 +1930,14 @@ app.put(
       targetId: orderId,
       targetLabel: currentOrder.order_no || `订单 #${orderId}`,
       beforeSnapshot: currentOrder,
-      afterSnapshot: updatedRows[0],
-      remark: '后台关闭订单'
+      afterSnapshot: { ...updatedRows[0], outcome: result?.outcome, refundStatus: result?.refundStatus },
+      remark: message
     })
   } catch (error) {
+    const errorStatus = Number(error?.status) || 500
+    const errorMessage = error?.body?.message || '关闭订单失败'
     console.error('[admin] close order failed', error)
-    res.status(500).json({ message: '关闭订单失败' })
+    res.status(errorStatus).json({ message: errorMessage })
   }
   }
 )

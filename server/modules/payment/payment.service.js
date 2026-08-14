@@ -754,6 +754,64 @@ export function createPaymentService(config = {}) {
     return buildTransactionResult(updatedTransaction)
   }
 
+  async function closeOrderPayment(payload = {}) {
+    const orderId = Number(payload.orderId || 0)
+    if (!orderId) {
+      fail(400, { message: '订单ID无效' })
+    }
+
+    const [transactionRows] = await pool.execute(
+      `SELECT transaction_no, status, channel, provider
+       FROM payment_transactions
+       WHERE order_id = ?
+       ORDER BY id DESC
+       LIMIT 1`,
+      [orderId]
+    )
+    const transaction = transactionRows[0]
+    if (!transaction) {
+      return { ok: true, skipped: true, reason: 'no_transaction', message: '订单未发起支付，无需关单' }
+    }
+
+    let latest = transaction
+    if (typeof syncPaymentTransactionWithProvider === 'function') {
+      latest = await syncPaymentTransactionWithProvider(transaction)
+    }
+    const latestStatus = String(latest?.status || '').trim()
+    if (latestStatus === 'paid') {
+      fail(409, { message: '订单刚刚支付成功，无法关单，请改用原路退款' })
+    }
+    if (['cancelled', 'failed'].includes(latestStatus)) {
+      return { ok: true, skipped: true, reason: 'already_closed', message: '支付流水已关闭或失败，无需关单' }
+    }
+
+    const transactionNo = String(latest.transaction_no || '').trim()
+    let providerPayload = latest.provider_payload || null
+    if (typeof paymentProvider?.closePaymentOrder === 'function') {
+      const closeResult = await paymentProvider.closePaymentOrder({
+        transactionNo,
+        channel: latest.channel,
+        provider: latest.provider
+      })
+      if (!closeResult?.ok) {
+        fail(502, { message: closeResult?.message || '关闭汇付支付订单失败' })
+      }
+      providerPayload = closeResult.rawResponse || closeResult
+    }
+
+    await pool.execute(
+      `UPDATE payment_transactions
+       SET status = 'cancelled',
+           provider_payload = COALESCE(?, provider_payload),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE transaction_no = ?
+         AND status IN ('created', 'pending')`,
+      [safeJsonStringify(providerPayload), transactionNo]
+    )
+
+    return { ok: true, transactionNo, status: 'cancelled' }
+  }
+
   async function handlePaymentCallback(payload = {}) {
     const transactionNo = String(payload.transactionNo || '').trim()
     const providerTradeNo = String(payload.providerTradeNo || '').trim()
@@ -1187,20 +1245,26 @@ export function createPaymentService(config = {}) {
     const orderId = Number(payload.orderId || 0)
     const supportUserId = Number(payload.supportUserId || 0)
 
-    if (!orderId || !supportUserId) {
-      fail(400, { message: '订单或客服信息不完整' })
+    if (!orderId) {
+      fail(400, { message: '订单信息不完整' })
     }
 
     const order = await fetchOrderById(pool, orderId)
     if (!order) {
       fail(404, { message: '订单不存在' })
     }
-    if (Number(order.support_assignee_id || 0) !== supportUserId) {
+
+    const supportScene = String(order.support_scene || '').trim()
+    const isAdminCloseScene = supportScene === 'admin_close_refund_processing'
+
+    if (!isAdminCloseScene && !supportUserId) {
+      fail(400, { message: '订单或客服信息不完整' })
+    }
+    if (!isAdminCloseScene && Number(order.support_assignee_id || 0) !== supportUserId) {
       fail(403, { message: '只有当前负责客服可以同步资金状态' })
     }
 
-    const supportScene = String(order.support_scene || '').trim()
-    if (!['cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing'].includes(supportScene)) {
+    if (!['cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing', 'admin_close_refund_processing'].includes(supportScene)) {
       fail(400, { message: '当前订单不在资金处理中状态' })
     }
 
@@ -1253,6 +1317,8 @@ export function createPaymentService(config = {}) {
           supportUserId,
           note: '客服已确认原路退款完成，订单已取消。'
         })
+      } else if (supportScene === 'admin_close_refund_processing') {
+        finalizedOrder = await orderLifecycleService.finalizeAdminCloseRefund({ orderId })
       } else {
         finalizedOrder = await orderLifecycleService.executeSettlement({
           orderId,
@@ -1296,11 +1362,11 @@ export function createPaymentService(config = {}) {
     const lookbackHours = Math.max(1, Number(options?.lookbackHours ?? 24) || 24)
     const limit = Math.min(200, Math.max(1, Number(options?.limit ?? 50) || 50))
     const [rows] = await pool.query(
-      `SELECT id, support_assignee_id
+      `SELECT id, support_assignee_id, support_scene
        FROM orders
        WHERE status = 'support_handling'
          AND support_status = 'handling'
-         AND support_scene IN ('cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing')
+         AND support_scene IN ('cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing', 'admin_close_refund_processing')
          AND updated_at > DATE_SUB(NOW(), INTERVAL ? HOUR)
        ORDER BY updated_at ASC
        LIMIT ?`,
@@ -1311,7 +1377,8 @@ export function createPaymentService(config = {}) {
     for (const row of rows) {
       const orderId = Number(row.id)
       const supportUserId = Number(row.support_assignee_id || 0)
-      if (!orderId || !supportUserId) {
+      const scene = String(row.support_scene || '').trim()
+      if (!orderId || (!supportUserId && scene !== 'admin_close_refund_processing')) {
         summary.skipped += 1
         continue
       }
@@ -1521,6 +1588,7 @@ export function createPaymentService(config = {}) {
     createOrderPayment,
     getPaymentTransactionDetail,
     closePaymentTransaction,
+    closeOrderPayment,
     handlePaymentCallback,
     getSettlementAccount,
     upsertSettlementAccount,

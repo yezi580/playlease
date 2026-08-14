@@ -720,7 +720,8 @@ const orderLifecycleService = createOrderLifecycleService({
   emitSupportEvent,
   emitSupportDeskUpdate,
   createOrderRefund: (payload) => paymentService?.createOrderRefund(payload),
-  createSettlementPayout: (payload) => paymentService?.createSettlementPayout(payload)
+  createSettlementPayout: (payload) => paymentService?.createSettlementPayout(payload),
+  closeOrderPayment: (payload) => paymentService?.closeOrderPayment(payload)
 })
 paymentService = createPaymentService({
   pool,
@@ -2502,7 +2503,8 @@ registerAdminRoutes({
   invalidateListingDetailCache: invalidateListingCacheSafely,
   smsCodeService,
   smsProvider,
-  loadBusinessSettings
+  loadBusinessSettings,
+  orderLifecycleService
 })
 
 
