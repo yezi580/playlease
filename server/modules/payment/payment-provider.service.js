@@ -337,6 +337,7 @@ function createHuifuCashierProvider(config = {}) {
     userQueryUrl: resolveHuifuApiUrl(config.huifuUserQueryUrl, config.huifuGatewayUrl, '/v2/user/basicdata/query'),
     balanceQueryUrl: resolveHuifuApiUrl(config.huifuBalanceQueryUrl, config.huifuGatewayUrl, '/v2/trade/acctpayment/balance/query'),
     encashmentUrl: resolveHuifuApiUrl(config.huifuEncashmentUrl, config.huifuGatewayUrl, '/v2/trade/settlement/encashment'),
+    encashmentQueryUrl: resolveHuifuApiUrl(config.huifuEncashmentQueryUrl, config.huifuGatewayUrl, '/v2/trade/settlement/encashment/query'),
     hostingCloseUrl: resolveHuifuApiUrl(config.huifuHostingCloseUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/close'),
     notifyUrl: String(config.huifuNotifyUrl || '').trim(),
     returnUrl: String(config.huifuReturnUrl || '').trim(),
@@ -1129,6 +1130,60 @@ function createHuifuCashierProvider(config = {}) {
         rawResponse: response.rawResponse
       }
     },
+    async queryEncashment(payload = {}) {
+      if (!runtimeConfig.encashmentQueryUrl) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'config_incomplete', message: '缺少取现查单接口地址' }
+      }
+      const huifuId = String(payload.huifuId || '').trim()
+      if (!huifuId) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'invalid_params', message: '汇付ID不能为空' }
+      }
+      const orgReqSeqId = String(payload.orgReqSeqId || '').trim()
+      const orgHfSeqId = String(payload.orgHfSeqId || '').trim()
+      if (!orgReqSeqId && !orgHfSeqId) {
+        return { ok: false, provider: 'huifu_cashier', reason: 'invalid_params', message: '原取现流水号不能为空' }
+      }
+      const reqSeqId = createHuifuReqSeqId('ENQ')
+      const businessData = sanitizeHuifuObject({
+        req_seq_id: reqSeqId,
+        req_date: getReqDateFromTransactionNo(reqSeqId),
+        huifu_id: huifuId,
+        org_req_seq_id: orgReqSeqId || undefined,
+        org_hf_seq_id: orgHfSeqId || undefined
+      })
+      const response = await sendHuifuRequest(runtimeConfig.encashmentQueryUrl, businessData, { provider: 'huifu_cashier' })
+      if (!response.ok) {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: response.reason || 'http_error',
+          message: response.message || `汇付取现查单失败（HTTP ${response.status}）`,
+          rawResponse: response.rawResponse
+        }
+      }
+      const responseData = response.responseData || {}
+      const respCode = String(responseData.resp_code || '').trim()
+      if (respCode !== '00000000') {
+        return {
+          ok: false,
+          provider: 'huifu_cashier',
+          reason: 'provider_rejected',
+          message: String(responseData.resp_desc || '汇付取现查单失败'),
+          respCode,
+          rawResponse: response.rawResponse
+        }
+      }
+      const transStat = String(responseData.trans_stat || '').trim()
+      return {
+        ok: true,
+        provider: 'huifu_cashier',
+        huifuId,
+        transStat,
+        status: normalizeHuifuProcessingStatus(transStat),
+        hfSeqId: String(responseData.hf_seq_id || responseData.org_hf_seq_id || '').trim(),
+        rawResponse: response.rawResponse
+      }
+    },
     async queryUserInfo(payload = {}) {
       if (!runtimeConfig.userQueryUrl) {
         return { ok: false, provider: 'huifu_cashier', reason: 'config_incomplete', message: '缺少用户信息查询接口地址' }
@@ -1332,6 +1387,7 @@ function createMockPaymentProvider(config = {}) {
   const paymentTransactions = new Map()
   const refundTransactions = new Map()
   const payoutTransactions = new Map()
+  const encashmentTransactions = new Map()
 
   function createMockBusinessNo(prefix = 'MOCK') {
     return `${prefix}${Date.now()}${Math.random().toString(36).slice(2, 8)}`.toUpperCase()
@@ -1623,6 +1679,55 @@ function createMockPaymentProvider(config = {}) {
           orderId: record.orderId
         }
       }
+    },
+    async createEncashment(payload = {}) {
+      const reqSeqId = String(payload.reqSeqId || createMockBusinessNo('EC')).trim()
+      const huifuId = String(payload.huifuId || '').trim()
+      const cashAmt = String(payload.cashAmt || '0').trim()
+      const status = withdrawImmediateSuccess ? 'success' : 'processing'
+      const transStat = status === 'success' ? 'S' : 'P'
+      const record = { reqSeqId, huifuId, cashAmt, status, transStat, hfSeqId: createMockBusinessNo('MEC') }
+      encashmentTransactions.set(reqSeqId, record)
+      return {
+        ok: true,
+        provider: 'mock_payment',
+        huifuId,
+        reqSeqId,
+        transStat,
+        hfSeqId: record.hfSeqId,
+        rawResponse: {
+          mock: true,
+          reqSeqId,
+          huifuId,
+          cashAmt,
+          transStat,
+          hfSeqId: record.hfSeqId,
+          message: withdrawImmediateSuccess
+            ? '演示环境：取现申请后立即标记成功'
+            : '演示环境：取现申请后进入处理中'
+        }
+      }
+    },
+    async queryEncashment(payload = {}) {
+      const reqSeqId = String(payload.orgReqSeqId || payload.reqSeqId || '').trim()
+      const record = reqSeqId ? encashmentTransactions.get(reqSeqId) : null
+      if (!record) {
+        return {
+          ok: false,
+          provider: 'mock_payment',
+          reason: 'encashment_not_found',
+          message: '模拟取现流水不存在'
+        }
+      }
+      return {
+        ok: true,
+        provider: 'mock_payment',
+        huifuId: record.huifuId,
+        transStat: record.transStat,
+        status: record.status,
+        hfSeqId: record.hfSeqId,
+        rawResponse: { mock: true, reqSeqId: record.reqSeqId, transStat: record.transStat, status: record.status }
+      }
     }
   }
 }
@@ -1760,6 +1865,17 @@ export function createPaymentProvider(config = {}) {
         }
       }
       return paymentProvider.createEncashment(payload)
+    },
+    async queryEncashment(payload = {}) {
+      if (typeof paymentProvider.queryEncashment !== 'function') {
+        return {
+          ok: false,
+          provider: paymentProvider.mode || 'unknown',
+          reason: 'provider_not_implemented',
+          message: `支付服务商 ${paymentProvider.mode || 'unknown'} 尚未接入取现查单能力`
+        }
+      }
+      return paymentProvider.queryEncashment(payload)
     },
     async queryUserInfo(payload = {}) {
       if (typeof paymentProvider.queryUserInfo !== 'function') {

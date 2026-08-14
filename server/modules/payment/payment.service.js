@@ -246,6 +246,33 @@ async function fetchLatestSettlementPayoutByOrderId(executor, orderId) {
   return rows[0] || null
 }
 
+async function fetchEncashmentByNo(executor, encashmentNo) {
+  const [rows] = await executor.execute(
+    `SELECT
+        id,
+        encashment_no,
+        user_id,
+        provider,
+        status,
+        amount,
+        huifu_id,
+        token_no,
+        into_acct_date_type,
+        trans_stat,
+        provider_request_id,
+        provider_payload,
+        failure_reason,
+        completed_at,
+        created_at,
+        updated_at
+     FROM encashments
+     WHERE encashment_no = ?
+     LIMIT 1`,
+    [String(encashmentNo || '').trim()]
+  )
+  return rows[0] || null
+}
+
 export function createPaymentService(config = {}) {
   const {
     pool,
@@ -281,6 +308,24 @@ export function createPaymentService(config = {}) {
       ...row,
       provider_payload: safeJsonParse(row?.provider_payload, null)
     }
+  }
+
+  function buildEncashmentResult(row) {
+    if (!row) return null
+    return {
+      ...row,
+      provider_payload: safeJsonParse(row?.provider_payload, null)
+    }
+  }
+
+  function normalizeEncashmentStatus(transStat = '', intoAcctDateType = 'D1') {
+    const stat = String(transStat || '').trim().toUpperCase()
+    if (stat === 'F') return 'failed'
+    const dateType = String(intoAcctDateType || 'D1').trim().toUpperCase()
+    // 秒到(TS)且汇付确认成功才算真正到账；D1/T1 同步返回的 S 仅表示“申请受理成功”，
+    // 资金要次日/次工作日才入银行卡，因此先记为处理中，避免误导用户以为已到账。
+    if (stat === 'S' && dateType === 'TS') return 'success'
+    return 'processing'
   }
 
   async function syncRefundWithProvider(refund = {}) {
@@ -1285,6 +1330,193 @@ export function createPaymentService(config = {}) {
     return summary
   }
 
+  async function requestEncashment(payload = {}) {
+    const userId = Number(payload.userId || 0)
+    if (!userId) {
+      fail(400, { message: '用户信息不完整' })
+    }
+    const account = await fetchSettlementAccountByUserId(pool, userId)
+    if (!account
+      || String(account.bind_status || '').trim() !== 'active'
+      || !String(account.huifu_id || '').trim()
+      || !String(account.acct_id || '').trim()) {
+      fail(400, { message: '请先完成开户和绑卡' })
+    }
+    const cashAmt = Number(payload.cashAmt || 0)
+    if (!cashAmt || cashAmt <= 0) {
+      fail(400, { message: '取现金额必须大于0' })
+    }
+    const cashAmtStr = cashAmt.toFixed(2)
+    const intoAcctDateType = String(payload.intoAcctDateType || 'D1').trim().toUpperCase() || 'D1'
+    const encashmentNo = createBusinessNo('EC')
+    const amountCents = Math.round(cashAmt * 100)
+    const providerName = String(paymentProvider?.mode || 'mock_payment').trim() || 'mock_payment'
+
+    await pool.execute(
+      `INSERT INTO encashments (
+        encashment_no,
+        user_id,
+        provider,
+        status,
+        amount,
+        huifu_id,
+        token_no,
+        into_acct_date_type
+      ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)`,
+      [encashmentNo, userId, providerName, amountCents, account.huifu_id, account.acct_id, intoAcctDateType]
+    )
+
+    const providerResult = await paymentProvider.createEncashment({
+      huifuId: account.huifu_id,
+      tokenNo: account.acct_id,
+      cashAmt: cashAmtStr,
+      intoAcctDateType,
+      reqSeqId: encashmentNo
+    })
+    if (!providerResult?.ok) {
+      await pool.execute(
+        `UPDATE encashments
+         SET status = 'failed',
+             failure_reason = ?,
+             provider_payload = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE encashment_no = ?`,
+        [providerResult?.message || '取现申请失败', safeJsonStringify(providerResult || null), encashmentNo]
+      )
+      fail(502, { message: providerResult?.message || '取现申请失败' })
+    }
+
+    const transStat = String(providerResult.transStat || 'P').trim()
+    const nextStatus = normalizeEncashmentStatus(transStat, intoAcctDateType)
+    await pool.execute(
+      `UPDATE encashments
+       SET status = ?,
+           trans_stat = ?,
+           provider = ?,
+           provider_request_id = ?,
+           provider_payload = ?,
+           completed_at = CASE WHEN ? = 'success' THEN NOW() ELSE completed_at END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE encashment_no = ?`,
+      [
+        nextStatus,
+        transStat,
+        String(providerResult.provider || providerName).trim() || providerName,
+        String(providerResult.hfSeqId || '').trim() || null,
+        safeJsonStringify(providerResult),
+        nextStatus,
+        encashmentNo
+      ]
+    )
+    return buildEncashmentResult(await fetchEncashmentByNo(pool, encashmentNo))
+  }
+
+  async function syncEncashmentWithProvider(encashment = {}, options = {}) {
+    const encashmentNo = String(encashment?.encashment_no || '').trim()
+    const currentStatus = String(encashment?.status || '').trim().toLowerCase()
+    const force = Boolean(options.force)
+    if (!encashmentNo) {
+      return buildEncashmentResult(encashment)
+    }
+    if (!force && !['pending', 'processing'].includes(currentStatus)) {
+      return buildEncashmentResult(encashment)
+    }
+    if (typeof paymentProvider?.queryEncashment !== 'function') {
+      return buildEncashmentResult(encashment)
+    }
+    const queryResult = await paymentProvider.queryEncashment({
+      huifuId: encashment.huifu_id,
+      orgReqSeqId: encashment.encashment_no,
+      orgHfSeqId: encashment.provider_request_id
+    })
+    if (!queryResult?.ok) {
+      return {
+        ...buildEncashmentResult(encashment),
+        provider_query_status: 'failed',
+        provider_query_message: String(queryResult?.message || '取现查单失败').trim()
+      }
+    }
+    const nextStatus = ['success', 'failed', 'cancelled'].includes(String(queryResult.status || '').trim())
+      ? String(queryResult.status).trim()
+      : 'processing'
+    const transStat = String(queryResult.transStat || '').trim()
+    await pool.execute(
+      `UPDATE encashments
+       SET status = ?,
+           trans_stat = COALESCE(NULLIF(?, ''), trans_stat),
+           provider_request_id = COALESCE(?, provider_request_id),
+           provider_payload = ?,
+           failure_reason = CASE
+             WHEN ? = 'failed' THEN COALESCE(failure_reason, '取现失败，请人工核对汇付结果')
+             ELSE failure_reason
+           END,
+           completed_at = CASE
+             WHEN ? = 'success' THEN COALESCE(completed_at, NOW())
+             ELSE completed_at
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE encashment_no = ?`,
+      [
+        nextStatus,
+        transStat,
+        String(queryResult.hfSeqId || '').trim() || null,
+        safeJsonStringify(queryResult),
+        nextStatus,
+        nextStatus,
+        encashmentNo
+      ]
+    )
+    return buildEncashmentResult(await fetchEncashmentByNo(pool, encashmentNo))
+  }
+
+  async function getUserEncashmentList(payload = {}) {
+    const userId = Number(payload.userId || 0)
+    if (!userId) {
+      fail(400, { message: '用户信息不完整' })
+    }
+    const [rows] = await pool.execute(
+      `SELECT
+          id,
+          encashment_no,
+          user_id,
+          provider,
+          status,
+          amount,
+          huifu_id,
+          token_no,
+          into_acct_date_type,
+          trans_stat,
+          provider_request_id,
+          provider_payload,
+          failure_reason,
+          completed_at,
+          created_at,
+          updated_at
+       FROM encashments
+       WHERE user_id = ?
+       ORDER BY id DESC
+       LIMIT 100`,
+      [userId]
+    )
+    return rows.map((row) => buildEncashmentResult(row))
+  }
+
+  async function syncEncashmentByNo(payload = {}) {
+    const userId = Number(payload.userId || 0)
+    const encashmentNo = String(payload.encashmentNo || '').trim()
+    if (!userId || !encashmentNo) {
+      fail(400, { message: '取现单信息不完整' })
+    }
+    const encashment = await fetchEncashmentByNo(pool, encashmentNo)
+    if (!encashment) {
+      fail(404, { message: '取现单不存在' })
+    }
+    if (Number(encashment.user_id || 0) !== userId) {
+      fail(403, { message: '无权操作该取现单' })
+    }
+    return syncEncashmentWithProvider(encashment, { force: true })
+  }
+
   return {
     createOrderPayment,
     getPaymentTransactionDetail,
@@ -1296,6 +1528,9 @@ export function createPaymentService(config = {}) {
     createOrderRefund,
     createSettlementPayout,
     reconcileOrderFunds,
-    reconcileProcessingFundsOrders
+    reconcileProcessingFundsOrders,
+    requestEncashment,
+    getUserEncashmentList,
+    syncEncashmentByNo
   }
 }

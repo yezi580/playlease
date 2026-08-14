@@ -342,8 +342,11 @@
           :format-order-date="formatOrderDate"
           :get-bind-status-text="getSettlementBindStatusText"
           :get-payout-status-text="getSettlementPayoutStatusText"
+          :encashment-list="settlementEncashmentList"
+          :get-encashment-status-text="getEncashmentStatusText"
           @login="triggerLogin"
           @refresh="loadSettlementData"
+          @refresh-encashments="fetchSettlementEncashmentList"
           @update:settlement-account-form="handleSettlementAccountFormUpdate"
           @submit="submitSettlementAccount"
         />
@@ -565,7 +568,8 @@ import {
   formatOrderDateTime,
   formatPendingCountdown,
   getSettlementBindStatusText,
-  getSettlementPayoutStatusText
+  getSettlementPayoutStatusText,
+  getEncashmentStatusText
 } from '../utils/profileCenter.js'
 import { showErrorToast, showSuccessToast, showWarningToast } from '../utils/toast.js'
 import { showConfirm } from '../utils/confirm.js'
@@ -684,6 +688,7 @@ export default {
       settlementSubmitting: false,
       settlementError: '',
       settlementPayoutList: [],
+      settlementEncashmentList: [],
       merchantPortalUrl: '',
       settlementBalance: '',
       settlementAccountForm: createSettlementAccountForm(),
@@ -1097,7 +1102,7 @@ export default {
       this.settlementLoading = true
       this.settlementError = ''
       try {
-        await Promise.all([this.fetchSettlementAccount(), this.fetchSettlementPayoutList()])
+        await Promise.all([this.fetchSettlementAccount(), this.fetchSettlementPayoutList(), this.fetchSettlementEncashmentList()])
       } catch (error) {
         this.settlementError = error.message || '收款配置加载失败'
       } finally {
@@ -1388,8 +1393,13 @@ export default {
       const data = await apiFetch('/api/settlement/payouts')
       this.settlementPayoutList = Array.isArray(data.list) ? data.list : []
     },
+    async fetchSettlementEncashmentList() {
+      const data = await apiFetch('/api/settlement-account/encashments')
+      this.settlementEncashmentList = Array.isArray(data.list) ? data.list : []
+    },
     getSettlementBindStatusText,
     getSettlementPayoutStatusText,
+    getEncashmentStatusText,
     handleSettlementAccountFormUpdate(nextForm = {}) {
       this.settlementAccountForm = {
         ...this.settlementAccountForm,

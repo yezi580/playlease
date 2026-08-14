@@ -621,7 +621,9 @@ const paymentProvider = createPaymentProvider({
   huifuBalancePayFundType: process.env.HUIFU_BALANCE_PAY_FUND_TYPE,
   huifuMerchantPrivateKey: process.env.HUIFU_MERCHANT_PRIVATE_KEY,
   huifuPublicKey: process.env.HUIFU_PUBLIC_KEY,
-  huifuVerifyResponseSignature: process.env.HUIFU_VERIFY_RESPONSE_SIGNATURE
+  huifuVerifyResponseSignature: process.env.HUIFU_VERIFY_RESPONSE_SIGNATURE,
+  huifuEncashmentUrl: process.env.HUIFU_ENCASHMENT_URL,
+  huifuEncashmentQueryUrl: process.env.HUIFU_ENCASHMENT_QUERY_URL
 })
 
 const paymentConfigIssues = typeof paymentProvider?.getConfigIssues === 'function'
@@ -2152,6 +2154,31 @@ async function ensureSettlementPaymentSchema() {
       INDEX idx_settlement_payouts_order_id (order_id, id),
       INDEX idx_settlement_payouts_payee_user_id (payee_user_id, id),
       INDEX idx_settlement_payouts_status (status, id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS encashments (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '取现单ID',
+      encashment_no VARCHAR(64) NOT NULL COMMENT '平台取现单号(汇付req_seq_id)',
+      user_id INT NOT NULL COMMENT '发起取现用户ID',
+      provider VARCHAR(50) NOT NULL DEFAULT 'mock_payment' COMMENT '取现服务商',
+      status ENUM('pending', 'processing', 'success', 'failed', 'cancelled') NOT NULL DEFAULT 'pending' COMMENT '取现状态',
+      amount BIGINT NOT NULL DEFAULT 0 COMMENT '取现金额（分）',
+      huifu_id VARCHAR(32) NOT NULL DEFAULT '' COMMENT '取现汇付ID',
+      token_no VARCHAR(64) NOT NULL DEFAULT '' COMMENT '取现卡序列号',
+      into_acct_date_type VARCHAR(8) NOT NULL DEFAULT 'D1' COMMENT '到账时效 D1/T1/TS',
+      trans_stat VARCHAR(8) DEFAULT NULL COMMENT '汇付交易状态原始值(P/S/F/C)',
+      provider_request_id VARCHAR(100) DEFAULT NULL COMMENT '汇付流水号(hf_seq_id)',
+      provider_payload LONGTEXT DEFAULT NULL COMMENT '服务商响应JSON',
+      failure_reason VARCHAR(255) DEFAULT NULL COMMENT '失败原因',
+      completed_at DATETIME DEFAULT NULL COMMENT '到账完成时间',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY uk_encashments_no (encashment_no),
+      INDEX idx_encashments_user_id (user_id, id),
+      INDEX idx_encashments_status (status, id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   )
 }

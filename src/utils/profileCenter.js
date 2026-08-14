@@ -52,6 +52,14 @@ const SETTLEMENT_PAYOUT_STATUS_TEXT_MAP = Object.freeze({
   cancelled: '已取消'
 })
 
+const ENCASHMENT_STATUS_TEXT_MAP = Object.freeze({
+  pending: '待发起',
+  processing: '待到账',
+  success: '已到账',
+  failed: '取现失败',
+  cancelled: '已取消'
+})
+
 function cloneList(items = []) {
   return items.map((item) => ({ ...item }))
 }
@@ -124,6 +132,10 @@ export function getSettlementBindStatusText(status = '') {
 
 export function getSettlementPayoutStatusText(status = '') {
   return SETTLEMENT_PAYOUT_STATUS_TEXT_MAP[String(status || '').trim().toLowerCase()] || '处理中'
+}
+
+export function getEncashmentStatusText(status = '') {
+  return ENCASHMENT_STATUS_TEXT_MAP[String(status || '').trim().toLowerCase()] || '处理中'
 }
 
 export function formatPendingCountdown(createdAt, timeoutMinutes, nowTs) {

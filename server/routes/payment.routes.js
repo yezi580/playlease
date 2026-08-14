@@ -83,6 +83,28 @@ function serializeSettlementPayout(normalizeOrderMoneyFields, row) {
   }
 }
 
+function serializeEncashment(normalizeOrderMoneyFields, row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    encashment_no: row.encashment_no,
+    user_id: row.user_id,
+    provider: row.provider || '',
+    status: row.status || 'pending',
+    amount: normalizeAmount(normalizeOrderMoneyFields, row.amount),
+    huifu_id: row.huifu_id || '',
+    token_no: row.token_no || '',
+    into_acct_date_type: row.into_acct_date_type || 'D1',
+    trans_stat: row.trans_stat || '',
+    provider_request_id: row.provider_request_id || '',
+    failure_reason: row.failure_reason || '',
+    completed_at: row.completed_at || null,
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+    provider_payload: row.provider_payload || null
+  }
+}
+
 export function registerPaymentRoutes(deps) {
   const {
     app,
@@ -345,43 +367,51 @@ export function registerPaymentRoutes(deps) {
 
   app.post('/api/settlement-account/encashment', authRequired, authenticatedWriteLimiter, async (req, res) => {
     try {
-      const account = await paymentService.getSettlementAccount({ userId: req.auth.userId })
-      const huifuId = String(account?.huifu_id || '').trim()
-      const tokenNo = String(account?.acct_id || '').trim()
-      if (!huifuId || !tokenNo) {
-        return res.status(400).json({ message: '请先完成开户和绑卡' })
-      }
-
       const cashAmt = Number(req.body?.cash_amt || 0)
       if (!cashAmt || cashAmt <= 0) {
         return res.status(400).json({ message: '取现金额必须大于0' })
       }
-      const cashAmtStr = cashAmt.toFixed(2)
-
-      const result = await paymentProvider.createEncashment({
-        huifuId,
-        tokenNo,
-        cashAmt: cashAmtStr,
+      const result = await paymentService.requestEncashment({
+        userId: req.auth.userId,
+        cashAmt,
         intoAcctDateType: 'D1'
       })
-
-      if (!result.ok) {
-        console.error('[huifu encashment] failed:', JSON.stringify(result, null, 2))
-        return res.status(400).json({
-          message: result.message || '汇付取现失败',
-          reason: result.reason,
-          resp_code: result.respCode
-        })
-      }
-
       res.json({
-        trans_stat: result.transStat,
-        hf_seq_id: result.hfSeqId,
-        req_seq_id: result.reqSeqId,
-        cash_amt: cashAmtStr
+        trans_stat: result.trans_stat || '',
+        hf_seq_id: result.provider_request_id || '',
+        req_seq_id: result.encashment_no,
+        cash_amt: cashAmt.toFixed(2),
+        status: result.status
       })
     } catch (error) {
       handlePaymentServiceError(error, res, '汇付取现失败')
+    }
+  })
+
+  app.get('/api/settlement-account/encashments', authRequired, authenticatedReadLimiter, async (req, res) => {
+    try {
+      const list = await paymentService.getUserEncashmentList({
+        userId: req.auth.userId
+      })
+      res.json({
+        list: list.map((item) => serializeEncashment(normalizeOrderMoneyFields, item))
+      })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '获取取现记录失败')
+    }
+  })
+
+  app.post('/api/settlement-account/encashments/:no/sync', authRequired, authenticatedWriteLimiter, async (req, res) => {
+    try {
+      const result = await paymentService.syncEncashmentByNo({
+        userId: req.auth.userId,
+        encashmentNo: String(req.params?.no || '').trim()
+      })
+      res.json({
+        encashment: serializeEncashment(normalizeOrderMoneyFields, result)
+      })
+    } catch (error) {
+      handlePaymentServiceError(error, res, '取现查单失败')
     }
   })
 

@@ -210,6 +210,48 @@
         </div>
       </div>
     </div>
+
+    <div class="wallet-action-card">
+      <div class="wallet-action-header">
+        <h4>取现记录</h4>
+        <button type="button" class="order-action-btn ghost" :disabled="!encashmentList.length" @click="$emit('refresh-encashments')">
+          刷新
+        </button>
+      </div>
+    </div>
+
+    <div class="wallet-tab-section">
+      <div class="wallet-tabs">
+        <button type="button" class="wallet-tab-btn active">
+          取现记录 ({{ encashmentList.length }})
+        </button>
+      </div>
+      <div class="wallet-tab-content">
+        <div class="wallet-tab-panel">
+          <div v-if="!encashmentList.length" class="profile-empty">当前还没有取现记录。</div>
+          <div v-else class="wallet-ledger-list">
+            <article v-for="item in encashmentList" :key="item.id" class="wallet-ledger-item wallet-withdraw-item">
+              <div>
+                <div class="wallet-withdraw-title-row">
+                  <h4>取现单 {{ item.encashment_no }}</h4>
+                  <span class="order-status" :class="`status-${item.status}`">{{ getEncashmentStatusText(item.status) }}</span>
+                </div>
+                <p>到账时效：{{ formatIntoAcctType(item.into_acct_date_type) }}</p>
+                <p v-if="item.provider_request_id">汇付流水号：{{ item.provider_request_id }}</p>
+                <p v-if="item.failure_reason" class="wallet-form-error">{{ item.failure_reason }}</p>
+                <button type="button" class="order-action-btn ghost wallet-sync-btn" :disabled="syncingNo === item.encashment_no" @click="handleSyncEncashment(item.encashment_no)">
+                  {{ syncingNo === item.encashment_no ? '查询中...' : '查询到账状态' }}
+                </button>
+              </div>
+              <div class="wallet-ledger-amount">
+                <strong>￥{{ formatMoney(item.amount) }}</strong>
+                <span>{{ formatOrderDate(item.created_at) }}</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -240,10 +282,12 @@ const props = defineProps({
   formatMoney: { type: Function, default: (value) => value || '0.00' },
   formatOrderDate: { type: Function, default: (value) => value || '--' },
   getBindStatusText: { type: Function, default: (value) => value || '--' },
-  getPayoutStatusText: { type: Function, default: (value) => value || '--' }
+  getPayoutStatusText: { type: Function, default: (value) => value || '--' },
+  encashmentList: { type: Array, default: () => [] },
+  getEncashmentStatusText: { type: Function, default: (value) => value || '--' }
 })
 
-const emit = defineEmits(['login', 'refresh', 'submit', 'update:settlement-account-form'])
+const emit = defineEmits(['login', 'refresh', 'refresh-encashments', 'submit', 'update:settlement-account-form'])
 
 const hasHuifuId = computed(() => String(props.accountForm.huifuId || '').trim() !== '')
 const isAccountReady = computed(() => {
@@ -339,6 +383,7 @@ const encashing = ref(false)
 const encashmentError = ref('')
 const encashmentResult = ref('')
 const encashmentForm = reactive({ amount: '' })
+const syncingNo = ref('')
 
 async function handleEncashment() {
   encashmentError.value = ''
@@ -354,7 +399,14 @@ async function handleEncashment() {
       method: 'POST',
       body: JSON.stringify({ cash_amt: amt.toFixed(2) })
     })
-    const statText = res.trans_stat === 'S' ? '成功' : res.trans_stat === 'P' ? '处理中' : '失败'
+    let statText
+    if (res.status === 'success') {
+      statText = '成功，已到账'
+    } else if (res.status === 'failed') {
+      statText = '失败'
+    } else {
+      statText = '申请已受理，预计次日(D1)到账银行卡'
+    }
     encashmentResult.value = `提现${statText}，金额 ${res.cash_amt} 元，流水号 ${res.hf_seq_id || res.req_seq_id || '-'}`
     encashmentForm.amount = ''
     emit('refresh')
@@ -362,6 +414,29 @@ async function handleEncashment() {
     encashmentError.value = err?.body?.message || err?.message || '提现失败，请稍后重试'
   } finally {
     encashing.value = false
+  }
+}
+
+function formatIntoAcctType(value = '') {
+  const normalized = String(value || '').trim().toUpperCase()
+  if (normalized === 'TS') return 'TS 秒到'
+  if (normalized === 'T1') return 'T1 次工作日'
+  return 'D1 次自然日'
+}
+
+async function handleSyncEncashment(encashmentNo) {
+  if (!encashmentNo || syncingNo.value) return
+  syncingNo.value = encashmentNo
+  encashmentError.value = ''
+  try {
+    await apiFetch(`/api/settlement-account/encashments/${encodeURIComponent(encashmentNo)}/sync`, {
+      method: 'POST'
+    })
+    emit('refresh-encashments')
+  } catch (err) {
+    encashmentError.value = err?.body?.message || err?.message || '查询到账状态失败，请稍后重试'
+  } finally {
+    syncingNo.value = ''
   }
 }
 
