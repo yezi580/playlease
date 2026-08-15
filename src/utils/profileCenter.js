@@ -11,8 +11,8 @@ export const PROFILE_SECTION_ITEMS = Object.freeze([
   { key: 'published', label: '我发布的' },
   { key: 'orders', label: '我买到的' },
   { key: 'messages', label: '我的消息' },
-  { key: 'wallet', label: '收款账号' },
-  { key: 'invite', label: '邀新赚钱' }
+  { key: 'invite', label: '邀新赚钱' },
+  { key: 'wallet', label: '收款账号' }
 ])
 
 export const ORDER_STATUS_TABS = Object.freeze([

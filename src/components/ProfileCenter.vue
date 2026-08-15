@@ -628,7 +628,7 @@ export default {
       mobileNavPage: 0,
       mobileNavLastSelected: {
         0: 'published',
-        1: 'invite'
+        1: 'wallet'
       },
       mobileNavTouch: {
         startX: 0,
