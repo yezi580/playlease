@@ -112,8 +112,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 主题切换过渡：useTheme 在切换期间给 <html> 挂上 theme-transition 类，
-   让全页颜色统一做约 0.7s 的渐变，1s 后移除以不影响日常交互动画 */
+/* 主题切换过渡（View Transitions）：整页新旧快照一次交叉淡化，
+   合成器层完成，避免逐元素 transition 的掉帧与渐变离散跳变 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.7s;
+  animation-timing-function: ease;
+}
+
+/* 用户偏好减少动效时直接切换 */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+/* 回退方案（不支持 View Transitions 的浏览器）：
+   useTheme 在切换期间给 <html> 挂上 theme-transition 类 */
 html.theme-transition,
 html.theme-transition *,
 html.theme-transition *::before,
