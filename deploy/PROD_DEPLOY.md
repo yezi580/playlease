@@ -118,6 +118,8 @@ ssh -i "D:\pic\only_key.pem" root@49.235.59.19
 5. 在服务器解压部署包，保留原有环境变量、证书和上传目录:
 
 ```bash
+# 先清掉上次部署残留的备份目录，避免 cp 把内容拷贝进旧目录导致嵌套
+rm -rf /tmp/my-app-prod.env.bak /tmp/my-app-certs.bak /tmp/my-app-uploads.bak
 cp /opt/my-app/deploy/env/prod.env /tmp/my-app-prod.env.bak
 cp -a /opt/my-app/deploy/nginx/certs /tmp/my-app-certs.bak
 cp -a /opt/my-app/server/uploads /tmp/my-app-uploads.bak
@@ -127,6 +129,9 @@ tar -xzf /opt/my-app-prod-deploy.tar.gz -C /opt/my-app
 cp /tmp/my-app-prod.env.bak /opt/my-app/deploy/env/prod.env
 rm -rf /opt/my-app/deploy/nginx/certs && cp -a /tmp/my-app-certs.bak /opt/my-app/deploy/nginx/certs
 rm -rf /opt/my-app/server/uploads && cp -a /tmp/my-app-uploads.bak /opt/my-app/server/uploads
+
+# 确认服务正常后删除临时备份，回收磁盘（uploads 备份有 8G+）
+# rm -rf /tmp/my-app-certs.bak /tmp/my-app-uploads.bak
 ```
 
 6. 在服务器启动生产环境:
