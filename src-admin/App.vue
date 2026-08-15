@@ -9,7 +9,7 @@
 
       <div v-else-if="!isAuthenticated" class="admin-auth-shell">
         <section class="admin-auth-card">
-          <div class="admin-auth-badge">Game Hub Admin</div>
+          <div class="admin-auth-badge">天蓬商行管理后台</div>
           <div class="admin-auth-head">
             <h1>平台管理控制台</h1>
             <p>统一管理用户、商品、订单审核与平台运营数据。</p>
@@ -82,7 +82,7 @@
         <aside class="admin-sidebar">
           <div class="admin-brand">
             <div class="admin-brand-mark">tp</div>
-            <strong>Game Hub Admin</strong>
+            <strong>天蓬商行管理后台</strong>
             <span>平台运营管理中心</span>
           </div>
 

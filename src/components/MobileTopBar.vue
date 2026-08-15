@@ -4,7 +4,7 @@
       <div class="logo">
         <span class="logo-mark">tp</span>
         <div class="logo-text">
-          <strong>Game Hub</strong>
+          <strong>天蓬商行</strong>
         </div>
       </div>
     </div>

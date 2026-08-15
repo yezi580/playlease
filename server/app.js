@@ -232,7 +232,7 @@ const ADMIN_TRUSTED_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const ADMIN_PASSKEY_ENABLED = !['0', 'false', 'off', 'no'].includes(
   String(process.env.ADMIN_PASSKEY_ENABLED ?? 'true').trim().toLowerCase()
 )
-const ADMIN_PASSKEY_RP_NAME = String(process.env.PASSKEY_RP_NAME || 'Game Hub Admin').trim() || 'Game Hub Admin'
+const ADMIN_PASSKEY_RP_NAME = String(process.env.PASSKEY_RP_NAME || '天蓬商行管理后台').trim() || '天蓬商行管理后台'
 const ADMIN_PASSKEY_RP_ID = String(process.env.PASSKEY_RP_ID || '').trim()
 const ADMIN_STEP_UP_POLICIES = Object.freeze({
   updateUserRole: {
