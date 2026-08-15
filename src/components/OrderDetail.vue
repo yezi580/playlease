@@ -113,7 +113,7 @@
               <div>
                 <strong>
                   {{ item.item_name }}
-                  <span v-if="item.item_remark" style="font-size: 11px; color: #9ca3af; font-weight: 400; margin-left: 4px;">({{ item.item_remark }})</span>
+                  <span v-if="item.item_remark" style="font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 4px;">({{ item.item_remark }})</span>
                 </strong>
                 <p>最多可填 {{ item.quantity }}，单价 ￥{{ formatMoney(item.unit_price) }}</p>
               </div>
@@ -146,7 +146,7 @@
             <div v-for="item in reportedUsageItems" :key="`reported-${item.item_key}`" class="table-row">
               <span>
                 {{ item.item_name }}
-                <div v-if="item.item_remark" style="font-size: 11px; color: #9ca3af; margin-top: 2px;">{{ item.item_remark }}</div>
+                <div v-if="item.item_remark" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">{{ item.item_remark }}</div>
               </span>
               <span>{{ item.reported_quantity }}</span>
               <span>￥{{ formatMoney(item.unit_price) }}</span>
@@ -687,14 +687,14 @@ export default {
 .state-card {
   padding: 48px 20px;
   text-align: center;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 20px;
-  background: #fff;
-  color: #6b7280;
+  background: var(--bg-card);
+  color: var(--text-muted);
 }
 
 .state-card--error p {
-  color: #b91c1c;
+  color: var(--danger-text-strong);
 }
 
 .hero {
@@ -703,25 +703,25 @@ export default {
   gap: 16px;
   padding: 24px;
   border-radius: 22px;
-  border: 1px solid #e5e7eb;
-  background: linear-gradient(135deg, #eff6ff, #e0f2fe);
+  border: 1px solid var(--border-color);
+  background: linear-gradient(135deg, var(--info-bg), var(--info-bg-strong));
 }
 
-.hero--pending_payment { background: linear-gradient(135deg, #fffbeb, #fef3c7); }
-.hero--completed { background: linear-gradient(135deg, #ecfdf5, #d1fae5); }
-.hero--cancelled { background: linear-gradient(135deg, #f9fafb, #e5e7eb); }
-.hero--support_handling { background: linear-gradient(135deg, #fef2f2, #fee2e2); }
-.hero--settlement_pending { background: linear-gradient(135deg, #eff6ff, #dbeafe); }
+.hero--pending_payment { background: linear-gradient(135deg, var(--warning-bg), var(--warning-bg-strong)); }
+.hero--completed { background: linear-gradient(135deg, var(--success-bg), var(--success-bg-strong)); }
+.hero--cancelled { background: linear-gradient(135deg, var(--bg-subtle), var(--bg-page)); }
+.hero--support_handling { background: linear-gradient(135deg, var(--danger-bg), var(--danger-bg-strong)); }
+.hero--settlement_pending { background: linear-gradient(135deg, var(--info-bg), var(--info-bg-strong)); }
 
 .hero-kicker {
   margin: 0 0 6px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .hero h2 {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
   font-size: 28px;
 }
 
@@ -747,7 +747,7 @@ export default {
 
 .hero-desc {
   margin: 0;
-  color: #475569;
+  color: var(--text-regular);
   line-height: 1.7;
 }
 
@@ -767,13 +767,13 @@ export default {
   padding: 6px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.7);
-  color: #1f2937;
+  color: var(--text-strong);
   font-size: 13px;
   font-weight: 700;
 }
 
 .pill--warn {
-  color: #c2410c;
+  color: var(--warning-text);
 }
 
 .grid {
@@ -785,9 +785,9 @@ export default {
 
 .card {
   padding: 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 20px;
-  background: #fff;
+  background: var(--bg-card);
 }
 
 .card--wide {
@@ -804,12 +804,12 @@ export default {
 
 .card-head h3 {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
   font-size: 18px;
 }
 
 .subtle {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -824,27 +824,27 @@ export default {
   height: 168px;
   object-fit: fill;
   border-radius: 16px;
-  background: #f8fafc;
+  background: var(--bg-subtle);
 }
 
 .product-cover--empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
-  border: 1px dashed #cbd5e1;
+  color: var(--text-faint);
+  border: 1px dashed var(--border-strong);
 }
 
 .product-main h4 {
   margin: 0 0 10px;
   font-size: 20px;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .product-main p,
 .note-list p {
   margin: 6px 0;
-  color: #475569;
+  color: var(--text-regular);
   line-height: 1.7;
 }
 
@@ -866,7 +866,7 @@ export default {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .money-list div:last-child,
@@ -876,12 +876,12 @@ export default {
 
 .money-list span,
 .info-list span {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .money-list strong,
 .info-list strong {
-  color: #111827;
+  color: var(--text-main);
 }
 
 .table {
@@ -896,13 +896,13 @@ export default {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: #f8fafc;
-  color: #334155;
+  background: var(--bg-subtle);
+  color: var(--text-regular);
 }
 
 .table-row--head {
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: var(--info-bg);
+  color: var(--info-text);
   font-weight: 700;
 }
 
@@ -919,12 +919,12 @@ export default {
   align-items: center;
   padding: 14px 16px;
   border-radius: 14px;
-  background: #f8fafc;
+  background: var(--bg-subtle);
 }
 
 .usage-row p {
   margin: 6px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -932,7 +932,7 @@ export default {
   width: 120px;
   min-height: 42px;
   padding: 0 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   box-sizing: border-box;
 }
@@ -945,7 +945,7 @@ export default {
 }
 
 .empty-tip {
-  color: #6b7280;
+  color: var(--text-muted);
   line-height: 1.7;
 }
 
@@ -962,11 +962,11 @@ export default {
 
 .timeline-item p {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .timeline-item small {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .timeline-dot {
@@ -974,7 +974,7 @@ export default {
   height: 12px;
   margin-top: 4px;
   border-radius: 999px;
-  background: #2563eb;
+  background: var(--info-strong);
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
   flex-shrink: 0;
 }
@@ -990,20 +990,20 @@ export default {
 }
 
 .btn--primary {
-  background: #2563eb;
+  background: var(--info-strong);
   color: #fff;
 }
 
 .btn--ghost {
-  background: #fff;
-  color: #1f2937;
-  border-color: #d1d5db;
+  background: var(--bg-card);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
 }
 
 .btn--danger {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  background: var(--danger-bg);
+  color: var(--danger-text-strong);
+  border-color: var(--danger-border);
 }
 
 @media (max-width: 960px) {

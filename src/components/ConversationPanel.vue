@@ -705,7 +705,7 @@ export default {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--bg-card);
   box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18);
 }
 
@@ -715,25 +715,25 @@ export default {
   justify-content: space-between;
   gap: 16px;
   padding: 18px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .conversation-header h3 {
   margin: 0;
   font-size: 18px;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .conversation-header p {
   margin: 6px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .conversation-close-btn {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-regular);
   border-radius: 10px;
   padding: 8px 12px;
   min-width: 64px;
@@ -745,11 +745,11 @@ export default {
 .conversation-empty {
   padding: 24px;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .conversation-state--error {
-  color: #b91c1c;
+  color: var(--danger-text-strong);
 }
 
 .conversation-messages {
@@ -759,7 +759,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: #f8fafc;
+  background: var(--bg-subtle);
 }
 
 .conversation-messages--hidden {
@@ -781,7 +781,7 @@ export default {
 .conversation-message-meta {
   display: flex;
   gap: 8px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -789,10 +789,10 @@ export default {
   white-space: pre-wrap;
   word-break: break-word;
   border-radius: 14px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   padding: 10px 12px;
-  color: #111827;
+  color: var(--text-main);
   line-height: 1.6;
 }
 
@@ -801,9 +801,9 @@ export default {
 }
 
 .conversation-message-bubble--system {
-  background: #fff7ed;
-  border-color: #fdba74;
-  color: #9a3412;
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning-text);
 }
 
 .conversation-message--self .conversation-message-bubble {
@@ -833,14 +833,14 @@ export default {
 
 .conversation-footer {
   padding: 16px 20px 20px;
-  border-top: 1px solid #e5e7eb;
-  background: #fff;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-card);
 }
 
 .conversation-composer {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  background: #fff;
+  background: var(--bg-card);
   overflow: hidden;
 }
 
@@ -857,8 +857,8 @@ export default {
   height: 60px;
   border-radius: 8px;
   overflow: hidden;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-page);
+  border: 1px solid var(--border-color);
 }
 
 .conversation-pending-preview {
@@ -900,7 +900,7 @@ export default {
   border-radius: 0;
   padding: 12px;
   font: inherit;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .conversation-image-input {
@@ -927,7 +927,7 @@ export default {
 }
 
 .conversation-footer-tip {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -944,9 +944,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-regular);
   border-radius: 10px;
   padding: 10px;
   cursor: pointer;

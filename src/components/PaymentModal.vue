@@ -68,8 +68,8 @@
           <div v-else-if="(processing || awaitingPaymentResult) && !payResult" class="payment-modal-body payment-processing-body">
             <div class="payment-processing-icon">
               <svg class="payment-spinner" viewBox="0 0 50 50" width="60" height="60">
-                <circle cx="25" cy="25" r="20" fill="none" stroke="#e5e7eb" stroke-width="4"/>
-                <circle cx="25" cy="25" r="20" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-dasharray="90 31.4" stroke-linecap="round" class="spinner-circle"/>
+                <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" style="stroke: var(--border-strong)"/>
+                <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" stroke-dasharray="90 31.4" stroke-linecap="round" class="spinner-circle" style="stroke: var(--info-strong)"/>
               </svg>
             </div>
             <p class="payment-processing-text">{{ paymentProcessingText }}</p>
@@ -494,7 +494,7 @@ export default {
 .payment-modal {
   width: 100%;
   max-width: 420px;
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
@@ -511,7 +511,7 @@ export default {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .payment-close-btn {
@@ -522,15 +522,15 @@ export default {
   height: 32px;
   border: none;
   border-radius: 8px;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-page);
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .payment-close-btn:hover:not(:disabled) {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--bg-page);
+  color: var(--text-regular);
 }
 
 .payment-close-btn:disabled {
@@ -546,7 +546,7 @@ export default {
   display: flex;
   gap: 14px;
   padding: 14px 16px;
-  background: #f9fafb;
+  background: var(--bg-subtle);
   border-radius: 12px;
   margin-bottom: 16px;
 }
@@ -557,7 +557,7 @@ export default {
   height: 80px;
   border-radius: 10px;
   overflow: hidden;
-  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+  background: linear-gradient(135deg, var(--bg-subtle), var(--bg-page));
 }
 
 .payment-cover-img {
@@ -579,7 +579,7 @@ export default {
 .payment-product-name {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-main);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -588,12 +588,12 @@ export default {
 
 .payment-rent-days {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .payment-amount-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 4px 0;
   margin-bottom: 20px;
@@ -605,22 +605,22 @@ export default {
   align-items: center;
   padding: 10px 16px;
   font-size: 14px;
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .payment-total-row {
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--border-color);
   margin-top: 4px;
 }
 
 .payment-amount-value {
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .payment-total-value {
   font-size: 20px;
   font-weight: 700;
-  color: #dc2626;
+  color: var(--danger-text);
 }
 
 .payment-method-section {
@@ -631,7 +631,7 @@ export default {
   margin: 0 0 12px;
   font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .payment-method-list {
@@ -645,7 +645,7 @@ export default {
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border: 1.5px solid #e5e7eb;
+  border: 1.5px solid var(--border-color);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -653,13 +653,13 @@ export default {
 }
 
 .payment-method-item:hover {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: var(--info-border);
+  background: var(--info-bg);
 }
 
 .payment-method-item.active {
-  border-color: #1d4ed8;
-  background: #eff6ff;
+  border-color: var(--info-strong);
+  background: var(--info-bg);
 }
 
 .payment-method-radio {
@@ -675,14 +675,14 @@ export default {
   flex: 1;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .payment-method-check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #1d4ed8;
+  color: var(--info-text);
 }
 
 .payment-processing-body,
@@ -698,7 +698,7 @@ export default {
 .payment-transaction-no {
   margin-top: 10px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-muted);
   word-break: break-all;
 }
 
@@ -723,13 +723,13 @@ export default {
   margin: 0;
   font-size: 17px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .payment-processing-hint {
   margin-top: 8px;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--text-faint);
 }
 
 .payment-result-icon {
@@ -743,26 +743,26 @@ export default {
 }
 
 .payment-result-icon.success {
-  color: #047857;
-  background: #d1fae5;
+  color: var(--success-text-dark);
+  background: var(--success-bg-strong);
 }
 
 .payment-result-icon.fail {
-  color: #b91c1c;
-  background: #fee2e2;
+  color: var(--danger-text-strong);
+  background: var(--danger-bg-strong);
 }
 
 .payment-result-text {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .payment-result-reason {
   margin-top: 8px;
   font-size: 14px;
-  color: #dc2626;
+  color: var(--danger-text);
 }
 
 .payment-modal-footer {
@@ -783,12 +783,12 @@ export default {
 }
 
 .payment-btn-cancel {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--bg-page);
+  color: var(--text-regular);
 }
 
 .payment-btn-cancel:hover {
-  background: #e5e7eb;
+  background: var(--bg-page);
 }
 
 .payment-btn-confirm {
@@ -803,13 +803,13 @@ export default {
 }
 
 .payment-btn-retry {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
 }
 
 .payment-btn-retry:hover {
-  background: #fee2e2;
+  background: var(--danger-bg-strong);
 }
 
 .modal-fade-enter-active,

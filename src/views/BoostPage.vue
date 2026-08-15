@@ -10,17 +10,17 @@
   max-width: 980px;
   margin: 0 auto;
   padding: 36px 20px;
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .panel-placeholder h3 {
   margin: 0 0 12px;
   font-size: 24px;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .panel-placeholder p {
   margin: 0;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 </style>

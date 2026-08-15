@@ -45,6 +45,23 @@
 
     <div class="right">
       <button
+        class="theme-toggle"
+        :class="{ 'is-dark': isDark }"
+        :title="isDark ? '切换到白天模式' : '切换到夜间模式'"
+        :aria-label="isDark ? '切换到白天模式' : '切换到夜间模式'"
+        @click="toggleTheme"
+      >
+        <span class="theme-icons" aria-hidden="true">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </span>
+      </button>
+      <button
         v-if="showBackAction"
         class="nav-back"
         :class="{ 'nav-back--highlight': highlightBackAction }"
@@ -60,8 +77,14 @@
 </template>
 
 <script>
+import { useTheme } from '../composables/useTheme'
+
 export default {
   name: 'MobileTopBar',
+  setup() {
+    const { theme, isDark, toggleTheme } = useTheme()
+    return { theme, isDark, toggleTheme }
+  },
   props: {
     showBackAction: {
       type: Boolean,
@@ -184,6 +207,63 @@ export default {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .theme-toggle {
+    height: 36px;
+    width: 36px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+  }
+
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* 太阳/月亮叠加放置，点击时旋转 + 缩放交叉过渡 */
+  .theme-icons {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+  }
+
+  .theme-icons svg {
+    position: absolute;
+    inset: 0;
+    width: 18px;
+    height: 18px;
+    transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.7s ease !important;
+  }
+
+  .icon-moon {
+    transform: rotate(-120deg) scale(0.3);
+    opacity: 0;
+  }
+
+  .is-dark .icon-sun {
+    transform: rotate(120deg) scale(0.3);
+    opacity: 0;
+  }
+
+  .is-dark .icon-moon {
+    transform: rotate(0deg) scale(1);
+    opacity: 1;
   }
 
   .listing-search {

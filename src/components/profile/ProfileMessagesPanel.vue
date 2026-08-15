@@ -110,19 +110,19 @@ export default {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #374151;
+  color: var(--text-regular);
   font-size: 14px;
 }
 
 .profile-message-summary strong {
-  color: #111827;
+  color: var(--text-main);
   font-size: 16px;
 }
 
 .profile-message-refresh-btn {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-regular);
   border-radius: 10px;
   padding: 8px 14px;
   cursor: pointer;
@@ -145,21 +145,21 @@ export default {
   justify-content: space-between;
   gap: 16px;
   padding: 18px;
-  border: 1px solid #e8eaed;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
-  background: #fff;
+  background: var(--bg-card);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.04);
   cursor: pointer;
   transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .profile-message-item--unread {
-  border-color: #bfdbfe;
-  background: #f8fbff;
+  border-color: var(--info-border);
+  background: var(--bg-subtle);
 }
 
 .profile-message-item:hover {
-  border-color: #bfdbfe;
+  border-color: var(--info-border);
   transform: translateY(-1px);
   box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
 }
@@ -186,7 +186,7 @@ export default {
 .profile-message-title-wrap h4 {
   margin: 0;
   font-size: 17px;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .profile-message-unread-badge {
@@ -197,7 +197,7 @@ export default {
   height: 22px;
   padding: 0 7px;
   border-radius: 999px;
-  background: #dc2626;
+  background: var(--danger-strong);
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -205,19 +205,19 @@ export default {
 
 .profile-message-time {
   flex-shrink: 0;
-  color: #9ca3af;
+  color: var(--text-faint);
   font-size: 12px;
 }
 
 .profile-message-counterpart,
 .profile-message-preview {
   margin: 8px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 .profile-message-preview {
-  color: #374151;
+  color: var(--text-regular);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -432,8 +432,8 @@ export default {
 
 .gun-filter-panel,
 .gun-group-section {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
 }
 
@@ -446,10 +446,10 @@ export default {
 }
 
 .gun-filter-chip {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  background: #f9fafb;
-  color: #374151;
+  background: var(--bg-subtle);
+  color: var(--text-regular);
   padding: 10px 14px;
   font-size: 14px;
   cursor: pointer;
@@ -464,8 +464,8 @@ export default {
   min-width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: #e5e7eb;
-  color: #111827;
+  background: var(--bg-page);
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -475,7 +475,7 @@ export default {
 
 .gun-filter-chip:hover {
   border-color: #111827;
-  background: #f3f4f6;
+  background: var(--bg-page);
 }
 
 .gun-filter-chip.active {
@@ -502,9 +502,9 @@ export default {
 
 .gun-code-card {
   min-height: 300px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-subtle) 100%);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -526,7 +526,7 @@ export default {
   min-width: 0;
   font-size: 20px;
   line-height: 1.2;
-  color: #111827;
+  color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -545,7 +545,7 @@ export default {
   flex-direction: column;
   gap: 8px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .gun-code-entry:last-child {
@@ -564,13 +564,13 @@ export default {
 .gun-code-price {
   font-size: 15px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .gun-code-description {
   font-size: 14px;
   line-height: 1.5;
-  color: #4b5563;
+  color: var(--text-regular);
 }
 
 .gun-code-row {
@@ -583,10 +583,10 @@ export default {
   display: block;
   flex: 1 1 auto;
   padding: 10px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: #f8fafc;
-  color: #111827;
+  background: var(--bg-subtle);
+  color: var(--text-main);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.5;
@@ -599,10 +599,10 @@ export default {
 .gun-copy-button {
   width: 36px;
   height: 36px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: #fff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-regular);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -613,8 +613,8 @@ export default {
 
 .gun-copy-button:hover {
   border-color: #111827;
-  color: #111827;
-  background: #f3f4f6;
+  color: var(--text-main);
+  background: var(--bg-page);
 }
 
 .gun-copy-button svg {
@@ -640,7 +640,7 @@ export default {
   border: none;
   border-radius: 0;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 15px;
   font-weight: 400;
   letter-spacing: 0;

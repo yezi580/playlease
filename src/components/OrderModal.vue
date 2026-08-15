@@ -189,7 +189,7 @@ export default {
   width: 500px;
   max-width: 90vw;
   max-height: 85vh;
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   display: flex;
@@ -202,7 +202,7 @@ export default {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
@@ -210,7 +210,7 @@ export default {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .close-btn {
@@ -219,7 +219,7 @@ export default {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
@@ -230,8 +230,8 @@ export default {
 }
 
 .close-btn:hover {
-  background: #f3f4f6;
-  color: #111827;
+  background: var(--bg-page);
+  color: var(--text-main);
 }
 
 .modal-body {
@@ -244,8 +244,8 @@ export default {
   display: flex;
   gap: 12px;
   padding: 12px;
-  background: #fafafa;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
 }
 
@@ -259,8 +259,8 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 6px;
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-  border: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, var(--bg-subtle) 0%, var(--bg-page) 100%);
+  border: 1px solid var(--border-color);
 }
 
 .cover-img {
@@ -277,7 +277,7 @@ export default {
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .summary-info {
@@ -291,7 +291,7 @@ export default {
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -300,14 +300,14 @@ export default {
 .owner-name {
   margin: 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .price-detail {
   margin-top: 14px;
   padding: 12px 14px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
 }
 
@@ -325,21 +325,21 @@ export default {
 .contact-field span {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .contact-field input {
   width: 100%;
   min-height: 42px;
   padding: 0 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   box-sizing: border-box;
 }
 
 .order-price-hint {
   margin: 10px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -350,22 +350,22 @@ export default {
   align-items: center;
   font-size: 14px;
   line-height: 2;
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .price-detail .price-row span {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .price-detail .price-row em {
   font-style: normal;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .price-divider {
   height: 1px;
-  background: #e5e7eb;
+  background: var(--bg-page);
   margin: 6px 0;
 }
 
@@ -373,7 +373,7 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  color: #dc2626;
+  color: var(--danger-text);
 }
 
 .total-row span {
@@ -391,7 +391,7 @@ export default {
   justify-content: flex-end;
   gap: 10px;
   padding: 14px 20px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
@@ -407,21 +407,21 @@ export default {
 }
 
 .btn-cancel {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--bg-page);
+  color: var(--text-regular);
 }
 
 .btn-cancel:hover:not(:disabled) {
-  background: #d1d5db;
+  background: var(--border-strong);
 }
 
 .btn-confirm {
-  background: #2563eb;
+  background: var(--info-strong);
   color: #fff;
 }
 
 .btn-confirm:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--info-strong);
 }
 
 .btn-cancel:disabled,

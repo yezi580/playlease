@@ -125,10 +125,10 @@ export default {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 9px 10px;
-  background: #fff;
+  background: var(--bg-card);
   cursor: pointer;
   box-sizing: border-box;
   min-height: 38px;
@@ -136,18 +136,18 @@ export default {
 }
 
 .is-disabled .select-trigger {
-  background: #f3f4f6;
+  background: var(--bg-page);
   cursor: not-allowed;
-  color: #9ca3af;
+  color: var(--text-faint);
 }
 
 .animated-select.is-open .select-trigger {
-  border-color: #3b82f6;
+  border-color: var(--info);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .select-value {
-  color: #111827;
+  color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -155,13 +155,13 @@ export default {
 }
 
 .select-value.is-placeholder {
-  color: #9ca3af;
+  color: var(--text-faint);
 }
 
 .select-arrow {
   width: 16px;
   height: 16px;
-  color: #9ca3af;
+  color: var(--text-faint);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
   margin-left: 8px;
@@ -169,7 +169,7 @@ export default {
 
 .animated-select.is-open .select-arrow {
   transform: rotate(180deg);
-  color: #3b82f6;
+  color: var(--info);
 }
 
 .select-dropdown {
@@ -179,8 +179,8 @@ export default {
   width: 100%;
   max-height: 240px;
   overflow-y: auto;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   z-index: 50;
@@ -191,7 +191,7 @@ export default {
   width: 6px;
 }
 .select-dropdown::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--border-strong);
   border-radius: 3px;
 }
 .select-dropdown::-webkit-scrollbar-track {
@@ -207,25 +207,25 @@ export default {
 .select-option {
   padding: 8px 12px;
   cursor: pointer;
-  color: #374151;
+  color: var(--text-regular);
   transition: background-color 0.15s ease, color 0.15s ease;
   display: flex;
   align-items: center;
 }
 
 .select-option:hover {
-  background-color: #f3f4f6;
-  color: #111827;
+  background-color: var(--bg-page);
+  color: var(--text-main);
 }
 
 .select-option.is-selected {
-  background-color: #eff6ff;
-  color: #2563eb;
+  background-color: var(--info-bg);
+  color: var(--info-strong);
   font-weight: 600;
 }
 
 .select-option-placeholder {
-  color: #6b7280;
+  color: var(--text-muted);
   font-style: italic;
 }
 

@@ -45,10 +45,10 @@ export default {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--border-color, var(--border-color));
   border-radius: 6px;
-  background: #f1f5f9; /* 与商品卡片背景一致（偏白色），弱化视觉干扰 */
-  color: #475569;
+  background: var(--bg-subtle); /* 与商品卡片背景一致（偏白色），弱化视觉干扰 */
+  color: var(--text-regular);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
@@ -58,9 +58,9 @@ export default {
 }
 
 .share-listing-btn:hover {
-  background: #ffffff;
+  background: var(--bg-card);
   border-color: rgba(16, 185, 129, 0.4);
-  color: var(--brand-primary-dark, #059669);
+  color: var(--brand-primary-dark, var(--success-text-dark));
   transform: translateY(-1px);
 }
 

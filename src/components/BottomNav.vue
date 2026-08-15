@@ -103,8 +103,8 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
   padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px));
   z-index: 30;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
@@ -118,7 +118,7 @@ export default {
   padding: 4px 8px;
   border: none;
   background: transparent;
-  color: #9ca3af;
+  color: var(--text-faint);
   cursor: pointer;
   transition: color 0.2s ease;
   min-width: 50px;
@@ -130,7 +130,7 @@ export default {
 }
 
 .nav-item.active {
-  color: #111827;
+  color: var(--text-main);
 }
 
 .nav-icon {
@@ -155,7 +155,7 @@ export default {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #dc2626;
+  background: var(--danger-strong);
   box-shadow: 0 0 0 2px #fff;
 }
 

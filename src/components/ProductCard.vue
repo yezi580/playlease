@@ -321,7 +321,7 @@ export default {
   display: grid;
   grid-template-columns: 180px 1fr;
   gap: 16px;
-  background: #f1f5f9; /* 进一步加深为更暗的灰蓝 */
+  background: var(--bg-subtle); /* 进一步加深为更暗的灰蓝 */
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
@@ -360,7 +360,7 @@ export default {
   height: 150px;
   border-radius: 8px;
   overflow: hidden;
-  background: #f8fafc;
+  background: var(--bg-subtle);
   border: 1px solid var(--border-color);
 }
 
@@ -368,7 +368,7 @@ export default {
   min-width: 0;
   height: 100%;
   overflow: hidden;
-  background: #eef2f7;
+  background: var(--bg-subtle);
 }
 
 .cover-img {
@@ -385,7 +385,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -407,7 +407,7 @@ export default {
 .owner {
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .owner-line {
@@ -502,9 +502,9 @@ export default {
 }
 
 .tag--special {
-  color: #dc2626;
-  background: #fef2f2;
-  border-color: #dc2626;
+  color: var(--danger-text);
+  background: var(--danger-bg);
+  border-color: var(--danger-strong);
 }
 
 .tag--mobile-special {
@@ -576,8 +576,8 @@ export default {
 
 .info-box {
   border-radius: 8px;
-  background: #e2e8f0; /* 再次加深内部信息框背景色 */
-  border: 1px solid #cbd5e1; /* 加深内部信息框边框色 */
+  background: var(--bg-subtle); /* 再次加深内部信息框背景色 */
+  border: 1px solid var(--border-strong); /* 加深内部信息框边框色 */
   padding: 8px 10px;
   font-size: 14px;
   line-height: 1.35;
@@ -600,7 +600,7 @@ export default {
 }
 
 .info-box span {
-  color: #4b5563; /* 让内部说明文字也稍微加深点对比度 */
+  color: var(--text-regular); /* 让内部说明文字也稍微加深点对比度 */
 }
 
 .blue,
@@ -608,15 +608,15 @@ export default {
 .green,
 .purple {
   /* 统一为更深的浅灰蓝背景 */
-  background: #e2e8f0;
-  border-color: #cbd5e1;
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
 }
 
 .price-area {
   border-radius: 8px;
   /* 恢复极浅的红色渐变背景 */
-  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
-  border: 1px solid #fecaca;
+  background: linear-gradient(135deg, var(--danger-bg) 0%, var(--bg-card) 100%);
+  border: 1px solid var(--danger-border);
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
@@ -634,7 +634,7 @@ export default {
   left: 0;
   width: 4px;
   height: 100%;
-  background: #dc2626; /* 调深红色，避免偏粉 */
+  background: var(--danger-strong); /* 调深红色，避免偏粉 */
 }
 
 .clickable-card {
@@ -658,7 +658,7 @@ export default {
   text-align: right;
   font-size: 12px;
   line-height: 1.4;
-  color: #475569;
+  color: var(--text-regular);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -673,12 +673,12 @@ export default {
   justify-content: space-between;
   font-size: 13px;
   line-height: 1.4;
-  color: #374151;
+  color: var(--text-regular);
   white-space: nowrap;
 }
 
 .price-row strong {
-  color: #111827;
+  color: var(--text-main);
   font-size: 14px;
 }
 
@@ -700,7 +700,7 @@ export default {
   padding-top: 6px;
   margin-top: 4px;
   line-height: 1.4;
-  color: #dc2626; /* 调深红色，避免偏粉 */
+  color: var(--danger-text); /* 调深红色，避免偏粉 */
   font-weight: 700;
   white-space: nowrap;
 }
@@ -718,9 +718,9 @@ export default {
 .publish-time {
   margin-top: 4px;
   padding-top: 4px;
-  border-top: 1px dashed #fecaca;
+  border-top: 1px dashed var(--danger-border);
   font-size: 11px;
-  color: #dc2626;
+  color: var(--danger-text);
   text-align: right;
   white-space: nowrap;
   overflow: hidden;

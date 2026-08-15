@@ -30,7 +30,7 @@
 .app-footer {
   padding: 24px 16px;
   background-color: transparent;
-  color: #94a3b8;
+  color: var(--text-faint);
   font-size: 13px;
   text-align: center;
   margin-top: 40px;
@@ -53,11 +53,11 @@
 }
 
 .divider {
-  color: #cbd5e1;
+  color: var(--text-faint);
 }
 
 .footer-icp a {
-  color: #94a3b8;
+  color: var(--text-faint);
   text-decoration: none;
   transition: color 0.2s;
 }
@@ -66,7 +66,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #94a3b8;
+  color: var(--text-faint);
   text-decoration: none;
   transition: color 0.2s;
 }
@@ -79,12 +79,12 @@
 }
 
 .footer-icp a:hover {
-  color: #64748b;
+  color: var(--text-muted);
   text-decoration: underline;
 }
 
 .footer-police a:hover {
-  color: #64748b;
+  color: var(--text-muted);
   text-decoration: underline;
 }
 

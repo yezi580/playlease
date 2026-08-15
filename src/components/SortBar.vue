@@ -143,7 +143,7 @@ export default {
   padding: 0px 20px 10px; /* 彻底去掉包裹层的顶部内边距 */
   box-sizing: border-box;
   background: transparent; /* 去掉排序栏自身的白色背景，融入全局透明吸顶 */
-  border-bottom: 1px solid rgba(226, 232, 240, 0.4); /* 极浅的底边框 */
+  border-bottom: 1px solid var(--border-color); /* 极浅的底边框 */
   box-shadow: none; /* 去掉多余的阴影 */
   margin-bottom: 0;
 }
@@ -183,7 +183,7 @@ export default {
   gap: 8px;
   border: 1px solid rgba(15, 23, 42, 0.24);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--bg-card);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
   color: var(--text-main);
   font-size: 14px;
@@ -194,7 +194,7 @@ export default {
 
 .sort-trigger:hover {
   border-color: rgba(15, 23, 42, 0.34);
-  background: #f8fafc;
+  background: var(--bg-subtle);
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
   color: var(--text-main);
   transform: translateY(-1px);
@@ -224,12 +224,12 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8; /* 默认未选中时箭头的浅灰色 */
+  color: var(--text-faint); /* 默认未选中时箭头的浅灰色 */
   margin-left: -2px;
 }
 
 .sort-trigger:hover .sort-arrows {
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .sort-trigger.active .sort-arrows {
@@ -267,7 +267,7 @@ export default {
   padding: 0 36px 0 16px;
   border-radius: 21px;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #ffffff;
+  background: var(--bg-card);
   color: var(--text-main);
   outline: none;
   font-size: 13px;
@@ -276,7 +276,7 @@ export default {
 }
 
 .listing-search-input::placeholder {
-  color: #94a3b8;
+  color: var(--text-faint);
 }
 
 .listing-search-input:focus {
@@ -296,7 +296,7 @@ export default {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #94a3b8;
+  color: var(--text-faint);
   cursor: pointer;
   transition: all 0.2s ease;
 }

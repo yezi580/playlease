@@ -1775,14 +1775,14 @@ export default {
 
 .profile-user-card,
 .profile-content {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
 }
 
 .profile-placeholder-card,
 .profile-panel-card {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 16px;
 }
 
@@ -1793,21 +1793,21 @@ export default {
   gap: 16px;
   padding: 16px 20px;
   margin-bottom: 16px;
-  border: 1px solid #fcd34d;
+  border: 1px solid var(--warning-border);
   border-radius: 14px;
-  background: #fffbeb;
+  background: var(--warning-bg);
 }
 
 .profile-onboarding-alert-content strong {
   display: block;
-  color: #92400e;
+  color: var(--warning-text);
   font-size: 15px;
   margin-bottom: 4px;
 }
 
 .profile-onboarding-alert-content p {
   margin: 0;
-  color: #b45309;
+  color: var(--warning-text);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1836,7 +1836,7 @@ export default {
 .profile-user-label {
   margin: 0 0 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1844,7 +1844,7 @@ export default {
 .profile-user-card h2,
 .profile-placeholder-card h4 {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .profile-user-title {
@@ -1874,7 +1874,7 @@ export default {
   border: none;
   background: none;
   padding: 0;
-  color: #2563eb;
+  color: var(--info-strong);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -1882,7 +1882,7 @@ export default {
 
 .profile-login-link:hover,
 .profile-login-btn:hover {
-  color: #1d4ed8;
+  color: var(--info-text);
 }
 
 .profile-login-btn {
@@ -1915,10 +1915,10 @@ export default {
   gap: 10px;
   width: 100%;
   padding: 14px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 14px;
-  background: #fff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-regular);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1927,14 +1927,14 @@ export default {
 }
 
 .profile-nav-item:hover {
-  border-color: #c7d2fe;
-  color: #1d4ed8;
+  border-color: var(--info-border);
+  color: var(--info-text);
 }
 
 .profile-nav-item.active {
-  border-color: #1d4ed8;
-  background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
-  color: #1d4ed8;
+  border-color: var(--info-strong);
+  background: linear-gradient(135deg, var(--info-bg) 0%, var(--info-bg-strong) 100%);
+  color: var(--info-text);
 }
 
 .profile-nav-label-wrap {
@@ -1954,7 +1954,7 @@ export default {
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: #dc2626;
+  background: var(--danger-strong);
   box-shadow: 0 0 0 2px #fff;
 }
 
@@ -1965,15 +1965,15 @@ export default {
 }
 
 .profile-nav-logout {
-  color: #ef4444;
-  border-color: #fecaca;
-  background: #fef2f2;
+  color: var(--danger);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
 }
 
 .profile-nav-logout:hover {
-  border-color: #fca5a5;
-  color: #dc2626;
-  background: #fee2e2;
+  border-color: var(--danger-border);
+  color: var(--danger-text);
+  background: var(--danger-bg-strong);
 }
 
 .profile-nav-items-wrapper {
@@ -2082,9 +2082,9 @@ export default {
 .order-role-tab,
 .order-filter-tab,
 .order-page-btn {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-regular);
   border-radius: 8px;
   padding: 6px 12px;
   font-size: 14px;
@@ -2096,16 +2096,16 @@ export default {
 .order-role-tab:hover,
 .order-filter-tab:hover,
 .order-page-btn:not(:disabled):hover {
-  border-color: #c7d2fe;
-  color: #1d4ed8;
+  border-color: var(--info-border);
+  color: var(--info-text);
 }
 
 .order-role-tab.active,
 .order-filter-tab.active,
 .order-page-btn.active {
-  border-color: #1d4ed8;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: var(--info-strong);
+  background: var(--info-bg);
+  color: var(--info-text);
 }
 
 .order-filter-count {
@@ -2117,7 +2117,7 @@ export default {
 .profile-empty {
   padding: 28px 12px;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .invite-panel {
@@ -2132,21 +2132,21 @@ export default {
 
 .invite-intro-card {
   padding: 12px 16px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
   border-radius: 8px;
 }
 
 .invite-intro-card p {
   margin: 0;
-  color: #1e40af;
+  color: var(--info-text);
   font-size: 14px;
   line-height: 1.6;
 }
 
 .invite-rule-card p {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -2157,14 +2157,14 @@ export default {
   flex-wrap: wrap;
   gap: 12px;
   padding: 12px 16px;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
   border-radius: 8px;
 }
 
 .invite-cashout-notice p {
   margin: 0;
-  color: #9a3412;
+  color: var(--warning-text);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -2172,20 +2172,20 @@ export default {
 @media (min-width: 961px) {
   .invite-rule-card {
     padding: 14px 20px;
-    background: #f9fafb;
+    background: var(--bg-subtle);
     border-radius: 12px;
   }
 }
 
 .invite-panel-title {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
   font-size: 22px;
 }
 
 .invite-panel-subtitle {
   margin: 8px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   line-height: 1.7;
 }
 
@@ -2197,9 +2197,9 @@ export default {
 
 .invite-summary-card,
 .invite-order-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
-  background: #fff;
+  background: var(--bg-card);
 }
 
 .invite-summary-card {
@@ -2227,13 +2227,13 @@ export default {
 
 .invite-summary-title h4 {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
   font-size: 18px;
 }
 
 .invite-summary-label {
   display: block;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -2244,29 +2244,29 @@ export default {
 }
 
 .invite-summary-stack span {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 .invite-summary-card strong {
   display: block;
-  color: #111827;
+  color: var(--text-main);
   font-size: 24px;
 }
 
 .invite-summary-card--full strong {
-  color: #10b981;
+  color: var(--success);
 }
 
 .invite-summary-card .invite-summary-code {
   display: block;
-  color: #60a5fa;
+  color: var(--info);
   letter-spacing: 0.08em;
 }
 
 .invite-summary-card p {
   margin: 10px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   line-height: 1.7;
 }
 
@@ -2280,23 +2280,23 @@ export default {
 .invite-bind-input {
   flex: 1;
   min-height: 44px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   padding: 0 14px;
-  background: #f9fafb;
-  color: #111827;
+  background: var(--bg-subtle);
+  color: var(--text-main);
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .invite-bind-input::placeholder {
-  color: #9ca3af;
+  color: var(--text-faint);
   font-size: 13px;
 }
 
 .invite-bind-input:focus {
-  border-color: #60a5fa;
+  border-color: var(--info-border);
   box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
 }
 
@@ -2321,12 +2321,12 @@ export default {
 
 .invite-order-section-header h4 {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
   font-size: 18px;
 }
 
 .invite-order-section-header span {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -2355,13 +2355,13 @@ export default {
 
 .invite-order-card h4 {
   margin: 0 0 8px;
-  color: #111827;
+  color: var(--text-main);
   font-size: 18px;
 }
 
 .invite-order-card p {
   margin: 6px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -2374,17 +2374,17 @@ export default {
 }
 
 .invite-order-amounts strong {
-  color: #10b981;
+  color: var(--success);
   font-size: 18px;
 }
 
 .invite-order-amounts span {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .profile-error {
-  color: #b91c1c;
+  color: var(--danger-text-strong);
 }
 
 .order-list,
@@ -2400,9 +2400,9 @@ export default {
   gap: 20px;
   align-items: stretch;
   padding: 20px;
-  border: 1px solid #f3f4f6;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
-  background: #fff;
+  background: var(--bg-card);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
@@ -2412,7 +2412,7 @@ export default {
 .listing-item:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  border-color: #e5e7eb;
+  border-color: var(--border-color);
 }
 
 .order-cover,
@@ -2424,7 +2424,7 @@ export default {
   aspect-ratio: 16 / 9;
   border-radius: 12px;
   overflow: hidden;
-  background: #eef2f7;
+  background: var(--bg-subtle);
 }
 
 .order-cover img,
@@ -2441,7 +2441,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -2471,14 +2471,14 @@ export default {
 .order-title-row h4 {
   margin: 0;
   font-size: 20px;
-  color: #111827;
+  color: var(--text-main);
   word-break: break-all;
 }
 
 .order-subtitle {
   margin: 0;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .order-status,
@@ -2506,8 +2506,8 @@ export default {
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #fff7ed;
-  color: #c2410c;
+  background: var(--warning-bg);
+  color: var(--warning-text);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
@@ -2515,49 +2515,49 @@ export default {
 }
 
 .status-pending_payment {
-  background: #fffbeb;
-  color: #b45309;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .status-in_progress,
 .status-paid,
 .status-settlement_pending,
 .status-rented {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--info-bg);
+  color: var(--info-text);
 }
 
 .status-completed,
 .status-active {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--success-bg);
+  color: var(--success-text-dark);
 }
 
 .status-support_handling,
 .status-pending_review,
 .status-failed,
 .status-rejected {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--danger-bg);
+  color: var(--danger-text-strong);
 }
 
 .status-cancelled,
 .status-inactive,
 .status-sold_out {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--bg-page);
+  color: var(--text-regular);
 }
 
 .status-pending,
 .status-processing {
-  background: #fffbeb;
-  color: #b45309;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .status-verified,
 .status-success {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--success-bg);
+  color: var(--success-text-dark);
 }
 
 .order-meta-grid,
@@ -2571,7 +2571,7 @@ export default {
 .order-meta-grid p,
 .listing-meta-grid p {
   margin: 0;
-  color: #374151;
+  color: var(--text-regular);
   font-size: 13px;
 }
 
@@ -2587,7 +2587,7 @@ export default {
 .listing-meta-grid span {
   display: inline-block;
   min-width: 72px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .order-actions,
@@ -2601,10 +2601,10 @@ export default {
 }
 
 .order-action-btn {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: #fff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-regular);
   padding: 8px 12px;
   cursor: pointer;
   font-size: 13px;
@@ -2613,13 +2613,13 @@ export default {
 }
 
 .order-action-btn:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background: var(--bg-page);
+  border-color: var(--border-strong);
 }
 
 .order-action-btn:active {
   transform: scale(0.96);
-  background: #e5e7eb;
+  background: var(--bg-page);
 }
 
 .order-action-btn.primary {
@@ -2638,32 +2638,32 @@ export default {
 }
 
 .order-action-btn.danger {
-  border-color: #fca5a5;
-  background: #fff;
-  color: #ef4444;
+  border-color: var(--danger-border);
+  background: var(--bg-card);
+  color: var(--danger);
 }
 
 .order-action-btn.danger:hover {
-  background: #fef2f2;
-  border-color: #ef4444;
+  background: var(--danger-bg);
+  border-color: var(--danger);
 }
 
 .order-action-btn.danger:active {
-  background: #fecdd3;
+  background: var(--danger-bg-strong);
 }
 
 .order-action-btn.ghost {
-  background: #fff;
-  border-color: #e5e7eb;
+  background: var(--bg-card);
+  border-color: var(--border-color);
 }
 
 .order-action-btn.ghost:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
 }
 
 .order-action-btn.ghost:active {
-  background: #e2e8f0;
+  background: var(--bg-subtle);
 }
 
 .order-pagination {
@@ -2680,7 +2680,7 @@ export default {
 }
 
 .order-page-summary {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -2690,14 +2690,14 @@ export default {
 
 .profile-placeholder-card p {
   margin: 10px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   line-height: 1.8;
 }
 
 .feedback-form-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 18px;
-  background: #fff;
+  background: var(--bg-card);
   padding: 20px;
 }
 
@@ -2720,7 +2720,7 @@ export default {
 }
 
 .feedback-count {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -2731,17 +2731,17 @@ export default {
 }
 
 .feedback-field span {
-  color: #374151;
+  color: var(--text-regular);
   font-size: 14px;
   font-weight: 600;
 }
 
 .feedback-select,
 .feedback-textarea {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  background: #fff;
-  color: #111827;
+  background: var(--bg-card);
+  color: var(--text-main);
 }
 
 .feedback-select {
@@ -2785,7 +2785,7 @@ export default {
     margin-bottom: -16px;
     padding-top: 12px;
     padding-bottom: 16px;
-    background: #f3f4f6;
+    background: var(--bg-page);
   }
 
   @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
@@ -2811,8 +2811,8 @@ export default {
     width: 100%;
     overflow-x: hidden;
     padding: 0 6px;
-    background: #fff;
-    border: 1px solid #e5e7eb;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     border-radius: 16px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -2849,7 +2849,7 @@ export default {
     justify-content: center;
     background: transparent;
     border: none;
-    color: #6b7280;
+    color: var(--text-muted);
     padding: 0 4px;
     height: 56px;
     cursor: pointer;
@@ -2864,7 +2864,7 @@ export default {
 
   .profile-nav-arrow:hover,
   .profile-nav-arrow:active {
-    color: #111827;
+    color: var(--text-main);
   }
 
   .profile-nav-item {
@@ -2884,14 +2884,14 @@ export default {
     box-shadow: none !important;
     white-space: nowrap;
     flex-shrink: 0;
-    color: #6b7280 !important;
+    color: var(--text-muted) !important;
     font-size: 14px;
     font-weight: 500;
     transition: color 0.2s ease;
   }
 
   .profile-nav-item.active {
-    color: #111827 !important;
+    color: var(--text-main) !important;
     font-weight: 600;
   }
 
@@ -2937,7 +2937,7 @@ export default {
   }
 
   .profile-nav-logout {
-    color: #ef4444 !important;
+    color: var(--danger) !important;
   }
 
   .profile-content {
@@ -3062,7 +3062,7 @@ export default {
   .order-meta-grid .meta-value,
   .listing-meta-grid .meta-value {
     min-width: 0;
-    color: #374151;
+    color: var(--text-regular);
     font-weight: 500;
     line-height: 1.4;
     overflow-wrap: anywhere;

@@ -484,15 +484,15 @@ async function handleBindCard() {
   display: flex;
   align-items: center;
   margin-bottom: 24px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 16px;
-  background: #fff;
+  background: var(--bg-card);
 }
 
 .wallet-summary-grid > div {
   flex: 1;
   padding: 24px;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--border-color);
   transition: background-color 0.2s ease;
 }
 
@@ -501,12 +501,12 @@ async function handleBindCard() {
 }
 
 .wallet-summary-grid > div:hover {
-  background-color: #f9fafb;
+  background-color: var(--bg-subtle);
 }
 
 .wallet-summary-caption {
   display: block;
-  color: #374151;
+  color: var(--text-regular);
   font-size: 13px;
   font-weight: 600;
 }
@@ -514,12 +514,12 @@ async function handleBindCard() {
 .wallet-summary-minor {
   display: block;
   margin-top: 8px;
-  color: #111827;
+  color: var(--text-main);
   font-size: 24px;
 }
 
 .wallet-summary-minor--highlight {
-  color: #10b981;
+  color: var(--success);
 }
 
 .wallet-cashout-notice {
@@ -528,31 +528,31 @@ async function handleBindCard() {
   gap: 10px;
   padding: 14px 16px;
   margin-bottom: 16px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
 }
 
 .wallet-cashout-info p {
   margin: 0;
-  color: #374151;
+  color: var(--text-regular);
   font-size: 13px;
   line-height: 1.6;
 }
 
 .wallet-cashout-hint {
   font-size: 12px !important;
-  color: #6b7280 !important;
+  color: var(--text-muted) !important;
 }
 
 .wallet-cashout-balance {
   font-size: 14px !important;
-  color: #374151 !important;
+  color: var(--text-regular) !important;
 }
 
 .wallet-cashout-balance strong {
   font-size: 18px;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .wallet-cashout-form {
@@ -565,17 +565,17 @@ async function handleBindCard() {
   flex: 1;
   max-width: 200px;
   padding: 7px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font-size: 14px;
 }
 
 .wallet-form-success {
-  color: #15803d;
+  color: var(--success-text-dark);
   font-size: 13px;
   padding: 8px 12px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
   border-radius: 6px;
 }
 
@@ -589,15 +589,15 @@ async function handleBindCard() {
 
 .wallet-step-card {
   padding: 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 14px;
-  background: #fff;
+  background: var(--bg-card);
   transition: opacity 0.2s ease;
 }
 
 .wallet-step-card--done {
-  border-color: #d1fae5;
-  background: #f0fdf4;
+  border-color: var(--success-border);
+  background: var(--success-bg);
 }
 
 .wallet-step-card--disabled {
@@ -612,7 +612,7 @@ async function handleBindCard() {
 
 .wallet-step-header h4 {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
   font-size: 18px;
 }
 
@@ -623,45 +623,45 @@ async function handleBindCard() {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-page);
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
 }
 
 .wallet-step-badge--done {
-  background: #10b981;
+  background: var(--success);
   color: #fff;
 }
 
 .wallet-step-badge--locked {
-  background: #f3f4f6;
-  color: #d1d5db;
+  background: var(--bg-page);
+  color: var(--text-faint);
 }
 
 .wallet-step-desc {
   margin: 8px 0 0 40px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .wallet-step-done {
   margin: 12px 0 0 40px;
-  color: #059669;
+  color: var(--success-text-dark);
   font-size: 14px;
   font-weight: 600;
 }
 
 .wallet-step-locked {
   margin: 12px 0 0 40px;
-  color: #9ca3af;
+  color: var(--text-faint);
   font-size: 14px;
 }
 
 .wallet-form-error {
-  color: #dc2626;
+  color: var(--danger-text);
   font-size: 13px;
 }
 
@@ -684,7 +684,7 @@ async function handleBindCard() {
 }
 
 .wallet-form-field span {
-  color: #374151;
+  color: var(--text-regular);
   font-size: 13px;
   font-weight: 600;
 }
@@ -692,11 +692,11 @@ async function handleBindCard() {
 .wallet-form-field input,
 .wallet-form-field select {
   min-height: 44px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   padding: 0 14px;
-  background: #fff;
-  color: #111827;
+  background: var(--bg-card);
+  color: var(--text-main);
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -704,14 +704,14 @@ async function handleBindCard() {
 
 .wallet-form-field input:focus,
 .wallet-form-field select:focus {
-  border-color: #60a5fa;
+  border-color: var(--info-border);
   box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
 }
 
 .wallet-form-field input:disabled,
 .wallet-form-field select:disabled {
-  background: #f8fafc;
-  color: #9ca3af;
+  background: var(--bg-subtle);
+  color: var(--text-faint);
   cursor: not-allowed;
 }
 
@@ -732,7 +732,7 @@ async function handleBindCard() {
 }
 
 .order-action-btn.ghost:hover:not(:disabled) {
-  background: #f1f5f9;
+  background: var(--bg-subtle);
 }
 
 .wallet-action-card {
@@ -748,7 +748,7 @@ async function handleBindCard() {
 
 .wallet-action-header h4 {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
   font-size: 18px;
 }
 
@@ -761,7 +761,7 @@ async function handleBindCard() {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--border-color);
   padding-bottom: 12px;
 }
 
@@ -769,7 +769,7 @@ async function handleBindCard() {
   padding: 8px 16px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 15px;
   font-weight: 600;
   border-radius: 8px;
@@ -778,13 +778,13 @@ async function handleBindCard() {
 }
 
 .wallet-tab-btn:hover {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--bg-page);
+  color: var(--text-regular);
 }
 
 .wallet-tab-btn.active {
-  background: #f3f4f6;
-  color: #111827;
+  background: var(--bg-page);
+  color: var(--text-main);
 }
 
 .wallet-ledger-list {
@@ -799,8 +799,8 @@ async function handleBindCard() {
   gap: 16px;
   padding: 16px;
   border-radius: 14px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -812,7 +812,7 @@ async function handleBindCard() {
   .wallet-summary-grid > div {
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .wallet-summary-grid > div:last-child {

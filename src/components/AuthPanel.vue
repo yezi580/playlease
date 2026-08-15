@@ -542,12 +542,12 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 40px 24px;
-  background: #f8fafc;
+  background: var(--bg-subtle);
 }
 
 .auth-card {
   width: min(400px, 100%);
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 20px;
   box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
   overflow: hidden;
@@ -566,7 +566,7 @@ export default {
 .tab-item {
   font-size: 22px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--text-main);
   position: relative;
   padding-bottom: 8px;
   transition: all 0.3s;
@@ -580,7 +580,7 @@ export default {
   transform: translateX(-50%);
   width: 24px;
   height: 4px;
-  background: #3b82f6;
+  background: var(--info);
   border-radius: 2px;
 }
 
@@ -598,36 +598,36 @@ export default {
 .input-group input {
   width: 100%;
   height: 48px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 0 16px;
   font-size: 15px;
-  color: #0f172a;
+  color: var(--text-main);
   transition: all 0.2s ease;
   outline: none;
   box-sizing: border-box;
 }
 
 .input-group input:focus {
-  background: #ffffff;
-  border-color: #3b82f6;
+  background: var(--bg-card);
+  border-color: var(--info);
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
 .input-group input::placeholder {
-  color: #94a3b8;
+  color: var(--text-faint);
 }
 
 .input-group input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background: #f1f5f9;
+  background: var(--bg-subtle);
 }
 
 .input-tip {
   margin: 8px 2px 0;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -645,8 +645,8 @@ export default {
   width: 120px;
   height: 48px;
   border: none;
-  background: #eff6ff;
-  color: #3b82f6;
+  background: var(--info-bg);
+  color: var(--info);
   border-radius: 12px;
   font-size: 14px;
   font-weight: 500;
@@ -655,12 +655,12 @@ export default {
 }
 
 .code-btn:hover:not(:disabled) {
-  background: #dbeafe;
+  background: var(--info-bg-strong);
 }
 
 .code-btn:disabled {
-  color: #94a3b8;
-  background: #f1f5f9;
+  color: var(--text-faint);
+  background: var(--bg-subtle);
   cursor: not-allowed;
 }
 
@@ -669,7 +669,7 @@ export default {
   height: 48px;
   border: none;
   border-radius: 12px;
-  background: #3b82f6;
+  background: var(--info);
   color: #ffffff;
   font-size: 16px;
   font-weight: 600;
@@ -679,7 +679,7 @@ export default {
 }
 
 .submit-btn:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--info-strong);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
@@ -706,7 +706,7 @@ export default {
   justify-content: center;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-muted);
   cursor: pointer;
   user-select: none;
   line-height: 1.8;
@@ -723,23 +723,23 @@ export default {
 .checkmark {
   width: 16px;
   height: 16px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   margin-right: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  background: #ffffff;
+  background: var(--bg-card);
 }
 
 .agreement-label:hover input ~ .checkmark {
-  border-color: #3b82f6;
+  border-color: var(--info);
 }
 
 .agreement-label input:checked ~ .checkmark {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
+  background-color: var(--info);
+  border-color: var(--info);
 }
 
 .agreement-label input:checked ~ .checkmark::after {
@@ -755,7 +755,7 @@ export default {
 .agreement-link {
   border: none;
   background: transparent;
-  color: #3b82f6;
+  color: var(--info);
   padding: 0;
   font-size: 12px;
   cursor: pointer;
@@ -779,7 +779,7 @@ export default {
 .agreement-modal__card {
   width: min(720px, 100%);
   max-height: min(80vh, 720px);
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 20px;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
   display: flex;
@@ -793,25 +793,25 @@ export default {
   justify-content: space-between;
   gap: 16px;
   padding: 24px 24px 16px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .agreement-modal__header h3 {
   margin: 0;
   font-size: 20px;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .agreement-modal__header p {
   margin: 6px 0 0;
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .agreement-modal__close {
   border: none;
-  background: #f1f5f9;
-  color: #334155;
+  background: var(--bg-subtle);
+  color: var(--text-regular);
   border-radius: 10px;
   padding: 10px 14px;
   cursor: pointer;
@@ -830,14 +830,14 @@ export default {
 .agreement-section h4 {
   margin: 0 0 10px;
   font-size: 15px;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .agreement-paragraphs p {
   margin: 0;
   font-size: 14px;
   line-height: 1.8;
-  color: #475569;
+  color: var(--text-regular);
   text-align: justify;
   display: flex;
   align-items: flex-start;

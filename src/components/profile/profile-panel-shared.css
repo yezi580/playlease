@@ -1,6 +1,6 @@
 .profile-placeholder-card,
 .profile-panel-card {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 16px;
 }
 
@@ -11,12 +11,12 @@
 
 .profile-placeholder-card h4 {
   margin: 0;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .profile-placeholder-card p {
   margin: 10px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   line-height: 1.8;
 }
 
@@ -43,18 +43,18 @@
 .profile-empty {
   padding: 28px 12px;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .profile-error {
-  color: #b91c1c;
+  color: var(--danger-text-strong);
 }
 
 .order-action-btn {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: #fff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-regular);
   padding: 10px 14px;
   cursor: pointer;
   font-size: 14px;
@@ -74,13 +74,13 @@
 
 .order-action-btn.secondary,
 .order-action-btn.ghost {
-  background: #f8fafc;
+  background: var(--bg-subtle);
 }
 
 .order-action-btn.danger {
-  border-color: #fecaca;
-  background: #fff1f2;
-  color: #b91c1c;
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text-strong);
 }
 
 .order-status,
@@ -96,49 +96,49 @@
 }
 
 .status-pending_payment {
-  background: #fffbeb;
-  color: #b45309;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .status-in_progress,
 .status-paid,
 .status-settlement_pending,
 .status-rented {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--info-bg);
+  color: var(--info-text);
 }
 
 .status-completed,
 .status-active {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--success-bg);
+  color: var(--success-text-dark);
 }
 
 .status-support_handling,
 .status-pending_review,
 .status-failed,
 .status-rejected {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--danger-bg);
+  color: var(--danger-text-strong);
 }
 
 .status-cancelled,
 .status-inactive,
 .status-sold_out {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--bg-page);
+  color: var(--text-regular);
 }
 
 .status-pending,
 .status-processing {
-  background: #fffbeb;
-  color: #b45309;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .status-verified,
 .status-success {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--success-bg);
+  color: var(--success-text-dark);
 }
 
 @media (max-width: 960px) {

@@ -831,9 +831,9 @@ export default {
 
 <style scoped>
 .detail-wrap {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: #fff;
+  background: var(--bg-card);
   padding: 16px 20px 200px;
   max-width: 900px;
   margin: 20px auto;
@@ -846,17 +846,17 @@ export default {
 }
 
 .status-box {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: #fff;
-  color: #4b5563;
+  background: var(--bg-card);
+  color: var(--text-regular);
   padding: 16px;
 }
 
 .status-box.error {
-  border-color: #fecaca;
-  background: #fff1f2;
-  color: #b91c1c;
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text-strong);
 }
 
 .status-box.inner {
@@ -865,16 +865,16 @@ export default {
 
 .publish-section {
   margin-top: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 16px 24px;
-  background: #fafafa;
+  background: var(--bg-subtle);
 }
 
 .publish-section h3,
 .publish-section h4 {
   margin: 0 0 10px;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .form-grid {
@@ -889,7 +889,7 @@ export default {
   flex-direction: column;
   gap: 5px;
   font-size: 13px;
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .form-grid > label > span,
@@ -904,7 +904,7 @@ export default {
   align-items: center;
   gap: 12px;
   font-size: 13px;
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .inline-radio-row {
@@ -928,27 +928,27 @@ export default {
   gap: 5px;
   cursor: default;
   padding: 6px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
-  background: #f9fafb;
+  background: var(--bg-subtle);
 }
 
 .radio-label.active {
-  color: #14532d;
-  border-color: #166534;
-  background: #dcfce7;
+  color: var(--success-text-dark);
+  border-color: var(--success-text-dark);
+  background: var(--success-bg-strong);
   font-weight: 700;
 }
 
 .radio-label input[type='radio'] {
   width: auto;
-  accent-color: #166534;
+  accent-color: var(--success-text-dark);
 }
 
 .readonly-input {
-  background: #e5e7eb !important;
-  border: 1px solid #d1d5db !important;
-  color: #111827 !important;
+  background: var(--bg-page) !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text-main) !important;
   font-weight: 600;
   cursor: not-allowed;
 }
@@ -957,11 +957,11 @@ export default {
 .form-grid textarea {
   width: 80%;
   max-width: 560px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 9px 10px;
   font-size: 14px;
-  background: #fff;
+  background: var(--bg-card);
   box-sizing: border-box;
 }
 
@@ -1004,7 +1004,7 @@ export default {
 
 .time-sep,
 .hafu-unit {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -1036,10 +1036,10 @@ export default {
 
 .capsule-btn {
   padding: 8px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
-  background: #f9fafb;
-  color: #4b5563;
+  background: var(--bg-subtle);
+  color: var(--text-regular);
   font-size: 14px;
 }
 
@@ -1048,7 +1048,7 @@ export default {
 }
 
 .empty-text {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .items-table {
@@ -1070,14 +1070,14 @@ export default {
 
 .col-label {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-weight: 600;
   text-align: center;
 }
 
 .item-name {
   font-size: 14px;
-  color: #111827;
+  color: var(--text-main);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1085,7 +1085,7 @@ export default {
 
 .item-remark {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-faint);
   font-weight: 400;
   margin-top: 2px;
 }
@@ -1103,11 +1103,11 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: #f9fafb;
+  background: var(--bg-subtle);
   font-size: 14px;
-  color: #111827;
+  color: var(--text-main);
   font-weight: 600;
   min-height: 36px;
 }
@@ -1118,12 +1118,12 @@ export default {
 
 .total-label {
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .items-total-price {
-  background: #e5e7eb;
-  border-color: #d1d5db;
+  background: var(--bg-page);
+  border-color: var(--border-strong);
 }
 
 .items-table-mobile {
@@ -1135,8 +1135,8 @@ export default {
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   margin-bottom: 10px;
 }
@@ -1149,19 +1149,19 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px dashed #cbd5e1;
+  border-bottom: 1px dashed var(--border-strong);
   padding-bottom: 10px;
 }
 
 .item-name-mobile {
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .item-remark-mobile {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-faint);
   font-weight: 400;
   margin-left: 4px;
 }
@@ -1169,7 +1169,7 @@ export default {
 .item-price-mobile {
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .item-card-body {
@@ -1180,8 +1180,8 @@ export default {
 
 .item-mode-mobile {
   font-size: 13px;
-  color: #475569;
-  background: #f1f5f9;
+  color: var(--text-regular);
+  background: var(--bg-subtle);
   padding: 4px 8px;
   border-radius: 6px;
 }
@@ -1194,7 +1194,7 @@ export default {
 
 .qty-label {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .qty-val {
@@ -1202,15 +1202,15 @@ export default {
   text-align: center;
   font-size: 13px;
   padding: 4px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #fff;
-  color: #334155;
+  background: var(--bg-card);
+  color: var(--text-regular);
 }
 
 .items-total-mobile {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
+  background: var(--success-bg);
+  border-color: var(--success-border);
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
@@ -1218,11 +1218,11 @@ export default {
 }
 
 .items-total-mobile .item-name-mobile {
-  color: #166534;
+  color: var(--success-text-dark);
 }
 
 .items-total-mobile .total-price-display {
-  color: #15803d;
+  color: var(--success-text-dark);
   font-size: 16px;
 }
 
@@ -1238,10 +1238,10 @@ export default {
 }
 
 .preview-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 4px;
-  background: #fff;
+  background: var(--bg-card);
 }
 
 .preview-media-trigger {
@@ -1265,7 +1265,7 @@ export default {
   margin-top: 8px;
   border: none;
   background: transparent;
-  color: #166534;
+  color: var(--success-text-dark);
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
@@ -1284,8 +1284,8 @@ export default {
   display: flex;
   justify-content: center;
   padding: 8px 16px;
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
 }
 
@@ -1312,7 +1312,7 @@ export default {
   align-items: center;
   gap: 6px 14px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #dbeafe;
+  border-bottom: 1px solid var(--info-border);
   overflow-x: auto;
 }
 
@@ -1327,19 +1327,19 @@ export default {
 }
 
 .summary-row span {
-  color: #6b7280;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
 .summary-row em {
   font-style: normal;
-  color: #111827;
+  color: var(--text-main);
   font-size: 16px;
   font-weight: 700;
 }
 
 .summary-total {
-  color: #dc2626;
+  color: var(--danger-text);
   font-weight: 700;
   justify-self: end;
 }
@@ -1354,9 +1354,9 @@ export default {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 12px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--info-border);
   border-radius: 12px;
-  background: #f8fbff;
+  background: var(--bg-subtle);
 }
 
 .agreement-content {
@@ -1379,7 +1379,7 @@ export default {
 }
 
 .agreement-title {
-  color: #1e3a8a;
+  color: var(--info-text);
   font-size: 14px;
   font-weight: 700;
 }
@@ -1389,7 +1389,7 @@ export default {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  color: #334155;
+  color: var(--text-regular);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -1397,14 +1397,14 @@ export default {
 .agreement-check input[type='checkbox'] {
   width: 16px;
   height: 16px;
-  accent-color: #2563eb;
+  accent-color: var(--info-strong);
 }
 
 .agreement-link {
   border: none;
   padding: 0;
   background: transparent;
-  color: #2563eb;
+  color: var(--info-strong);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -1453,7 +1453,7 @@ export default {
   display: flex;
   flex-direction: column;
   border-radius: 20px;
-  background: #fff;
+  background: var(--bg-card);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
   overflow: hidden;
 }
@@ -1465,30 +1465,30 @@ export default {
   justify-content: space-between;
   gap: 16px;
   padding: 18px 22px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .agreement-modal-footer {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
   border-bottom: none;
   justify-content: flex-end;
 }
 
 .agreement-modal-header h3 {
   margin: 0;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .agreement-modal-header p {
   margin: 6px 0 0;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .agreement-close-btn {
   border: none;
   background: transparent;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 28px;
   line-height: 1;
   cursor: pointer;
@@ -1501,7 +1501,7 @@ export default {
 
 .agreement-intro {
   margin: 0 0 16px;
-  color: #475569;
+  color: var(--text-regular);
   line-height: 1.8;
 }
 
@@ -1511,13 +1511,13 @@ export default {
 
 .agreement-section h4 {
   margin: 0 0 10px;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .agreement-section ol {
   margin: 0;
   padding-left: 20px;
-  color: #475569;
+  color: var(--text-regular);
   line-height: 1.9;
 }
 

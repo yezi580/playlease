@@ -677,7 +677,7 @@ export default {
   gap: 6px;
   padding: 0 10px;
   border: 1px solid rgba(15, 23, 42, 0.24);
-  background: #ffffff;
+  background: var(--bg-card);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
   color: var(--text-main);
   cursor: pointer;
@@ -685,7 +685,7 @@ export default {
 
 .filter-trigger:hover {
   border-color: rgba(15, 23, 42, 0.34);
-  background: #f8fafc;
+  background: var(--bg-subtle);
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
   transform: translateY(-1px);
 }
@@ -806,9 +806,9 @@ export default {
   min-width: 220px;
   max-width: 280px;
   padding: 10px;
-  border: 1px solid #d8dde3;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--bg-card);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   will-change: transform, opacity; /* 提前分配 GPU 渲染层，防止首帧动画掉帧 */
 }
@@ -825,17 +825,17 @@ export default {
   align-items: center;
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: #ffffff;
-  color: #334155;
+  background: var(--bg-card);
+  color: var(--text-regular);
   font-size: 13px;
   cursor: pointer;
 }
 
 .dropdown-item:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
+  border-color: var(--border-strong);
+  background: var(--bg-subtle);
 }
 
 .dropdown-item.selected {
@@ -856,9 +856,9 @@ export default {
 .custom-input-row input {
   width: 100%;
   padding: 0 10px;
-  border: 1px solid #d8dde3;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-regular);
 }
 
 .region-picker-placeholder {
@@ -867,13 +867,13 @@ export default {
   justify-content: center;
   min-height: 36px;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--bg-subtle);
 }
 
 .region-picker-section select:disabled,
 .custom-input-row input:disabled {
   opacity: 0.55;
-  background: #f8fafc;
+  background: var(--bg-subtle);
   cursor: not-allowed;
 }
 
@@ -885,7 +885,7 @@ export default {
 }
 
 .range-separator {
-  color: #64748b;
+  color: var(--text-muted);
   font-weight: 600;
 }
 

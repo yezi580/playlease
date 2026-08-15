@@ -3,22 +3,105 @@
   --brand-primary: #10b981;
   --brand-primary-dark: #059669;
   --brand-secondary: #0f172a;
-  
+
   /* 文本颜色 */
   --text-main: #111827;
+  --text-strong: #1f2937;
   --text-regular: #374151;
   --text-muted: #6b7280;
-  
+  --text-faint: #9ca3af;
+
   /* 背景和边框 - 优化为柔和的浅灰背景，提升商业高级感 */
   --bg-page: #f3f4f6; /* 加深网页大背景，进一步拉开层次 */
   --bg-card: #ffffff; /* 卡片底色改为纯白，拉开反差 */
+  --bg-subtle: #f9fafb; /* 悬浮/次级浅色表面 */
   --border-color: #e5e7eb; /* 边框同步变淡，勾勒卡片轮廓 */
-  
+  --border-strong: #d1d5db;
+
+  /* 语义色：危险 / 信息 / 成功 / 警告（背景、边框、文字） */
+  --danger: #ef4444;
+  --danger-strong: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-bg-strong: #fee2e2;
+  --danger-border: #fecaca;
+  --danger-text: #dc2626;
+  --danger-text-strong: #b91c1c;
+
+  --info: #3b82f6;
+  --info-strong: #2563eb;
+  --info-bg: #eff6ff;
+  --info-bg-strong: #dbeafe;
+  --info-border: #bfdbfe;
+  --info-text: #1d4ed8;
+
+  --success: #10b981;
+  --success-bg: #ecfdf5;
+  --success-bg-strong: #d1fae5;
+  --success-border: #a7f3d0;
+  --success-text-dark: #047857;
+
+  --warning: #f59e0b;
+  --warning-bg: #fffbeb;
+  --warning-bg-strong: #fef3c7;
+  --warning-border: #fcd34d;
+  --warning-text: #b45309;
+
   /* 阴影 - 增加商业化层次感 */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  color-scheme: light;
+}
+
+/* 黑夜模式：覆盖语义令牌，组件无需感知当前主题 */
+html[data-theme='dark'] {
+  --text-main: #f3f4f6;
+  --text-strong: #e5e7eb;
+  --text-regular: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+
+  --bg-page: #0b101b;
+  --bg-card: #131a28;
+  --bg-subtle: #1a2334;
+  --border-color: #263349;
+  --border-strong: #3b4a66;
+
+  --danger: #f87171;
+  --danger-strong: #ef4444;
+  --danger-bg: #3b1d20;
+  --danger-bg-strong: #4e2429;
+  --danger-border: #7a2e35;
+  --danger-text: #f87171;
+  --danger-text-strong: #fca5a5;
+
+  --info: #60a5fa;
+  --info-strong: #3b82f6;
+  --info-bg: #1c2942;
+  --info-bg-strong: #24345a;
+  --info-border: #35507f;
+  --info-text: #93c5fd;
+
+  --success: #34d399;
+  --success-bg: #12291f;
+  --success-bg-strong: #1a3a2b;
+  --success-border: #1f5c40;
+  --success-text-dark: #34d399;
+
+  --warning: #fbbf24;
+  --warning-bg: #33270f;
+  --warning-bg-strong: #443616;
+  --warning-border: #7a5c1e;
+  --warning-text: #fbbf24;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+  --shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+
+  color-scheme: dark;
 }
 
 html,
@@ -29,11 +112,23 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 主题切换过渡：useTheme 在切换期间给 <html> 挂上 theme-transition 类，
+   让全页颜色统一做约 0.7s 的渐变，1s 后移除以不影响日常交互动画 */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.7s ease, background 0.7s ease, color 0.7s ease,
+    border-color 0.7s ease, fill 0.7s ease, stroke 0.7s ease,
+    box-shadow 0.7s ease, outline-color 0.7s ease !important;
+}
+
 body {
   min-width: 320px;
   background: var(--bg-page);
   color: var(--text-main);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 * {

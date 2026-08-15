@@ -493,7 +493,7 @@ function handleLogout() {
 <style scoped>
 .page {
   position: relative;
-  background: #f3f4f6;
+  background: var(--bg-page);
   min-height: 100vh;
   font-family: Arial;
   padding-left: 240px;
@@ -545,9 +545,9 @@ function handleLogout() {
   min-height: 52px;
   padding: 0 18px;
   border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-muted);
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
@@ -585,7 +585,7 @@ function handleLogout() {
 
 .action-label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -593,9 +593,9 @@ function handleLogout() {
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-muted);
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   display: flex;
@@ -662,9 +662,9 @@ function handleLogout() {
   .presale-action .home-quick-action-btn {
     width: 56px;
     height: 56px;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    color: var(--brand-primary, #10b981);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--brand-primary, var(--success));
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     animation: pulse-shadow-soft 2.5s infinite;
   }

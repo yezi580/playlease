@@ -499,8 +499,8 @@ export default {
   top: 0;
   z-index: 120;
   isolation: isolate;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-subtle) 100%);
+  border-bottom: 1px solid var(--border-color);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
 }
 
@@ -508,7 +508,7 @@ export default {
   max-width: 1400px;
   margin: 0 auto;
   padding: 24px 20px 32px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .list {
@@ -529,7 +529,7 @@ export default {
 .list-status {
   padding: 0 20px 32px;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 14px;
 }
 

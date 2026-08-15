@@ -125,21 +125,21 @@ export default {
   width: min(420px, 100%);
   padding: 24px 22px 20px;
   border-radius: 24px;
-  background: #ffffff;
+  background: var(--bg-card);
   box-shadow: 0 24px 50px rgba(15, 23, 42, 0.18);
 }
 
 .app-confirm-card h3 {
   margin: 0;
   font-size: 20px;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .app-confirm-card p {
   margin: 10px 0 0;
   font-size: 14px;
   line-height: 1.7;
-  color: #475569;
+  color: var(--text-regular);
   white-space: pre-wrap;
 }
 
@@ -150,11 +150,11 @@ export default {
 .app-confirm-input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
   font-size: 14px;
-  color: #1e293b;
-  background: #f8fafc;
+  color: var(--text-strong);
+  background: var(--bg-subtle);
   resize: vertical;
   box-sizing: border-box;
   font-family: inherit;
@@ -163,8 +163,8 @@ export default {
 
 .app-confirm-input:focus {
   outline: none;
-  border-color: #2563eb;
-  background: #ffffff;
+  border-color: var(--info-strong);
+  background: var(--bg-card);
 }
 
 .app-confirm-actions {
@@ -184,8 +184,8 @@ export default {
 }
 
 .app-confirm-btn--ghost {
-  background: #f8fafc;
-  color: #334155;
+  background: var(--bg-subtle);
+  color: var(--text-regular);
 }
 
 .app-confirm-btn--primary {
@@ -194,7 +194,7 @@ export default {
 }
 
 .app-confirm-btn--danger {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: linear-gradient(135deg, var(--danger) 0%, var(--danger-strong) 100%);
   color: #ffffff;
 }
 

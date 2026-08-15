@@ -53,7 +53,7 @@ export default {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #94a3b8; /* 改为柔和的浅色，避免满屏绿色干扰视线 */
+  color: var(--text-faint); /* 改为柔和的浅色，避免满屏绿色干扰视线 */
   display: inline-flex;
   align-items: center;
   justify-content: center;

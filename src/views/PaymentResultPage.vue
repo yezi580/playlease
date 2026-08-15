@@ -231,8 +231,8 @@ export default {
 }
 
 .payment-result-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 20px;
   padding: 28px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
@@ -257,35 +257,35 @@ export default {
 }
 
 .payment-result-hero-icon.success {
-  color: #047857;
-  background: #ecfdf5;
+  color: var(--success-text-dark);
+  background: var(--success-bg);
 }
 
 .payment-result-hero-icon.fail {
-  color: #b91c1c;
-  background: #fee2e2;
+  color: var(--danger-text-strong);
+  background: var(--danger-bg-strong);
 }
 
 .payment-result-hero-icon.pending {
-  color: #1d4ed8;
-  background: #dbeafe;
+  color: var(--info-text);
+  background: var(--info-bg-strong);
 }
 
 .payment-result-kicker {
   margin: 0 0 6px;
-  color: #047857;
+  color: var(--success-text-dark);
   font-weight: 700;
 }
 
 .payment-result-hero h2 {
   margin: 0;
   font-size: 28px;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .payment-result-subtitle {
   margin: 8px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .payment-result-summary {
@@ -293,26 +293,26 @@ export default {
   gap: 14px;
   padding: 22px;
   border-radius: 18px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
 }
 
 .payment-result-row {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  color: #374151;
+  color: var(--text-regular);
 }
 
 .payment-result-row--amount {
   padding-top: 14px;
-  border-top: 1px dashed #d1d5db;
+  border-top: 1px dashed var(--border-strong);
   align-items: center;
 }
 
 .payment-result-amount-value {
   font-size: 22px;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .payment-result-actions {
@@ -325,16 +325,16 @@ export default {
 .payment-result-status-note {
   margin: 16px 0 0;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .payment-result-btn {
   min-width: 120px;
   height: 42px;
   border-radius: 12px;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  color: #111827;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-main);
   font-weight: 600;
   cursor: pointer;
 }
