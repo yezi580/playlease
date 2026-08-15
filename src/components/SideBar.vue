@@ -24,7 +24,11 @@
       </button>
 
       <!-- 2. 我要出号（原 发布账号） -->
-      <button class="nav-item" @click="$emit('publish')">
+      <button
+        class="nav-item"
+        :class="{ active: !showAuth && currentPage === 'publish' }"
+        @click="$emit('publish')"
+      >
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
@@ -41,7 +45,11 @@
       </button>
 
       <!-- 4. 邀新赚钱 -->
-      <button class="nav-item" @click="$emit('invite')">
+      <button
+        class="nav-item"
+        :class="{ active: !showAuth && inviteActive }"
+        @click="$emit('invite')"
+      >
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M8 5h8" />
           <path d="M10 2h4a1 1 0 0 1 1 1v2H9V3a1 1 0 0 1 1-1Z" />
@@ -116,6 +124,7 @@ export default {
   name: 'SideBar',
   props: {
     currentPage: { type: String, default: 'resource' },
+    inviteActive: { type: Boolean, default: false },
     showAuth: { type: Boolean, default: false },
     isLoggedIn: { type: Boolean, default: false },
     hasUnreadMessages: { type: Boolean, default: false },

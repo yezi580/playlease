@@ -2,6 +2,7 @@
   <div class="page">
     <SideBar
       :currentPage="currentPageKey"
+      :inviteActive="isProfileInviteSection"
       :showAuth="showAuth"
       :isLoggedIn="isLoggedIn"
       :has-unread-messages="hasRegularUnreadMessages"
@@ -230,6 +231,11 @@ const {
 
 const showHomeQuickActions = computed(() => {
   return routeName.value === 'home' && !showAuth.value
+})
+
+// 邀新赚钱入口对应 profile?section=invite，需与普通个人中心区分高亮
+const isProfileInviteSection = computed(() => {
+  return !showAuth.value && routeName.value === 'profile' && String(route.query.section || '') === 'invite'
 })
 
 watch(
