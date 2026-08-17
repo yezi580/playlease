@@ -130,6 +130,14 @@ function verifyHuifuData(rawPayload = '', signature = '', publicKey = '', should
   return verifier.verify(normalizePemKey(publicKey, 'PUBLIC KEY'), normalizedSignature, 'base64')
 }
 
+function parseYuanAmountToCents(value) {
+  const amount = Number(String(value ?? '').trim())
+  if (!Number.isFinite(amount) || amount < 0) {
+    return null
+  }
+  return Math.round(amount * 100)
+}
+
 function toCentAmountYuanString(amount = 0) {
   return (Math.max(0, Number(amount || 0) || 0) / 100).toFixed(2)
 }
@@ -729,6 +737,7 @@ function createHuifuCashierProvider(config = {}) {
         callbackData.hf_seq_id || callbackData.out_ord_id || callbackData.party_order_id || callbackData.bank_order_no || ''
       ).trim(),
       status: normalizeHuifuPayStatus(callbackData.trans_stat),
+      amount: parseYuanAmountToCents(callbackData.ord_amt ?? callbackData.trans_amt),
       rawPayload: {
         ...body,
         parsed_data: callbackData
@@ -1371,6 +1380,7 @@ function createHuifuCashierProvider(config = {}) {
         transactionNo,
         providerTradeNo: String(responseData.org_hf_seq_id || responseData.hf_seq_id || '').trim(),
         status: normalizeHuifuPayStatus(responseData.trans_stat),
+        amount: parseYuanAmountToCents(responseData.ord_amt ?? responseData.trans_amt),
         rawResponse: response.rawResponse
       }
     },

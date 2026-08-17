@@ -470,6 +470,7 @@ export function createPaymentService(config = {}) {
       transactionNo,
       providerTradeNo: queryResult.providerTradeNo,
       status: queryResult.status,
+      amount: queryResult.amount,
       rawPayload: queryResult.rawResponse || queryResult
     })
   }
@@ -856,14 +857,28 @@ export function createPaymentService(config = {}) {
         }
       }
 
-      await conn.execute(
+      // 金额一致性校验：回调/查单金额必须与流水金额一致，防止错配或篡改的支付通知
+      const callbackAmount = Number(payload.amount || 0)
+      const transactionAmount = Number(transaction.amount || 0)
+      if (callbackStatus === 'paid' && callbackAmount > 0 && transactionAmount > 0 && callbackAmount !== transactionAmount) {
+        console.error('[payment-callback] amount mismatch rejected', {
+          transactionNo,
+          callbackAmount,
+          transactionAmount
+        })
+        await conn.rollback()
+        fail(400, { message: '回调金额与支付流水金额不一致，已拒绝本次回调' })
+      }
+
+      // 状态守卫：只允许从 created/pending 推进，防止并发回调互相覆盖终态
+      const [updateResult] = await conn.execute(
         `UPDATE payment_transactions
          SET status = ?,
              provider_trade_no = COALESCE(?, provider_trade_no),
              provider_payload = ?,
              paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, NOW()) ELSE paid_at END,
              updated_at = CURRENT_TIMESTAMP
-         WHERE transaction_no = ?`,
+         WHERE transaction_no = ? AND status IN ('created', 'pending')`,
         [
           callbackStatus,
           providerTradeNo || null,
@@ -872,6 +887,28 @@ export function createPaymentService(config = {}) {
           transactionNo
         ]
       )
+
+      if (Number(updateResult?.affectedRows || 0) === 0) {
+        // 并发冲突：他方已先行推进状态。已支付视为幂等成功，其余冲突拒绝并留待人工核查
+        const concurrent = await fetchPaymentTransactionByNo(conn, transactionNo)
+        if (String(concurrent?.status || '') === 'paid' && callbackStatus === 'paid') {
+          transaction = concurrent
+          await conn.commit()
+          const idempotentSync = await syncOrderPayment(transaction)
+          return {
+            ...transaction,
+            provider_payload: safeJsonParse(transaction.provider_payload, null),
+            ...idempotentSync
+          }
+        }
+        console.warn('[payment-callback] state conflict rejected', {
+          transactionNo,
+          callbackStatus,
+          currentStatus: String(concurrent?.status || 'unknown')
+        })
+        await conn.rollback()
+        fail(409, { message: '支付流水状态已被并发变更，本次回调已拒绝，请以查单结果为准' })
+      }
 
       transaction = await fetchPaymentTransactionByNo(conn, transactionNo)
       await conn.commit()
@@ -1077,8 +1114,19 @@ export function createPaymentService(config = {}) {
       if (!transaction) {
         fail(400, { message: '未找到可退款的已支付流水' })
       }
-      if (amount > Number(transaction.amount || 0)) {
-        fail(400, { message: '退款金额不能大于原支付金额' })
+      // 累计上限：历史各笔退款（未失败）合计 + 本次金额不得超过原支付金额
+      const [refundSumRows] = await conn.execute(
+        `SELECT COALESCE(SUM(amount), 0) AS refunded
+         FROM payment_refunds
+         WHERE transaction_no = ?
+           AND status IN ('pending', 'processing', 'success')`,
+        [transaction.transaction_no]
+      )
+      const alreadyRefunded = Number(refundSumRows?.[0]?.refunded || 0)
+      if (amount + alreadyRefunded > Number(transaction.amount || 0)) {
+        fail(400, {
+          message: `退款累计金额不能超过原支付金额（已退 ${alreadyRefunded} 分，本次最多可退 ${Math.max(0, Number(transaction.amount || 0) - alreadyRefunded)} 分）`
+        })
       }
 
       refundNo = createBusinessNo('RFD')
@@ -1427,6 +1475,41 @@ export function createPaymentService(config = {}) {
     const cashAmt = Number(payload.cashAmt || 0)
     if (!cashAmt || cashAmt <= 0) {
       fail(400, { message: '取现金额必须大于0' })
+    }
+    if (!Number.isFinite(cashAmt) || Math.round(cashAmt * 100) !== cashAmt * 100) {
+      fail(400, { message: '取现金额最多两位小数' })
+    }
+    // 单笔上限：防止异常金额直接打到渠道
+    const maxEncashmentAmount = Math.max(
+      1,
+      Number(process.env.ENCASHMENT_MAX_AMOUNT_YUAN || 50000) || 50000
+    )
+    if (cashAmt > maxEncashmentAmount) {
+      fail(400, { message: `单笔取现金额不能超过 ${maxEncashmentAmount} 元` })
+    }
+    // 每日次数上限：防自动化刷提现
+    const dailyEncashmentLimit = Math.max(
+      1,
+      Number(process.env.ENCASHMENT_DAILY_LIMIT || 5) || 5
+    )
+    const [todayRows] = await pool.execute(
+      `SELECT COUNT(*) AS count FROM encashments
+       WHERE user_id = ? AND created_at >= CURDATE()`,
+      [userId]
+    )
+    const todayCount = Number(todayRows?.[0]?.count || 0)
+    if (todayCount >= dailyEncashmentLimit) {
+      fail(429, { message: `每日最多发起 ${dailyEncashmentLimit} 笔取现，请明天再试` })
+    }
+    // 余额校验：取现金额不能超过渠道可用余额（生产 Huifu 实时查询）
+    if (typeof paymentProvider?.queryBalance === 'function') {
+      const balanceResult = await paymentProvider.queryBalance({ huifuId: account.huifu_id })
+      if (balanceResult?.ok) {
+        const avlBal = Number(balanceResult.avlBal || 0)
+        if (Number.isFinite(avlBal) && cashAmt > avlBal) {
+          fail(400, { message: `取现金额超过可用余额（${avlBal.toFixed(2)} 元）` })
+        }
+      }
     }
     const cashAmtStr = cashAmt.toFixed(2)
     const intoAcctDateType = String(payload.intoAcctDateType || 'D1').trim().toUpperCase() || 'D1'
