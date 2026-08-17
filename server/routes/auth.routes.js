@@ -38,7 +38,7 @@ function isValidPhone(value = '') {
 }
 
 function isValidSmsScene(value = '') {
-  return ['login'].includes(String(value || '').trim())
+  return ['login', 'admin_login'].includes(String(value || '').trim())
 }
 
 function isStrongPassword(value = '') {
@@ -400,7 +400,7 @@ export function registerAuthRoutes(deps) {
       const verifyResult = await smsCodeService.verifyCode({
         phone,
         code,
-        scene: 'login',
+        scene: 'admin_login',
         consume: true
       })
       if (!verifyResult?.ok) {
@@ -446,7 +446,10 @@ export function registerAuthRoutes(deps) {
     const scene = String(req.body?.scene || 'login').trim() || 'login'
     const captchaTicket = String(req.body?.captcha_ticket || req.body?.ticket || '').trim()
     const captchaRandstr = String(req.body?.captcha_randstr || req.body?.randstr || '').trim()
-    const requestIp = getRequestIp(req)
+    // 管理员登录 scene 的 IP 配额使用不可伪造的 req.ip（trust proxy=1 下取真实直连地址）
+    const requestIp = scene === 'admin_login'
+      ? String(req.ip || req.socket?.remoteAddress || '').trim()
+      : getRequestIp(req)
 
     if (!isValidPhone(phone)) {
       return res.status(400).json({ message: '请输入正确的11位手机号' })
@@ -474,8 +477,19 @@ export function registerAuthRoutes(deps) {
         })
       }
 
+      // 管理员登录验证码：每日单号上限收紧到 min(5, 配置值)
+      const effectiveSmsThresholds = scene === 'admin_login'
+        ? {
+            ...smsSecurityThresholds,
+            smsDailyLimitPerPhone: Math.min(
+              5,
+              Number(smsSecurityThresholds.smsDailyLimitPerPhone) || 5
+            )
+          }
+        : smsSecurityThresholds
+
       await conn.beginTransaction()
-      const ipQuotaResult = await reserveSmsIpDailyQuota(conn, requestIp, smsSecurityThresholds)
+      const ipQuotaResult = await reserveSmsIpDailyQuota(conn, requestIp, effectiveSmsThresholds)
       if (!ipQuotaResult.ok) {
         await conn.rollback()
         return res.status(429).json({
@@ -485,7 +499,7 @@ export function registerAuthRoutes(deps) {
           daily_count: Number(ipQuotaResult.dailyCount || smsSecurityThresholds.smsDailyLimitPerIp || SMS_IP_DAILY_LIMIT)
         })
       }
-      const dailyQuotaResult = await reserveSmsDailyQuota(conn, phone, scene, smsSecurityThresholds)
+      const dailyQuotaResult = await reserveSmsDailyQuota(conn, phone, scene, effectiveSmsThresholds)
       if (!dailyQuotaResult.ok) {
         await conn.rollback()
         return res.status(429).json({

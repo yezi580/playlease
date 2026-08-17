@@ -446,7 +446,7 @@ export default {
           method: 'POST',
           body: JSON.stringify({
             phone,
-            scene: 'login',
+            scene: 'admin_login',
             captcha_ticket: captchaResult.ticket,
             captcha_randstr: captchaResult.randstr
           })

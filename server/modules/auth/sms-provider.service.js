@@ -57,7 +57,8 @@ function normalizeSmsScene(scene = 'login') {
     forgotpassword: 'reset_password',
     admin_passkey_register: 'admin_passkey_register',
     passkey_register: 'admin_passkey_register',
-    adminpasskeyregister: 'admin_passkey_register'
+    adminpasskeyregister: 'admin_passkey_register',
+    admin_login: 'login'
   }
   return sceneAliasMap[normalizedScene] || 'login'
 }
