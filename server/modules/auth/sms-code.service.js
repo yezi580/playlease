@@ -81,8 +81,8 @@ function persistSmsVerificationCodeInMemory({
     createdAt: now,
     expiresAt: now + Math.max(60, Number(ttlSeconds || 0) || 300) * 1000
   })
+  // 只清空失败计数；验证锁定不随新码下发而解除（与 Redis 实现保持一致）
   memorySmsVerifyFailStore.delete(storeKey)
-  memorySmsVerifyLockStore.delete(storeKey)
   return { ok: true, retryAfterSeconds: 0 }
 }
 

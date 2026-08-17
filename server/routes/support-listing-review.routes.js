@@ -270,7 +270,7 @@ export function registerSupportListingReviewRoutes(deps) {
       await invalidateListingDetailCache(listingId)
 
       const updatedListing = await getListingSummaryById(pool, listingId)
-      res.json({ message: '商品审核已通过', listing: updatedListing })
+      // 审计先写后响应：保证审核操作的日志先于响应落库
       await recordOperationSafely({
         operatorUserId: req.auth?.userId,
         operatorName: req.auth?.username,
@@ -283,6 +283,8 @@ export function registerSupportListingReviewRoutes(deps) {
         afterSnapshot: updatedListing,
         remark: remark || '审核通过'
       })
+
+      res.json({ message: '商品审核已通过', listing: updatedListing })
     } catch (error) {
       console.error('[support] approve listing failed', error)
       res.status(500).json({ message: '审核通过失败' })

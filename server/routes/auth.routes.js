@@ -348,6 +348,7 @@ export function registerAuthRoutes(deps) {
     app,
     pool,
     authLimiter,
+    authIpLimiter,
     authRequired,
     authenticatedReadLimiter,
     issueAuthSession,
@@ -381,7 +382,7 @@ export function registerAuthRoutes(deps) {
     res.status(410).json({ message: '注册功能已下线，请使用验证码直接登录' })
   })
 
-  app.post('/api/admin/login', authLimiter, async (req, res) => {
+  app.post('/api/admin/login', authIpLimiter, authLimiter, async (req, res) => {
     const phone = String(req.body?.phone || '').trim()
     const code = String(req.body?.code || '').trim()
 
@@ -436,7 +437,7 @@ export function registerAuthRoutes(deps) {
     res.status(410).json({ message: '密码登录已下线，请使用验证码登录' })
   })
 
-  app.post('/api/auth/sms/send', authLimiter, async (req, res) => {
+  app.post('/api/auth/sms/send', authIpLimiter, authLimiter, async (req, res) => {
     const phone = String(req.body?.phone || '').trim()
     const scene = String(req.body?.scene || 'login').trim() || 'login'
     const captchaTicket = String(req.body?.captcha_ticket || req.body?.ticket || '').trim()
@@ -569,7 +570,7 @@ export function registerAuthRoutes(deps) {
     }
   })
 
-  app.post('/api/auth/sms/login', authLimiter, async (req, res) => {
+  app.post('/api/auth/sms/login', authIpLimiter, authLimiter, async (req, res) => {
     const phone = String(req.body?.phone || '').trim()
     const code = String(req.body?.code || '').trim()
     const inviteCode = normalizeInviteCode(req.body?.invite_code || '')

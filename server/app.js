@@ -48,7 +48,8 @@ import {
   publishLimiter,
   conversationApiLimiter,
   uploadReadLimiter,
-  uploadWriteLimiter
+  uploadWriteLimiter,
+  authIpLimiter
 } from './middleware/security.middleware.js'
 import { createSlidingWindowRateStore } from './infrastructure/rate-limit-store.js'
 import {
@@ -238,6 +239,15 @@ const ADMIN_PASSKEY_ENABLED = !['0', 'false', 'off', 'no'].includes(
 const SUPPORT_MONEY_STEP_UP_ENABLED = ['1', 'true', 'on', 'yes'].includes(
   String(process.env.SUPPORT_MONEY_STEP_UP_ENABLED ?? 'false').trim().toLowerCase()
 )
+// 开关关闭属于安全降级，必须在启动时大声告警，防止误配置后无人察觉
+if (!ADMIN_PASSKEY_ENABLED) {
+  console.warn('==================== 安全警告 ====================')
+  console.warn('[security] ADMIN_PASSKEY_ENABLED 已关闭：所有高危操作 Passkey 二次校验处于停用状态！')
+  console.warn('==================================================')
+}
+if (!SUPPORT_MONEY_STEP_UP_ENABLED) {
+  console.warn('[security] SUPPORT_MONEY_STEP_UP_ENABLED 未开启：客服资金操作暂不要求 Passkey 二次校验（客服完成绑定后应尽快开启）')
+}
 const ADMIN_PASSKEY_RP_NAME = String(process.env.PASSKEY_RP_NAME || '天蓬商行管理后台').trim() || '天蓬商行管理后台'
 const ADMIN_PASSKEY_RP_ID = String(process.env.PASSKEY_RP_ID || '').trim()
 const ADMIN_STEP_UP_POLICIES = Object.freeze({
@@ -246,8 +256,7 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     message: '用户角色变更需要完成二次校验',
     maxAgeMinutes: 15,
     requirePasskey: true,
-    requireTrustedDevice: false,
-    allowTrustedDeviceBypassPasskey: true
+    requireTrustedDevice: false
   },
   banUser: {
     action: 'ban_user',
@@ -311,16 +320,14 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     message: '安全设置修改需要完成二次校验',
     maxAgeMinutes: 5,
     requirePasskey: true,
-    requireTrustedDevice: false,
-    allowTrustedDeviceBypassPasskey: true
+    requireTrustedDevice: false
   },
   updateBusinessSettings: {
     action: 'update_business_settings',
     message: '修改平台参数需要完成二次校验',
     maxAgeMinutes: 5,
     requirePasskey: true,
-    requireTrustedDevice: false,
-    allowTrustedDeviceBypassPasskey: true
+    requireTrustedDevice: false
   },
   approveListing: {
     action: 'approve_listing',
@@ -1209,7 +1216,7 @@ function toUploadFileUrl(folderName, fileName) {
   return buildManagedUploadUrl(folderName, fileName)
 }
 
-app.get('/api/health/storage', (_req, res) => {
+app.get('/api/health/storage', authRequired, adminOnly, (_req, res) => {
   res.json({
     status: 'ok',
     storage: {
@@ -2556,6 +2563,7 @@ registerAuthRoutes({
   app,
   pool,
   authLimiter,
+  authIpLimiter,
   authRequired,
   authenticatedReadLimiter,
   issueAuthSession,

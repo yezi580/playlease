@@ -1345,13 +1345,7 @@ app.put(
       ]
     )
 
-    res.json({
-      message: '参数配置已保存',
-      settings: normalizedSettings,
-      updatedByUserId: Number(req.auth?.userId || 0) || null,
-      updatedAt: new Date().toISOString()
-    })
-
+    // 审计先写后响应：保证高危操作的日志先于响应落库
     await recordAdminOperationSafely({
       operatorUserId: req.auth?.userId,
       operatorName: req.auth?.username,
@@ -1363,6 +1357,13 @@ app.put(
       beforeSnapshot: normalizeAdminBusinessSettings(currentSettings),
       afterSnapshot: normalizedSettings,
       remark: '更新平台业务参数配置'
+    })
+
+    res.json({
+      message: '参数配置已保存',
+      settings: normalizedSettings,
+      updatedByUserId: Number(req.auth?.userId || 0) || null,
+      updatedAt: new Date().toISOString()
     })
   } catch (error) {
     console.error('[admin] business settings update failed', error)
@@ -1691,10 +1692,7 @@ app.put(
       [userId]
     )
 
-    res.json({
-      message: '用户角色已更新',
-      user: updatedRows[0]
-    })
+    // 审计先写后响应：保证高危操作的日志先于响应落库
     await recordAdminOperationSafely({
       operatorUserId: req.auth?.userId,
       operatorName: req.auth?.username,
@@ -1706,6 +1704,11 @@ app.put(
       beforeSnapshot: rows[0],
       afterSnapshot: updatedRows[0],
       remark: `角色变更为 ${nextRole}`
+    })
+
+    res.json({
+      message: '用户角色已更新',
+      user: updatedRows[0]
     })
   } catch (error) {
     console.error('[admin] update user role failed', error)
@@ -1762,10 +1765,7 @@ app.put(
       [userId]
     )
 
-    res.json({
-      message: `用户已封禁 ${days} 天`,
-      user: updatedRows[0]
-    })
+    // 审计先写后响应：保证高危操作的日志先于响应落库
     await recordAdminOperationSafely({
       operatorUserId: req.auth?.userId,
       operatorName: req.auth?.username,
@@ -1777,6 +1777,11 @@ app.put(
       beforeSnapshot: rows[0],
       afterSnapshot: updatedRows[0],
       remark: `封禁 ${days} 天`
+    })
+
+    res.json({
+      message: `用户已封禁 ${days} 天`,
+      user: updatedRows[0]
     })
   } catch (error) {
     console.error('[admin] ban user failed', error)
@@ -1816,10 +1821,7 @@ app.delete(
       [userId]
     )
 
-    res.json({
-      message: '用户封禁已解除',
-      user: updatedRows[0]
-    })
+    // 审计先写后响应：保证高危操作的日志先于响应落库
     await recordAdminOperationSafely({
       operatorUserId: req.auth?.userId,
       operatorName: req.auth?.username,
@@ -1831,6 +1833,11 @@ app.delete(
       beforeSnapshot: rows[0],
       afterSnapshot: updatedRows[0],
       remark: '解除封禁'
+    })
+
+    res.json({
+      message: '用户封禁已解除',
+      user: updatedRows[0]
     })
   } catch (error) {
     console.error('[admin] unban user failed', error)
@@ -1918,12 +1925,7 @@ app.put(
       [orderId]
     )
 
-    res.json({
-      message,
-      order: updatedRows[0],
-      outcome: result?.outcome || 'closed',
-      refundStatus: result?.refundStatus || null
-    })
+    // 审计先写后响应：保证高危操作的日志先于响应落库
     await recordAdminOperationSafely({
       operatorUserId: req.auth?.userId,
       operatorName: req.auth?.username,
@@ -1935,6 +1937,13 @@ app.put(
       beforeSnapshot: currentOrder,
       afterSnapshot: { ...updatedRows[0], outcome: result?.outcome, refundStatus: result?.refundStatus },
       remark: message
+    })
+
+    res.json({
+      message,
+      order: updatedRows[0],
+      outcome: result?.outcome || 'closed',
+      refundStatus: result?.refundStatus || null
     })
   } catch (error) {
     const errorStatus = Number(error?.status) || 500

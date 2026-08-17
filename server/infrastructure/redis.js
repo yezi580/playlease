@@ -495,7 +495,9 @@ export async function persistSmsVerificationCode({
     }),
     { EX: Math.max(60, Number(ttlSeconds || 0) || SMS_CODE_TTL_SECONDS) }
   )
-  await client.del(verifyFailKey, verifyLockKey)
+  // 只清空失败计数；验证锁定不随新码下发而解除——
+  // 否则攻击者可反复申请新码重置锁定，把每日爆破空间从 5 次放大到 50 次
+  await client.del(verifyFailKey)
 
   return { ok: true, retryAfterSeconds: 0 }
 }

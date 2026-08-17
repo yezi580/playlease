@@ -55,6 +55,7 @@ const publishLimiterStore = await createExpressRateLimitStore('publish')
 const conversationLimiterStore = await createExpressRateLimitStore('conversation')
 const uploadReadLimiterStore = await createExpressRateLimitStore('upload-read')
 const uploadWriteLimiterStore = await createExpressRateLimitStore('upload-write')
+const authIpLimiterStore = await createExpressRateLimitStore('auth-ip')
 
 function createLimiter({
   store,
@@ -114,6 +115,19 @@ export const authLimiter = createLimiter({
   max: readPositiveIntEnv('AUTH_LIMIT_MAX_PER_5_MIN', 10),
   keyGenerator: buildPhoneScopedKey,
   message: '操作过于频繁，请5分钟后再试'
+})
+
+/**
+ * 认证接口按 IP 限流：
+ * - authLimiter 按手机号计数，攻击者轮换伪造手机号即可绕开
+ * - 本限流器按真实 IP（req.ip）封顶认证相关请求总量，堵住撞库/爆破的请求量
+ */
+export const authIpLimiter = createLimiter({
+  store: authIpLimiterStore,
+  windowMs: 5 * 60 * 1000,
+  max: readPositiveIntEnv('AUTH_IP_LIMIT_MAX_PER_5_MIN', 30),
+  keyGenerator: buildIpKey,
+  message: '当前网络操作过于频繁，请稍后再试'
 })
 
 /**

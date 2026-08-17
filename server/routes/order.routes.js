@@ -387,6 +387,23 @@ app.get('/api/orders/:id/settlement-preview', authRequired, authenticatedReadLim
   }
 
   try {
+    // 越权防护：结算金额只对买家/卖家/被分配客服可见，防止枚举他人订单金额
+    const [accessRows] = await pool.execute(
+      `SELECT buyer_id, seller_id, support_assignee_id FROM orders WHERE id = ? LIMIT 1`,
+      [orderId]
+    )
+    const accessOrder = accessRows[0]
+    if (!accessOrder) {
+      return res.status(404).json({ message: '订单不存在' })
+    }
+    const currentUserId = Number(req.auth.userId)
+    if (
+      currentUserId !== Number(accessOrder.buyer_id)
+      && currentUserId !== Number(accessOrder.seller_id)
+      && currentUserId !== Number(accessOrder.support_assignee_id || 0)
+    ) {
+      return res.status(403).json({ message: '无权查看此订单结算信息' })
+    }
     const preview = await orderLifecycleService.buildSettlementPreview(orderId)
     res.json({
       rent_amount: normalizeOrderMoneyFields({ amount: preview.rentAmount, deposit_amount: 0 }).amount,
