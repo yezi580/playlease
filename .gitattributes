@@ -1,0 +1,2 @@
+# 部署脚本必须保持 LF，否则传到 Linux 后 bash 无法执行
+*.sh text eol=lf
