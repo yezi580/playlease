@@ -70,7 +70,7 @@ export function registerAdminRoutes(deps) {
     markAdminStepUpChallengeConsumed,
     updateAdminPasskeyUsage
   } = authModule
-  const PASSKEY_SELF_SERVICE_ROLES = new Set(['admin'])
+  const PASSKEY_SELF_SERVICE_ROLES = new Set(['admin', 'support'])
   const ADMIN_PASSKEY_REGISTER_SMS_SCENE = 'admin_passkey_register'
 
   // 审计/审核摘要：与管理员、客服共用同一套实现（写入同一张 admin_operation_logs）
@@ -597,8 +597,12 @@ app.get('/api/admin/profile', authRequired, adminOnly, async (req, res) => {
   }
 })
 
-app.get('/api/admin/passkeys', authRequired, adminOnly, async (req, res) => {
+app.get('/api/admin/passkeys', authRequired, async (req, res) => {
   try {
+    const authUser = await fetchAuthUserById(req.auth.userId)
+    if (!authUser || !PASSKEY_SELF_SERVICE_ROLES.has(String(authUser.role || '').trim())) {
+      return res.status(404).json({ message: '当前账号不支持 Passkey 绑定' })
+    }
     const passkeys = await listAdminPasskeysByUserId(req.auth.userId)
     res.json({
       list: passkeys.map((item) => ({
@@ -622,7 +626,6 @@ app.get('/api/admin/passkeys', authRequired, adminOnly, async (req, res) => {
 app.delete(
   '/api/admin/passkeys/:id',
   authRequired,
-  adminOnly,
   requireStepUpAuth(ADMIN_STEP_UP_POLICIES.deletePasskey),
   async (req, res) => {
     const passkeyId = Math.max(0, Number(req.params?.id || 0) || 0)
@@ -684,11 +687,11 @@ app.delete(
   }
 )
 
-app.post('/api/admin/passkeys/register/sms/send', authRequired, adminOnly, async (req, res) => {
+app.post('/api/admin/passkeys/register/sms/send', authRequired, async (req, res) => {
   try {
     const authUser = await fetchAuthUserById(req.auth.userId)
-    if (!authUser || String(authUser.role || '').trim() !== 'admin') {
-      return res.status(404).json({ message: '当前账号不支持管理员 Passkey 绑定' })
+    if (!authUser || !PASSKEY_SELF_SERVICE_ROLES.has(String(authUser.role || '').trim())) {
+      return res.status(404).json({ message: '当前账号不支持 Passkey 绑定' })
     }
     if (!isValidAdminSmsPhone(authUser.phone)) {
       return res.status(400).json({ message: '当前管理员账号未绑定有效手机号，无法发送验证码' })
@@ -757,9 +760,9 @@ app.post('/api/admin/passkeys/register/options', authRequired, async (req, res) 
     if (!authUser || !PASSKEY_SELF_SERVICE_ROLES.has(String(authUser.role || '').trim())) {
       return res.status(404).json({ message: '当前账号不支持 Passkey 绑定' })
     }
-    if (String(authUser.role || '').trim() === 'admin') {
+    if (PASSKEY_SELF_SERVICE_ROLES.has(String(authUser.role || '').trim())) {
       if (!isValidAdminSmsPhone(authUser.phone)) {
-        return res.status(400).json({ message: '当前管理员账号未绑定有效手机号，无法完成短信校验' })
+        return res.status(400).json({ message: '当前账号未绑定有效手机号，无法完成短信校验' })
       }
       if (!isValidAdminSmsCode(smsCode)) {
         return res.status(400).json({ message: '请输入正确的短信验证码' })

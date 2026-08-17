@@ -8,6 +8,8 @@ export function registerSupportRoutes(deps) {
     pool,
     authRequired,
     supportOnly,
+    requireStepUpAuth,
+    ADMIN_STEP_UP_POLICIES,
     authenticatedReadLimiter,
     orderWriteLimiter,
     normalizeOrderMoneyFields,
@@ -765,7 +767,7 @@ app.put('/api/support/orders/:id/note', authRequired, supportOnly, orderWriteLim
   }
 })
 
-app.put('/api/support/orders/:id/cancel', authRequired, supportOnly, orderWriteLimiter, async (req, res) => {
+app.put('/api/support/orders/:id/cancel', authRequired, supportOnly, requireStepUpAuth(ADMIN_STEP_UP_POLICIES.supportCancelOrder), orderWriteLimiter, async (req, res) => {
   const orderId = Number(req.params?.id)
   const note = sanitizeSupportNote(req.body?.note)
 
@@ -837,7 +839,7 @@ app.put('/api/support/orders/:id/return-to-settlement', authRequired, supportOnl
   }
 })
 
-app.put('/api/support/orders/:id/freeze-funds', authRequired, supportOnly, orderWriteLimiter, async (req, res) => {
+app.put('/api/support/orders/:id/freeze-funds', authRequired, supportOnly, requireStepUpAuth(ADMIN_STEP_UP_POLICIES.supportFreezeFunds), orderWriteLimiter, async (req, res) => {
   const orderId = Number(req.params?.id)
   const freezeReason = sanitizeSupportNote(req.body?.freezeReason)
 
@@ -861,7 +863,7 @@ app.put('/api/support/orders/:id/freeze-funds', authRequired, supportOnly, order
   }
 })
 
-app.put('/api/support/orders/:id/release-funds', authRequired, supportOnly, orderWriteLimiter, async (req, res) => {
+app.put('/api/support/orders/:id/release-funds', authRequired, supportOnly, requireStepUpAuth(ADMIN_STEP_UP_POLICIES.supportReleaseFunds), orderWriteLimiter, async (req, res) => {
   const orderId = Number(req.params?.id)
   const note = sanitizeSupportNote(req.body?.note)
 
@@ -885,7 +887,7 @@ app.put('/api/support/orders/:id/release-funds', authRequired, supportOnly, orde
   }
 })
 
-app.post('/api/support/orders/:id/reconcile-funds', authRequired, supportOnly, orderWriteLimiter, async (req, res) => {
+app.post('/api/support/orders/:id/reconcile-funds', authRequired, supportOnly, requireStepUpAuth(ADMIN_STEP_UP_POLICIES.supportReconcileFunds), orderWriteLimiter, async (req, res) => {
   const orderId = Number(req.params?.id)
 
   if (!orderId || !Number.isFinite(orderId) || orderId < 1) {

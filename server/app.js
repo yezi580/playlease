@@ -232,6 +232,10 @@ const ADMIN_TRUSTED_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const ADMIN_PASSKEY_ENABLED = !['0', 'false', 'off', 'no'].includes(
   String(process.env.ADMIN_PASSKEY_ENABLED ?? 'true').trim().toLowerCase()
 )
+// 客服资金操作的 Passkey 二次校验开关：默认关闭，待客服账号完成 Passkey 绑定后再开启
+const SUPPORT_MONEY_STEP_UP_ENABLED = ['1', 'true', 'on', 'yes'].includes(
+  String(process.env.SUPPORT_MONEY_STEP_UP_ENABLED ?? 'false').trim().toLowerCase()
+)
 const ADMIN_PASSKEY_RP_NAME = String(process.env.PASSKEY_RP_NAME || '天蓬商行管理后台').trim() || '天蓬商行管理后台'
 const ADMIN_PASSKEY_RP_ID = String(process.env.PASSKEY_RP_ID || '').trim()
 const ADMIN_STEP_UP_POLICIES = Object.freeze({
@@ -276,7 +280,8 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     message: '删除 Passkey 需要完成二次校验',
     maxAgeMinutes: 5,
     requirePasskey: true,
-    requireTrustedDevice: false
+    requireTrustedDevice: false,
+    allowedRoles: ['admin', 'support']
   },
   trustCurrentDevice: {
     action: 'trust_current_device',
@@ -335,6 +340,56 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     maxAgeMinutes: 10,
     requirePasskey: true,
     requireTrustedDevice: false
+  },
+  supportCancelOrder: {
+    action: 'support_cancel_order',
+    message: '客服取消订单（全额退款）需要完成 Passkey 二次校验',
+    maxAgeMinutes: 10,
+    requirePasskey: true,
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: false,
+    allowedRoles: ['support'],
+    enabled: SUPPORT_MONEY_STEP_UP_ENABLED
+  },
+  supportExecuteSettlement: {
+    action: 'support_execute_settlement',
+    message: '执行分账（退款与打款）需要完成 Passkey 二次校验',
+    maxAgeMinutes: 10,
+    requirePasskey: true,
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: false,
+    allowedRoles: ['support'],
+    enabled: SUPPORT_MONEY_STEP_UP_ENABLED
+  },
+  supportFreezeFunds: {
+    action: 'support_freeze_funds',
+    message: '冻结订单资金需要完成 Passkey 二次校验',
+    maxAgeMinutes: 10,
+    requirePasskey: true,
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: false,
+    allowedRoles: ['support'],
+    enabled: SUPPORT_MONEY_STEP_UP_ENABLED
+  },
+  supportReleaseFunds: {
+    action: 'support_release_funds',
+    message: '释放订单资金需要完成 Passkey 二次校验',
+    maxAgeMinutes: 10,
+    requirePasskey: true,
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: false,
+    allowedRoles: ['support'],
+    enabled: SUPPORT_MONEY_STEP_UP_ENABLED
+  },
+  supportReconcileFunds: {
+    action: 'support_reconcile_funds',
+    message: '资金对账需要完成 Passkey 二次校验',
+    maxAgeMinutes: 10,
+    requirePasskey: true,
+    requireTrustedDevice: false,
+    allowTrustedDeviceBypassPasskey: false,
+    allowedRoles: ['support'],
+    enabled: SUPPORT_MONEY_STEP_UP_ENABLED
   }
 })
 const ADMIN_STEP_UP_POLICY_BY_ACTION = Object.freeze(

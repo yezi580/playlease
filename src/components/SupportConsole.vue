@@ -19,6 +19,84 @@
         商品审核
         <span v-if="reviewPendingCount > 0" class="desk-mode-dot">{{ reviewPendingCount }}</span>
       </button>
+      <button
+        type="button"
+        class="desk-mode-btn"
+        :class="{ 'desk-mode-btn--active': deskMode === 'security' }"
+        @click="switchToSecurityDesk"
+      >
+        安全设置
+      </button>
+    </div>
+    <div v-show="deskMode === 'security'" class="security-desk">
+      <div class="panel panel--orders security-panel">
+        <div class="panel-head">
+          <h3>Passkey 安全设置</h3>
+          <button type="button" class="ghost-btn" :disabled="passkeyLoading" @click="loadPasskeys">
+            刷新
+          </button>
+        </div>
+        <div class="security-panel-body">
+          <p class="security-tip">
+            资金相关操作（取消订单、执行分账、冻结、释放、对账）需要进行 Passkey 二次校验。
+            注册需输入发送到你登录手机号的验证码，请妥善保管绑定设备。
+          </p>
+          <ul v-if="passkeys.length" class="passkey-list">
+            <li v-for="item in passkeys" :key="`passkey-${item.id}`" class="passkey-item">
+              <div class="passkey-meta">
+                <strong>{{ item.deviceName || '未命名设备' }}</strong>
+                <span>绑定于 {{ formatPasskeyDate(item.createdAt) }}</span>
+              </div>
+              <button
+                type="button"
+                class="danger-btn"
+                :disabled="passkeyLoading"
+                @click="removePasskey(item.id)"
+              >
+                删除
+              </button>
+            </li>
+          </ul>
+          <p v-else class="security-empty">尚未绑定 Passkey</p>
+          <div class="passkey-register">
+            <div class="passkey-register-row">
+              <input
+                v-model.trim="passkeyDeviceName"
+                type="text"
+                maxlength="30"
+                placeholder="设备名称（如：办公电脑）"
+              >
+              <button
+                type="button"
+                class="ghost-btn"
+                :disabled="passkeySmsSending"
+                @click="sendPasskeySms"
+              >
+                {{ passkeySmsSending ? '发送中...' : '发送验证码' }}
+              </button>
+            </div>
+            <div class="passkey-register-row">
+              <input
+                v-model.trim="passkeySmsCode"
+                type="text"
+                maxlength="6"
+                placeholder="短信验证码"
+              >
+              <button
+                type="button"
+                class="primary-btn"
+                :disabled="passkeyRegistering"
+                @click="registerPasskey"
+              >
+                {{ passkeyRegistering ? '注册中...' : '注册 Passkey' }}
+              </button>
+            </div>
+            <p v-if="passkeySmsMaskedPhone" class="security-hint">
+              验证码已发送至 {{ passkeySmsMaskedPhone }}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
     <div v-show="deskMode === 'tickets'">
     <div class="toolbar">
@@ -510,6 +588,13 @@
 <script>
 import { io } from 'socket.io-client'
 import { apiFetch } from '../utils/api.js'
+import {
+  stepUpFetch,
+  listSupportPasskeys,
+  sendSupportPasskeySmsCode,
+  registerSupportPasskey,
+  deleteSupportPasskey
+} from '../utils/supportPasskey.js'
 import { formatMoneyFixed } from '../utils/money'
 import { getSocketServerUrl } from '../utils/runtime.js'
 import { showErrorToast, showSuccessToast } from '../utils/toast.js'
@@ -531,6 +616,13 @@ export default {
       activeDesk: 'aftersale',
       deskMode: 'tickets',
       reviewPendingCount: 0,
+      passkeys: [],
+      passkeyLoading: false,
+      passkeySmsSending: false,
+      passkeyRegistering: false,
+      passkeySmsCode: '',
+      passkeyDeviceName: '',
+      passkeySmsMaskedPhone: '',
       reviewPollTimer: null,
       loading: false,
       error: '',
@@ -1165,6 +1257,78 @@ export default {
         this.presaleResolving = false
       }
     },
+    async switchToSecurityDesk() {
+      this.deskMode = 'security'
+      await this.loadPasskeys()
+    },
+    async loadPasskeys() {
+      this.passkeyLoading = true
+      try {
+        const data = await listSupportPasskeys()
+        this.passkeys = Array.isArray(data?.list) ? data.list : []
+      } catch (error) {
+        showErrorToast(error.message || '获取 Passkey 列表失败')
+      } finally {
+        this.passkeyLoading = false
+      }
+    },
+    async sendPasskeySms() {
+      if (this.passkeySmsSending) return
+      this.passkeySmsSending = true
+      try {
+        const data = await sendSupportPasskeySmsCode()
+        this.passkeySmsMaskedPhone = String(data?.maskedPhone || '')
+        showSuccessToast('验证码已发送')
+      } catch (error) {
+        showErrorToast(error.message || '发送验证码失败')
+      } finally {
+        this.passkeySmsSending = false
+      }
+    },
+    async registerPasskey() {
+      if (this.passkeyRegistering) return
+      if (!this.passkeySmsCode) {
+        showErrorToast('请先输入短信验证码')
+        return
+      }
+      this.passkeyRegistering = true
+      try {
+        await registerSupportPasskey(this.passkeyDeviceName || '客服工作台设备', this.passkeySmsCode)
+        showSuccessToast('Passkey 绑定成功')
+        this.passkeySmsCode = ''
+        await this.loadPasskeys()
+      } catch (error) {
+        showErrorToast(error.message || 'Passkey 注册失败')
+      } finally {
+        this.passkeyRegistering = false
+      }
+    },
+    async removePasskey(passkeyId) {
+      const confirmed = await showConfirm({
+        title: '删除 Passkey',
+        message: '确认删除该 Passkey 吗？删除后资金操作需用其他已绑定设备完成验证。',
+        confirmText: '确认删除',
+        cancelText: '返回',
+        tone: 'danger'
+      })
+      if (!confirmed) return
+      this.passkeyLoading = true
+      try {
+        await deleteSupportPasskey(passkeyId)
+        showSuccessToast('Passkey 已删除')
+        await this.loadPasskeys()
+      } catch (error) {
+        showErrorToast(error.message || '删除 Passkey 失败')
+      } finally {
+        this.passkeyLoading = false
+      }
+    },
+    formatPasskeyDate(value) {
+      if (!value) return '--'
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return '--'
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    },
     async executeSettlement() {
       if (!this.activeOrder) return
       const isFrozenSettlement = this.activeOrder?.status === 'support_handling'
@@ -1181,11 +1345,12 @@ export default {
       if (!confirmed) return
       this.settlementSubmitting = true
       try {
-        await apiFetch(
+        await stepUpFetch(
           `/api/support/orders/${this.activeOrder.id}/execute-settlement`,
           {
             method: 'PUT'
-          }
+          },
+          'support_execute_settlement'
         )
         showSuccessToast('分账执行成功')
         await this.fetchOrders(this.activeStatus)
@@ -1199,11 +1364,12 @@ export default {
       if (!this.activeOrder || this.reconcileSubmitting) return
       this.reconcileSubmitting = true
       try {
-        const result = await apiFetch(
+        const result = await stepUpFetch(
           `/api/support/orders/${this.activeOrder.id}/reconcile-funds`,
           {
             method: 'POST'
-          }
+          },
+          'support_reconcile_funds'
         )
         showSuccessToast(result?.finalized ? '资金结果已同步，订单已自动收口' : '已同步最新资金结果')
         await this.fetchOrders(this.activeStatus)
@@ -1229,12 +1395,12 @@ export default {
 
       this.cancelSubmitting = true
       try {
-        await apiFetch(`/api/support/orders/${this.activeOrder.id}/cancel`, {
+        await stepUpFetch(`/api/support/orders/${this.activeOrder.id}/cancel`, {
           method: 'PUT',
           body: JSON.stringify({
             note: this.noteDraft
           })
-        })
+        }, 'support_cancel_order')
         showSuccessToast('订单已取消')
         await this.fetchOrders(this.activeStatus)
         if (this.activeOrderId) {
@@ -1301,14 +1467,15 @@ export default {
 
       this.statusSubmitting = true
       try {
-        await apiFetch(
+        await stepUpFetch(
           `/api/support/orders/${this.activeOrder.id}/freeze-funds`,
           {
             method: 'PUT',
             body: JSON.stringify({
               freezeReason: this.freezeReasonDraft
             })
-          }
+          },
+          'support_freeze_funds'
         )
         this.freezeDialogVisible = false
         showSuccessToast('订单资金已冻结')
@@ -1332,14 +1499,15 @@ export default {
 
       this.statusSubmitting = true
       try {
-        await apiFetch(
+        await stepUpFetch(
           `/api/support/orders/${this.activeOrder.id}/release-funds`,
           {
             method: 'PUT',
             body: JSON.stringify({
               note: this.noteDraft
             })
-          }
+          },
+          'support_release_funds'
         )
         showSuccessToast('订单资金冻结已解除')
         await this.fetchOrders(this.activeStatus)
@@ -2175,5 +2343,90 @@ export default {
   .ok-btn {
     width: 100%;
   }
+}
+
+.security-desk {
+  max-width: 640px;
+}
+
+.security-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.security-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.security-tip,
+.security-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary, #6b7280);
+}
+
+.security-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, #9ca3af);
+}
+
+.passkey-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.passkey-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 10px;
+}
+
+.passkey-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.passkey-meta span {
+  font-size: 12px;
+  color: var(--text-secondary, #9ca3af);
+}
+
+.passkey-register {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-color, #e5e7eb);
+}
+
+.passkey-register-row {
+  display: flex;
+  gap: 10px;
+}
+
+.passkey-register-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--input-bg, transparent);
+  color: inherit;
 }
 </style>

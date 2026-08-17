@@ -1193,6 +1193,12 @@ function requireStepUpAuth(policy = {}) {
       next()
     }
   }
+  // 策略级开关（如客服资金操作在完成 Passkey 绑定前保持关闭）
+  if (policy.enabled === false) {
+    return (_req, _res, next) => {
+      next()
+    }
+  }
 
   const mergedPolicy = {
     action: String(policy.action || 'high_risk_admin_action').trim() || 'high_risk_admin_action',
