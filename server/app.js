@@ -2811,6 +2811,7 @@ export function createApp() {
     refreshUploadSortOrderFlags,
     expirePendingPaymentOrders,
     reconcileProcessingFundsOrders: () => paymentService?.reconcileProcessingFundsOrders?.() ?? { scanned: 0 },
-    captureOnlinePresenceSnapshot
+    captureOnlinePresenceSnapshot,
+    arbitrateSettlementTimeouts: () => orderLifecycleService?.arbitrateSettlementTimeouts?.() ?? { buyerTimeoutArbitrated: 0, sellerTimeoutConfirmed: 0 }
   }
 }

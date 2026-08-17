@@ -921,7 +921,7 @@ export function createOrderLifecycleService({
     try {
       await conn.beginTransaction()
       const [orders] = await conn.execute(
-        `SELECT id, buyer_id, status
+        `SELECT id, buyer_id, status, settlement_status
          FROM orders
          WHERE id = ?
          LIMIT 1
@@ -935,6 +935,10 @@ export function createOrderLifecycleService({
       }
       if (String(order.status || '').trim() !== 'settlement_pending') {
         fail(400, { message: '当前状态不允许填报额外物品使用情况' })
+      }
+      // 卖家已确认后买家不得再重新申报（防止反复重置确认状态的拖延循环），变更走争议/客服通道
+      if (String(order.settlement_status || '').trim() === 'seller_confirmed') {
+        fail(400, { message: '卖家已确认使用情况，如需变更请让卖家发起争议或联系客服处理' })
       }
 
       const [snapshotRows] = await conn.execute(
@@ -1139,6 +1143,122 @@ export function createOrderLifecycleService({
     } finally {
       conn.release()
     }
+  }
+
+  /**
+   * 结算超时仲裁（后台周期任务，由 startRecurringJobs 驱动）：
+   * - 买家超时未申报额外物品使用 → 订单转入客服仲裁（settlement_dispute），
+   *   不自动判零/判满，由客服依据聊天记录与凭证裁量
+   * - 买家已申报、卖家超时既不确认也不争议 → 视为确认买家申报（超时默认同意），
+   *   重建结算草稿并通知客服可执行分账
+   * 时长由环境变量 SETTLEMENT_BUYER_REPORT_TIMEOUT_HOURS / SETTLEMENT_SELLER_CONFIRM_TIMEOUT_HOURS 配置。
+   */
+  async function arbitrateSettlementTimeouts() {
+    const buyerTimeoutHours = Math.max(1, Number(process.env.SETTLEMENT_BUYER_REPORT_TIMEOUT_HOURS || 24) || 24)
+    const sellerTimeoutHours = Math.max(1, Number(process.env.SETTLEMENT_SELLER_CONFIRM_TIMEOUT_HOURS || 48) || 48)
+    const summary = { buyerTimeoutArbitrated: 0, sellerTimeoutConfirmed: 0 }
+
+    // Case A：买家超时未申报（仅存在销售类快照项的订单需要申报）
+    const [buyerTimeoutRows] = await pool.execute(
+      `SELECT id, buyer_id
+       FROM orders
+       WHERE status = 'settlement_pending'
+         AND buyer_item_reported_at IS NULL
+         AND settlement_status NOT IN ('buyer_reported', 'seller_confirmed')
+         AND settlement_requested_at IS NOT NULL
+         AND settlement_requested_at < NOW() - INTERVAL ${buyerTimeoutHours} HOUR
+         AND EXISTS (
+           SELECT 1 FROM order_item_snapshots s
+           WHERE s.order_id = orders.id AND s.item_mode = 'sale'
+         )
+       LIMIT 50`
+    )
+    for (const row of buyerTimeoutRows) {
+      const [result] = await pool.execute(
+        `UPDATE orders
+         SET status = 'support_handling',
+             support_scene = 'settlement_dispute',
+             support_status = 'handling',
+             support_requested_at = NOW(),
+             support_requested_by = NULL,
+             support_note = ?
+         WHERE id = ? AND status = 'settlement_pending' AND buyer_item_reported_at IS NULL`,
+        [`买家超过 ${buyerTimeoutHours} 小时未提交额外物品使用表单，系统自动转客服仲裁`, row.id]
+      )
+      if (Number(result?.affectedRows || 0) > 0) {
+        summary.buyerTimeoutArbitrated += 1
+        const updated = await fetchOrderById(pool, row.id)
+        await emitOrderSystemMessage({
+          order: updated,
+          actorUserId: row.buyer_id,
+          actorRole: 'buyer',
+          content: `买家超过 ${buyerTimeoutHours} 小时未提交额外物品使用表单，订单已自动转客服仲裁，请客服依据聊天记录与凭证处理押金结算。`
+        }).catch(() => {})
+      }
+    }
+
+    // Case B：卖家超时未处理买家申报 → 视为确认
+    const [sellerTimeoutRows] = await pool.execute(
+      `SELECT id, buyer_id, seller_id
+       FROM orders
+       WHERE status = 'settlement_pending'
+         AND settlement_status = 'buyer_reported'
+         AND seller_item_confirmed_at IS NULL
+         AND buyer_item_reported_at IS NOT NULL
+         AND buyer_item_reported_at < NOW() - INTERVAL ${sellerTimeoutHours} HOUR
+       LIMIT 50`
+    )
+    for (const row of sellerTimeoutRows) {
+      const conn = await pool.getConnection()
+      try {
+        await conn.beginTransaction()
+        const [orders] = await conn.execute(
+          `SELECT id FROM orders
+           WHERE id = ? AND status = 'settlement_pending'
+             AND settlement_status = 'buyer_reported'
+             AND seller_item_confirmed_at IS NULL
+           LIMIT 1 FOR UPDATE`,
+          [row.id]
+        )
+        if (!orders.length) {
+          await conn.rollback()
+          continue
+        }
+        await conn.execute(
+          `UPDATE order_item_usage_reports
+           SET seller_confirmed = 1,
+               seller_confirmed_by = NULL,
+               seller_confirmed_at = NOW()
+           WHERE order_id = ?`,
+          [row.id]
+        )
+        const preview = await buildSettlementPreview(conn, row.id)
+        await upsertSettlement(conn, row.id, preview, 'draft')
+        await conn.execute(
+          `UPDATE orders
+           SET settlement_status = 'seller_confirmed',
+               seller_item_confirmed_at = NOW()
+           WHERE id = ?`,
+          [row.id]
+        )
+        await conn.commit()
+        summary.sellerTimeoutConfirmed += 1
+        const updated = await fetchOrderById(pool, row.id)
+        await emitOrderSystemMessage({
+          order: updated,
+          actorUserId: row.seller_id || row.buyer_id,
+          actorRole: 'seller',
+          content: `卖家超过 ${sellerTimeoutHours} 小时未处理买家提交的额外物品表单，系统已视为确认买家申报，客服可执行分账。`
+        }).catch(() => {})
+      } catch (error) {
+        await conn.rollback()
+        throw error
+      } finally {
+        conn.release()
+      }
+    }
+
+    return summary
   }
 
   async function confirmFinish({ orderId, userId }) {
@@ -2037,6 +2157,7 @@ export function createOrderLifecycleService({
     submitItemUsageReport,
     confirmItemUsageBySeller,
     rejectItemUsageBySeller,
+    arbitrateSettlementTimeouts,
     confirmFinish,
     requestCancel,
     respondCancel,

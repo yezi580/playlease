@@ -6,6 +6,7 @@ export function startRecurringJobs({
   expirePendingPaymentOrders,
   captureOnlinePresenceSnapshot,
   reconcileProcessingFundsOrders,
+  arbitrateSettlementTimeouts,
   intervalMs = 60_000,
   onlineSnapshotIntervalMs = 60_000,
   fundsReconcileIntervalMs = 120_000
@@ -48,17 +49,34 @@ export function startRecurringJobs({
     }
   }
 
+  const runSettlementArbitration = async () => {
+    if (typeof arbitrateSettlementTimeouts !== 'function') return
+    try {
+      const summary = await arbitrateSettlementTimeouts()
+      if (summary && (summary.buyerTimeoutArbitrated > 0 || summary.sellerTimeoutConfirmed > 0)) {
+        console.log(
+          `[结算仲裁] 买家超时转客服仲裁 ${summary.buyerTimeoutArbitrated} 单，卖家超时视为确认 ${summary.sellerTimeoutConfirmed} 单`
+        )
+      }
+    } catch (error) {
+      console.error('[结算仲裁] 执行失败:', error.message)
+    }
+  }
+
   runExpiredOrderCleanup()
   runOnlineSnapshotCapture()
   runProcessingFundsReconcile()
+  runSettlementArbitration()
 
   const cleanupInterval = setInterval(runExpiredOrderCleanup, intervalMs)
   const onlineSnapshotInterval = setInterval(runOnlineSnapshotCapture, onlineSnapshotIntervalMs)
   const fundsReconcileInterval = setInterval(runProcessingFundsReconcile, fundsReconcileIntervalMs)
+  const settlementArbitrationInterval = setInterval(runSettlementArbitration, intervalMs)
 
   return {
     cleanupInterval,
     onlineSnapshotInterval,
-    fundsReconcileInterval
+    fundsReconcileInterval,
+    settlementArbitrationInterval
   }
 }
