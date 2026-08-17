@@ -1992,6 +1992,11 @@ export function createOrderLifecycleService({
       await conn.execute(
         `UPDATE orders
          SET status = 'settlement_pending',
+             settlement_requested_at = NOW(),
+             buyer_item_reported_at = CASE
+               WHEN settlement_status = 'buyer_reported' THEN NOW()
+               ELSE buyer_item_reported_at
+             END,
              support_scene = 'none',
              support_note = ?
          WHERE id = ?`,
