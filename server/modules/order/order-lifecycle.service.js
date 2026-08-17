@@ -758,6 +758,18 @@ export function createOrderLifecycleService({
             })
           }
 
+          // 安全兜底：订单置为已支付前必须存在渠道侧支付成功（paid）的支付流水。
+          // payOrder 仅限支付回调/主动查单同步的内部调用链，任何路由不得直接暴露。
+          const [paidTransactions] = await conn.execute(
+            `SELECT id FROM payment_transactions
+             WHERE order_id = ? AND user_id = ? AND status = 'paid'
+             LIMIT 1`,
+            [orderId, userId]
+          )
+          if (!paidTransactions.length) {
+            fail(400, { message: '未找到已支付的支付流水，无法将订单标记为已支付' })
+          }
+
           const supportUser = await assignSupportUser(conn)
           await conn.execute(
             `UPDATE orders

@@ -178,23 +178,9 @@ app.post('/api/orders', authRequired, orderWriteLimiter, async (req, res) => {
   }
 })
 
-app.put('/api/orders/:id/pay', authRequired, orderWriteLimiter, async (req, res) => {
-  const orderId = Number(req.params?.id)
-
-  if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
-    return res.status(400).json({ message: '订单ID无效' })
-  }
-
-  try {
-    const order = await orderLifecycleService.payOrder({
-      orderId,
-      userId: req.auth.userId
-    })
-    res.json(normalizeOrderMoneyFields(order, { includeSensitiveContacts: true }))
-  } catch (error) {
-    handleOrderLifecycleError(error, res, '支付确认失败')
-  }
-})
+// 安全说明：不要在此暴露“订单支付确认”路由。订单置为已支付只能由支付服务在
+// 渠道回调验签或主动查单成功后通过 orderLifecycleService.payOrder 内部驱动，
+// 否则买家可绕过支付直接推进订单状态（免费下单漏洞）。
 
 app.put('/api/orders/:id/cancel', authRequired, orderWriteLimiter, async (req, res) => {
   const orderId = Number(req.params?.id)

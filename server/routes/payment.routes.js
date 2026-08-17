@@ -175,23 +175,34 @@ export function registerPaymentRoutes(deps) {
   app.post('/api/pay/callback/:channel', async (req, res) => {
     const channel = String(req.params.channel || '').trim().toLowerCase()
     try {
-      const parsedCallback = typeof paymentProvider?.parsePaymentCallback === 'function'
-        ? await paymentProvider.parsePaymentCallback({
+      // 安全要求：支付回调只信任支付渠道侧验签解析出的数据。
+      // 解析能力缺失或解析结果为空时一律拒绝，绝不回退信任请求体原始字段，
+      // 否则任何人可伪造 { transaction_no, status: 'paid' } 白嫖订单。
+      if (typeof paymentProvider?.parsePaymentCallback !== 'function') {
+        console.warn('[payment-callback] rejected: provider cannot parse callback', {
           channel,
-          headers: req.headers || {},
-          body: req.body || {},
-          rawBody: req.rawBody || ''
+          ip: req.ip
         })
-        : null
-      const callbackPayload = parsedCallback || {
-        channel,
-        transactionNo: req.body?.transaction_no,
-        providerTradeNo: req.body?.provider_trade_no,
-        status: req.body?.status,
-        rawPayload: req.body || {}
+        return res.status(400).json({ message: '当前支付通道不支持异步回调' })
       }
-      const transaction = await paymentService.handlePaymentCallback(callbackPayload)
-      if (parsedCallback?.callbackResponseText) {
+
+      const parsedCallback = await paymentProvider.parsePaymentCallback({
+        channel,
+        headers: req.headers || {},
+        body: req.body || {},
+        rawBody: req.rawBody || ''
+      })
+
+      if (!parsedCallback || !String(parsedCallback.transactionNo || '').trim()) {
+        console.warn('[payment-callback] rejected: unverified callback payload', {
+          channel,
+          ip: req.ip
+        })
+        return res.status(400).json({ message: '回调数据校验失败' })
+      }
+
+      const transaction = await paymentService.handlePaymentCallback(parsedCallback)
+      if (parsedCallback.callbackResponseText) {
         return res.type('text/plain').send(parsedCallback.callbackResponseText)
       }
       return res.json({
