@@ -1156,7 +1156,7 @@ export function createOrderLifecycleService({
   async function arbitrateSettlementTimeouts() {
     const buyerTimeoutHours = Math.max(1, Number(process.env.SETTLEMENT_BUYER_REPORT_TIMEOUT_HOURS || 24) || 24)
     const sellerTimeoutHours = Math.max(1, Number(process.env.SETTLEMENT_SELLER_CONFIRM_TIMEOUT_HOURS || 48) || 48)
-    const summary = { buyerTimeoutArbitrated: 0, sellerTimeoutConfirmed: 0 }
+    const summary = { buyerTimeoutArbitrated: 0, sellerTimeoutConfirmed: 0, autoEnteredSettlement: 0 }
 
     // Case A：买家超时未申报（仅存在销售类快照项的订单需要申报）
     const [buyerTimeoutRows] = await pool.execute(
@@ -1255,6 +1255,44 @@ export function createOrderLifecycleService({
         throw error
       } finally {
         conn.release()
+      }
+    }
+
+    // Case C：租期（verified_at + rent_days）结束后 N 天买家仍未申请结算 → 自动进入结算流程，
+    // 之后自然落入 Case A/B 的申报与确认超时（仅处理买家已确认账号正常的订单）
+    const autoEnterDays = Math.max(0, Number(process.env.SETTLEMENT_AUTO_ENTER_AFTER_RENT_END_DAYS ?? 3) || 3)
+    const [autoEnterRows] = await pool.execute(
+      `SELECT id, buyer_id
+       FROM orders
+       WHERE status = 'paid'
+         AND verified_at IS NOT NULL
+         AND settlement_requested_at IS NULL
+         AND DATE_ADD(DATE_ADD(verified_at, INTERVAL rent_days DAY), INTERVAL ${autoEnterDays} DAY) < NOW()
+       LIMIT 50`
+    )
+    for (const row of autoEnterRows) {
+      const saleSnapshotCount = await countSaleSnapshotItems(pool, row.id)
+      const nextSettlementStatus = saleSnapshotCount > 0 ? 'none' : 'buyer_reported'
+      const buyerReportedSql = saleSnapshotCount > 0 ? 'buyer_item_reported_at' : 'NOW()'
+      const [result] = await pool.execute(
+        `UPDATE orders
+         SET status = 'settlement_pending',
+             settlement_status = ?,
+             settlement_requested_at = NOW(),
+             support_scene = 'none',
+             buyer_item_reported_at = ${buyerReportedSql}
+         WHERE id = ? AND status = 'paid'`,
+        [nextSettlementStatus, row.id]
+      )
+      if (Number(result?.affectedRows || 0) > 0) {
+        summary.autoEnteredSettlement += 1
+        const updated = await fetchOrderById(pool, row.id)
+        await emitOrderSystemMessage({
+          order: updated,
+          actorUserId: row.buyer_id,
+          actorRole: 'buyer',
+          content: `租期已结束超过 ${autoEnterDays} 天，买家未申请结算，系统已自动进入结算流程。请买家在申报期限内完成额外物品使用表单（或确认无使用），随后由卖家确认。`
+        }).catch(() => {})
       }
     }
 
