@@ -1156,7 +1156,47 @@ export function createOrderLifecycleService({
   async function arbitrateSettlementTimeouts() {
     const buyerTimeoutHours = Math.max(1, Number(process.env.SETTLEMENT_BUYER_REPORT_TIMEOUT_HOURS || 24) || 24)
     const sellerTimeoutHours = Math.max(1, Number(process.env.SETTLEMENT_SELLER_CONFIRM_TIMEOUT_HOURS || 48) || 48)
-    const summary = { buyerTimeoutArbitrated: 0, sellerTimeoutConfirmed: 0, autoEnteredSettlement: 0 }
+    const summary = { buyerTimeoutArbitrated: 0, sellerTimeoutConfirmed: 0, autoEnteredSettlement: 0, autoVerifiedOrders: 0 }
+
+    // 生命周期自动化生效日期：仅处理该日期之后支付的订单（测试期遗留单排除）。
+    // 只约束 Case C/D 两个自动推进入口；已进入结算流程的订单照常受超时约束。
+    const lifecycleCutoff = /^\d{4}-\d{2}-\d{2}$/.test(String(process.env.ORDER_LIFECYCLE_EFFECTIVE_FROM || '').trim())
+      ? String(process.env.ORDER_LIFECYCLE_EFFECTIVE_FROM).trim()
+      : ''
+
+    // Case D：支付后 N 小时买家仍未「确认账号正常，继续履约」→ 系统自动确认，
+    // 视为自支付起租用（verified_at 回溯为 paid_at，租期不因拖延重新起算）；
+    // 自动确认后买家失去自助取消入口，问题账号走客服异常处理
+    const autoVerifyHours = Math.max(1, Number(process.env.ORDER_AUTO_VERIFY_AFTER_PAID_HOURS ?? 48) || 48)
+    const [autoVerifyRows] = await pool.execute(
+      `SELECT id, buyer_id
+       FROM orders
+       WHERE status = 'paid'
+         AND verified_at IS NULL
+         AND paid_at IS NOT NULL
+         AND paid_at < NOW() - INTERVAL ${autoVerifyHours} HOUR
+         AND (? = '' OR paid_at > ?)
+       LIMIT 50`,
+      [lifecycleCutoff, lifecycleCutoff]
+    )
+    for (const row of autoVerifyRows) {
+      const [result] = await pool.execute(
+        `UPDATE orders
+         SET verified_at = paid_at
+         WHERE id = ? AND status = 'paid' AND verified_at IS NULL`,
+        [row.id]
+      )
+      if (Number(result?.affectedRows || 0) > 0) {
+        summary.autoVerifiedOrders += 1
+        const updated = await fetchOrderById(pool, row.id)
+        await emitOrderSystemMessage({
+          order: updated,
+          actorUserId: row.buyer_id,
+          actorRole: 'buyer',
+          content: `买家支付后超过 ${autoVerifyHours} 小时未确认账号状态，系统已自动确认继续履约。如账号存在问题，请立即联系客服发起异常处理。`
+        }).catch(() => {})
+      }
+    }
 
     // Case A：买家超时未申报（仅存在销售类快照项的订单需要申报）
     const [buyerTimeoutRows] = await pool.execute(
@@ -1268,7 +1308,9 @@ export function createOrderLifecycleService({
          AND verified_at IS NOT NULL
          AND settlement_requested_at IS NULL
          AND DATE_ADD(DATE_ADD(verified_at, INTERVAL rent_days DAY), INTERVAL ${autoEnterDays} DAY) < NOW()
-       LIMIT 50`
+         AND (? = '' OR paid_at > ?)
+       LIMIT 50`,
+      [lifecycleCutoff, lifecycleCutoff]
     )
     for (const row of autoEnterRows) {
       const saleSnapshotCount = await countSaleSnapshotItems(pool, row.id)

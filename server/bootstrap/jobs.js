@@ -53,9 +53,9 @@ export function startRecurringJobs({
     if (typeof arbitrateSettlementTimeouts !== 'function') return
     try {
       const summary = await arbitrateSettlementTimeouts()
-      if (summary && (summary.buyerTimeoutArbitrated > 0 || summary.sellerTimeoutConfirmed > 0 || summary.autoEnteredSettlement > 0)) {
+      if (summary && (summary.buyerTimeoutArbitrated > 0 || summary.sellerTimeoutConfirmed > 0 || summary.autoEnteredSettlement > 0 || summary.autoVerifiedOrders > 0)) {
         console.log(
-          `[结算仲裁] 租期结束自动进入结算 ${summary.autoEnteredSettlement} 单，买家超时转客服仲裁 ${summary.buyerTimeoutArbitrated} 单，卖家超时视为确认 ${summary.sellerTimeoutConfirmed} 单`
+          `[结算仲裁] 支付超时自动确认履约 ${summary.autoVerifiedOrders} 单，租期结束自动进入结算 ${summary.autoEnteredSettlement} 单，买家超时转客服仲裁 ${summary.buyerTimeoutArbitrated} 单，卖家超时视为确认 ${summary.sellerTimeoutConfirmed} 单`
         )
       }
     } catch (error) {
