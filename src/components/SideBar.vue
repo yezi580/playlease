@@ -76,7 +76,7 @@
         <span>改枪推荐</span>
       </button>
 
-      <!-- 6. 帮我代肝（原 代肝） -->
+      <!-- 6. 鼠团跑刀（原 代肝） -->
       <button
         class="nav-item"
         :class="{ active: !showAuth && currentPage === 'boost' }"
@@ -88,7 +88,7 @@
           <path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01" />
           <path d="M8 16h8" />
         </svg>
-        <span>帮我代肝</span>
+        <span>鼠团跑刀</span>
       </button>
     </nav>
 
