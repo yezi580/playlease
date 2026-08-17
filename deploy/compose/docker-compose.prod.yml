@@ -3,7 +3,9 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      # root 密码独立于应用密码：应用连接用 DB_USER/DB_PASSWORD（最小权限业务账号），
+      # root 仅用于容器初始化与健康检查。未设置 DB_ROOT_PASSWORD 时向后兼容旧行为。
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-${DB_PASSWORD}}
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
@@ -12,7 +14,7 @@ services:
       - ../../server/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
       - ../mysql/my.cnf:/etc/mysql/conf.d/zz-prod.cnf:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD:-${DB_PASSWORD}}"]
       interval: 10s
       timeout: 5s
       retries: 10
