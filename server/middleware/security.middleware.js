@@ -53,6 +53,8 @@ const authenticatedWriteLimiterStore = await createExpressRateLimitStore('auth-w
 const orderWriteLimiterStore = await createExpressRateLimitStore('order-write')
 const publishLimiterStore = await createExpressRateLimitStore('publish')
 const conversationLimiterStore = await createExpressRateLimitStore('conversation')
+const uploadReadLimiterStore = await createExpressRateLimitStore('upload-read')
+const uploadWriteLimiterStore = await createExpressRateLimitStore('upload-write')
 
 function createLimiter({
   store,
@@ -149,6 +151,32 @@ export const authenticatedWriteLimiter = createLimiter({
   max: readPositiveIntEnv('AUTHENTICATED_WRITE_LIMIT_MAX_PER_MIN', 120),
   keyGenerator: (req) => buildUserScopedKey(req, 'auth-write'),
   message: '操作过于频繁，请稍后再试'
+})
+
+/**
+ * 上传文件访问限流：
+ * - GET /api/uploads/files/* 的读取频率
+ * - 封顶对象存在性枚举（COS 签名 307 探测）与每请求的 DB 属主校验消耗
+ */
+export const uploadReadLimiter = createLimiter({
+  store: uploadReadLimiterStore,
+  windowMs: 60 * 1000,
+  max: readPositiveIntEnv('UPLOAD_READ_LIMIT_MAX_PER_MIN', 120),
+  keyGenerator: (req) => buildUserScopedKey(req, 'upload-read'),
+  message: '文件访问过于频繁，请稍后再试'
+})
+
+/**
+ * 上传写接口限流：
+ * - POST 上传频率（列表图/封禁图/视频/聊天图）
+ * - 封顶并发大文件内存缓冲（multer memoryStorage）造成的 OOM 攻击面
+ */
+export const uploadWriteLimiter = createLimiter({
+  store: uploadWriteLimiterStore,
+  windowMs: 60 * 1000,
+  max: readPositiveIntEnv('UPLOAD_WRITE_LIMIT_MAX_PER_MIN', 20),
+  keyGenerator: (req) => buildUserScopedKey(req, 'upload-write'),
+  message: '上传过于频繁，请稍后再试'
 })
 
 /**

@@ -46,7 +46,9 @@ import {
   authenticatedWriteLimiter,
   orderWriteLimiter,
   publishLimiter,
-  conversationApiLimiter
+  conversationApiLimiter,
+  uploadReadLimiter,
+  uploadWriteLimiter
 } from './middleware/security.middleware.js'
 import { createSlidingWindowRateStore } from './infrastructure/rate-limit-store.js'
 import {
@@ -490,11 +492,40 @@ const adminJwtRenewWindowMs = Math.max(
 if (
   !jwtSecret ||
   jwtSecret === 'please_change_this_secret' ||
+  jwtSecret === 'please_change_this_secret_in_production' ||
+  jwtSecret === 'change_me' ||
   jwtSecret === 'dev-jwt-secret' ||
   jwtSecret.length < 32
 ) {
   throw new Error('JWT_SECRET 不安全：请在 `server/.env` 中设置至少 32 位的高强度随机密钥')
 }
+
+// 跨域防护（fail-closed）：CORS_ALLOWED_ORIGINS 未配置时只放行同源与已列入
+// allowlist 的来源，跨源请求直接 403。避免空 allowlist 被解读为"允许所有来源"。
+const CORS_ALLOWLIST_SET = new Set(CORS_ALLOWED_ORIGINS)
+function extractRequestHostname(value = '') {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  try {
+    return new URL(text).hostname.toLowerCase()
+  } catch (_error) {
+    return text.split(':')[0].toLowerCase()
+  }
+}
+app.use((req, res, next) => {
+  const origin = String(req.headers.origin || '').trim()
+  if (!origin || CORS_ALLOWLIST_SET.has(origin)) {
+    next()
+    return
+  }
+  const originHost = extractRequestHostname(origin)
+  const requestHost = extractRequestHostname(req.headers.host || '')
+  if (originHost && requestHost && originHost === requestHost) {
+    next()
+    return
+  }
+  return res.status(403).json({ message: '跨域请求被拒绝' })
+})
 
 // 全局中间件：跨域支持 + JSON请求体解析（限制2MB防止大文件攻击）
 app.use(cors({
@@ -1136,6 +1167,8 @@ registerUploadRoutes({
   pool,
   authRequired,
   getOptionalAuth,
+  uploadReadLimiter,
+  uploadWriteLimiter,
   isSafeUploadFileName,
   toUploadFileUrl,
   buildManagedFileReadUrl: USE_COS_STORAGE ? buildManagedFileReadUrl : null,

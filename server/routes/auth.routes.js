@@ -174,14 +174,9 @@ function serializeInviteRewardRow(row = {}) {
 }
 
 function getRequestIp(req) {
-  const forwardedFor = String(req.headers['x-forwarded-for'] || '').trim()
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0].trim()
-  }
-  const realIp = String(req.headers['x-real-ip'] || '').trim()
-  if (realIp) {
-    return realIp
-  }
+  // 安全要求：统一使用 Express 的 req.ip（trust proxy=1 下由 proxy-addr 解析，
+  // 不可被客户端伪造），不再读取 X-Forwarded-For / X-Real-Ip 首段，
+  // 否则短信按 IP 的日配额可被轮换伪造头绕过
   return String(req.ip || req.socket?.remoteAddress || '').trim()
 }
 
@@ -446,10 +441,7 @@ export function registerAuthRoutes(deps) {
     const scene = String(req.body?.scene || 'login').trim() || 'login'
     const captchaTicket = String(req.body?.captcha_ticket || req.body?.ticket || '').trim()
     const captchaRandstr = String(req.body?.captcha_randstr || req.body?.randstr || '').trim()
-    // 管理员登录 scene 的 IP 配额使用不可伪造的 req.ip（trust proxy=1 下取真实直连地址）
-    const requestIp = scene === 'admin_login'
-      ? String(req.ip || req.socket?.remoteAddress || '').trim()
-      : getRequestIp(req)
+    const requestIp = getRequestIp(req)
 
     if (!isValidPhone(phone)) {
       return res.status(400).json({ message: '请输入正确的11位手机号' })

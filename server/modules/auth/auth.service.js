@@ -193,9 +193,9 @@ function clearTrustedDeviceCookie(req, res) {
 }
 
 function getClientIpAddress(req) {
-  return String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')
-    .split(',')[0]
-    .trim()
+  // 安全要求：统一使用 Express 的 req.ip（trust proxy=1 下取 nginx 直连地址），
+  // 不读取可被客户端伪造的 X-Forwarded-For 首段
+  return String(req.ip || req.socket?.remoteAddress || '').trim()
 }
 
 async function persistAuthSessionRecord(req, user, sessionState = {}, existingSessionId = '', options = {}) {

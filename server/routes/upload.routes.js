@@ -3,6 +3,8 @@ import { Readable } from 'stream'
 export function registerUploadRoutes(deps) {
   const {
     app,
+    uploadReadLimiter,
+    uploadWriteLimiter,
     fs,
     path,
     pool,
@@ -332,7 +334,7 @@ export function registerUploadRoutes(deps) {
     }
   }
 
-  app.get('/api/uploads/files/listing-images/:fileName', async (req, res) => {
+  app.get('/api/uploads/files/listing-images/:fileName', uploadReadLimiter, async (req, res) => {
     if (!ensureStorageReady(res)) return
 
     const fileName = String(req.params.fileName || '').trim()
@@ -347,7 +349,7 @@ export function registerUploadRoutes(deps) {
     return redirectToCosFile(res, toUploadFileUrl('listing-images', fileName))
   })
 
-  app.get('/api/uploads/files/ban-images/:fileName', async (req, res) => {
+  app.get('/api/uploads/files/ban-images/:fileName', uploadReadLimiter, async (req, res) => {
     if (!ensureStorageReady(res)) return
 
     const fileName = String(req.params.fileName || '').trim()
@@ -377,7 +379,7 @@ export function registerUploadRoutes(deps) {
     }
   })
 
-  app.get('/api/uploads/files/ban-videos/:fileName', async (req, res) => {
+  app.get('/api/uploads/files/ban-videos/:fileName', uploadReadLimiter, async (req, res) => {
     if (!ensureStorageReady(res)) return
 
     const fileName = String(req.params.fileName || '').trim()
@@ -407,7 +409,7 @@ export function registerUploadRoutes(deps) {
     }
   })
 
-  app.get('/api/uploads/files/chat-images/:fileName', async (req, res) => {
+  app.get('/api/uploads/files/chat-images/:fileName', uploadReadLimiter, async (req, res) => {
     if (!ensureStorageReady(res)) return
 
     const fileName = String(req.params.fileName || '').trim()
@@ -437,7 +439,7 @@ export function registerUploadRoutes(deps) {
     }
   })
 
-  app.post('/api/uploads/ban-images', authRequired, (req, res) => {
+  app.post('/api/uploads/ban-images', authRequired, uploadWriteLimiter, (req, res) => {
     if (!ensureStorageReady(res)) return
 
     banImageUploader.array('images', MAX_BAN_IMAGE_COUNT)(req, res, async (error) => {
@@ -468,7 +470,7 @@ export function registerUploadRoutes(deps) {
     })
   })
 
-  app.post('/api/uploads/listing-images', authRequired, (req, res) => {
+  app.post('/api/uploads/listing-images', authRequired, uploadWriteLimiter, (req, res) => {
     if (!ensureStorageReady(res)) return
 
     listingImageUploader.array('images', MAX_LISTING_IMAGE_COUNT)(req, res, async (error) => {
@@ -499,7 +501,7 @@ export function registerUploadRoutes(deps) {
     })
   })
 
-  app.post('/api/uploads/ban-video', authRequired, (req, res) => {
+  app.post('/api/uploads/ban-video', authRequired, uploadWriteLimiter, (req, res) => {
     if (!ensureStorageReady(res)) return
 
     banVideoUploader.single('video')(req, res, async (error) => {
@@ -530,7 +532,7 @@ export function registerUploadRoutes(deps) {
     })
   })
 
-  app.post('/api/uploads/chat-images', authRequired, async (req, res) => {
+  app.post('/api/uploads/chat-images', authRequired, uploadWriteLimiter, async (req, res) => {
     if (!ensureStorageReady(res)) return
 
     const authUserId = Number(req.auth?.userId || 0)
@@ -609,7 +611,7 @@ export function registerUploadRoutes(deps) {
       .filter(Boolean)
   }
 
-  app.post('/api/uploads/recycle-temp', authRequired, async (req, res) => {
+  app.post('/api/uploads/recycle-temp', authRequired, uploadWriteLimiter, async (req, res) => {
     if (!ensureStorageReady(res)) return
 
     const mediaUrls = normalizeBanRecycleMediaUrls(req.body?.mediaUrls)
