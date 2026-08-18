@@ -36,6 +36,16 @@
   - 最大连接数 `max_connections=200`
   - `performance_schema=ON`
 
+## 时区约定（全站北京时间）
+
+- MySQL 与 api 容器均已设置 `TZ=Asia/Shanghai`，`my.cnf` 设置 `default-time-zone = '+08:00'`，
+  `NOW()`/`CURRENT_TIMESTAMP`/Node `new Date()` 落库均为北京墙钟
+- 2026-08-18 已执行一次性迁移：全库 DATETIME 列 +8 小时（历史数据原为 UTC 墙钟），
+  迁移脚本 `deploy/scripts/migrate-datetime-to-beijing.sh` 仅在重演同类问题时使用，
+  **勿重复执行**（会再加 8 小时）
+- 注意：api 容器（alpine）内 shell `date` 显示 UTC 是缺 tzdata 的显示怪癖，
+  Node 的默认时区是正确的 Asia/Shanghai，不影响业务
+
 ## 上线前必须修改
 
 编辑 `deploy/env/prod.env`，至少补齐这些变量:

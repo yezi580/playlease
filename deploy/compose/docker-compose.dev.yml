@@ -7,6 +7,7 @@ services:
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
+      TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${MYSQL_PORT}:3306"
     volumes:
@@ -41,6 +42,7 @@ services:
       - ../env/dev.env
     environment:
       PORT: 3000
+      TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${API_PORT}:3000"
     volumes:

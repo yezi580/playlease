@@ -7,6 +7,8 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-game_rental}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
+      # 全站统一北京时间（配合 my.cnf 的 default-time-zone）
+      TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:3306:3306"
     volumes:
@@ -38,6 +40,8 @@ services:
     environment:
       PORT: 3000
       NODE_ENV: production
+      # Node 侧同步北京时间，与 MySQL NOW() 保持同一时区
+      TZ: Asia/Shanghai
       APP_NAME: ${APP_NAME:-my-app-prod}
       DB_HOST: mysql
       DB_PORT: 3306
