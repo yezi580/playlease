@@ -12,7 +12,8 @@ export async function startServer(options) {
     expirePendingPaymentOrders,
     captureOnlinePresenceSnapshot,
     reconcileProcessingFundsOrders,
-    arbitrateSettlementTimeouts
+    arbitrateSettlementTimeouts,
+    refreshListingHotStats
   } = options
 
   await runBootstrapSchemaTasks(options)
@@ -23,7 +24,8 @@ export async function startServer(options) {
       expirePendingPaymentOrders,
       captureOnlinePresenceSnapshot,
       reconcileProcessingFundsOrders,
-      arbitrateSettlementTimeouts
+      arbitrateSettlementTimeouts,
+      refreshListingHotStats
     })
   })
 }

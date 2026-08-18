@@ -7,9 +7,11 @@ export function startRecurringJobs({
   captureOnlinePresenceSnapshot,
   reconcileProcessingFundsOrders,
   arbitrateSettlementTimeouts,
+  refreshListingHotStats,
   intervalMs = 60_000,
   onlineSnapshotIntervalMs = 60_000,
-  fundsReconcileIntervalMs = 120_000
+  fundsReconcileIntervalMs = 120_000,
+  listingHotStatsIntervalMs = 60_000
 }) {
   const runExpiredOrderCleanup = async () => {
     try {
@@ -63,20 +65,32 @@ export function startRecurringJobs({
     }
   }
 
+  const runListingHotStatsRefresh = async () => {
+    if (typeof refreshListingHotStats !== 'function') return
+    try {
+      await refreshListingHotStats()
+    } catch (error) {
+      console.error('[商品热度] 预聚合刷新失败:', error.message)
+    }
+  }
+
   runExpiredOrderCleanup()
   runOnlineSnapshotCapture()
   runProcessingFundsReconcile()
   runSettlementArbitration()
+  runListingHotStatsRefresh()
 
   const cleanupInterval = setInterval(runExpiredOrderCleanup, intervalMs)
   const onlineSnapshotInterval = setInterval(runOnlineSnapshotCapture, onlineSnapshotIntervalMs)
   const fundsReconcileInterval = setInterval(runProcessingFundsReconcile, fundsReconcileIntervalMs)
   const settlementArbitrationInterval = setInterval(runSettlementArbitration, intervalMs)
+  const listingHotStatsInterval = setInterval(runListingHotStatsRefresh, listingHotStatsIntervalMs)
 
   return {
     cleanupInterval,
     onlineSnapshotInterval,
     fundsReconcileInterval,
-    settlementArbitrationInterval
+    settlementArbitrationInterval,
+    listingHotStatsInterval
   }
 }

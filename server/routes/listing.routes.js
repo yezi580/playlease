@@ -542,10 +542,10 @@ export function registerListingRoutes(deps) {
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const orderMap = {
       hot: `CASE
-        WHEN COALESCE(hot.recent_unique_click_7d, 0) >= ${Math.max(1, Number(hotMinUniqueClickCount || 1))}
+        WHEN COALESCE(hot.unique_click_7d, 0) >= ${Math.max(1, Number(hotMinUniqueClickCount || 1))}
         THEN 0
         ELSE 1
-      END ASC, COALESCE(hot.recent_unique_click_7d, 0) DESC, l.created_at DESC`,
+      END ASC, COALESCE(hot.unique_click_7d, 0) DESC, l.created_at DESC`,
       latest: 'l.created_at DESC',
       rent_asc: `${buyerRentPriceSql} ASC`,
       rent_desc: `${buyerRentPriceSql} DESC`,
@@ -574,7 +574,7 @@ export function registerListingRoutes(deps) {
           l.face_verified, l.dive_level, l.decontamination_chamber_level,
           l.knife_skin, l.operator_appearance, l.gold_skin, l.weapon_skin,
           l.remark,
-          COALESCE(hot.recent_unique_click_7d, 0) AS recent_unique_click_7d,
+          COALESCE(hot.unique_click_7d, 0) AS recent_unique_click_7d,
           (
             SELECT quantity FROM listing_items li_item
             WHERE li_item.listing_id = l.id
@@ -635,14 +635,7 @@ export function registerListingRoutes(deps) {
             WHERE li.listing_id = l.id ORDER BY ${getListingImagesOrderSql('li')} LIMIT 1 OFFSET 1
           ) AS secondary_image
         FROM listings l
-        LEFT JOIN (
-          SELECT
-            listing_id,
-            COUNT(*) AS recent_unique_click_7d
-          FROM listing_click_users
-          WHERE last_clicked_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-          GROUP BY listing_id
-        ) hot ON hot.listing_id = l.id
+        LEFT JOIN listing_hot_stats hot ON hot.listing_id = l.id
         ${whereSql}
         ORDER BY ${orderSql}
         LIMIT ${limitSafe} OFFSET ${offsetSafe}`,

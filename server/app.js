@@ -115,6 +115,7 @@ import {
 import { createListingMediaService } from './modules/listing/listing-media.service.js'
 import { createOrderLifecycleService } from './modules/order/order-lifecycle.service.js'
 import { createOrderQueryService } from './modules/order/order-query.service.js'
+import { ensurePerformanceIndexes, refreshListingHotStats } from './bootstrap/performance.js'
 import {
   getSmsSecurityThresholds,
   getPendingPaymentTimeoutMinutes,
@@ -632,6 +633,7 @@ const {
   refreshAdminStepUpSession,
   updateAdminPasskeyUsage,
   fetchAuthUserById,
+  invalidateAuthUserCache,
   authRequired,
   supportOnly,
   adminOnly,
@@ -2600,6 +2602,7 @@ registerAdminRoutes({
   smsCodeService,
   smsProvider,
   loadBusinessSettings,
+  invalidateAuthUserCache,
   orderLifecycleService
 })
 
@@ -2809,6 +2812,8 @@ export function createApp() {
     ensurePaymentChannelSchema,
     ensureSettlementPaymentSchema,
     refreshUploadSortOrderFlags,
+    ensurePerformanceIndexes: () => ensurePerformanceIndexes(pool),
+    refreshListingHotStats: () => refreshListingHotStats(pool),
     expirePendingPaymentOrders,
     reconcileProcessingFundsOrders: () => paymentService?.reconcileProcessingFundsOrders?.() ?? { scanned: 0 },
     captureOnlinePresenceSnapshot,

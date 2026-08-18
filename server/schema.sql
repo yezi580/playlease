@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS listings (
   INDEX idx_listings_owner_user_id (owner_user_id),
   UNIQUE INDEX uk_listings_listing_no (listing_no),
   INDEX idx_listings_status (listing_status),
+  INDEX idx_listings_status_created (listing_status, created_at),
   INDEX idx_listings_owner_status (owner_user_id, listing_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -135,6 +136,14 @@ CREATE TABLE IF NOT EXISTS listing_click_users (
   UNIQUE INDEX uk_listing_click_users_listing_user (listing_id, user_id),
   INDEX idx_listing_click_users_last_clicked_listing (last_clicked_at, listing_id),
   INDEX idx_listing_click_users_listing_last_clicked (listing_id, last_clicked_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 商品 7 日热度预聚合表：由定时任务周期刷新，商品列表接口直接 JOIN 使用
+CREATE TABLE IF NOT EXISTS listing_hot_stats (
+  listing_id INT NOT NULL COMMENT '商品ID',
+  unique_click_7d INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '近7天独立访客点击数（周期预聚合）',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后聚合时间',
+  PRIMARY KEY (listing_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 商品物品表：存储每个商品包含的额外物品详情及其处理方式（一对多关系）
@@ -211,6 +220,8 @@ CREATE TABLE IF NOT EXISTS orders (
   INDEX idx_orders_buyer_id (buyer_id),
   INDEX idx_orders_seller_id (seller_id),
   INDEX idx_orders_status (status),
+  INDEX idx_orders_status_created (status, created_at),
+  INDEX idx_orders_status_paid (status, paid_at),
   INDEX idx_orders_buyer_status (buyer_id, status),
   INDEX idx_orders_seller_status (seller_id, status),
   INDEX idx_orders_listing_id (listing_id)

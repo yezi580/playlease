@@ -263,7 +263,26 @@ export function normalizeBusinessSettings(rawValue = {}) {
   }
 }
 
+// 业务配置为单行全局数据且读取极高频（商品列表/短信/下单等热路径），
+// 进程内短 TTL 缓存避免每请求查库；写入方需调用 invalidateBusinessSettingsCache 失效
+const BUSINESS_SETTINGS_CACHE_TTL_MS = Math.max(
+  0,
+  Number(process.env.BUSINESS_SETTINGS_CACHE_TTL_MS != null ? process.env.BUSINESS_SETTINGS_CACHE_TTL_MS : 30_000) || 0
+)
+let cachedBusinessSettings = null
+
+function cloneBusinessSettings(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+export function invalidateBusinessSettingsCache() {
+  cachedBusinessSettings = null
+}
+
 export async function loadBusinessSettings(pool) {
+  if (cachedBusinessSettings && cachedBusinessSettings.expiresAt > Date.now()) {
+    return cloneBusinessSettings(cachedBusinessSettings.value)
+  }
   try {
     const [rows] = await pool.execute(
       `SELECT settings_json
@@ -272,14 +291,21 @@ export async function loadBusinessSettings(pool) {
        LIMIT 1`
     )
     const row = rows[0] || null
+    let value
     if (!row?.settings_json) {
-      return cloneDefaults()
+      value = cloneDefaults()
+    } else {
+      try {
+        value = normalizeBusinessSettings(JSON.parse(row.settings_json))
+      } catch (_error) {
+        value = cloneDefaults()
+      }
     }
-    try {
-      return normalizeBusinessSettings(JSON.parse(row.settings_json))
-    } catch (_error) {
-      return cloneDefaults()
+    cachedBusinessSettings = {
+      value,
+      expiresAt: Date.now() + BUSINESS_SETTINGS_CACHE_TTL_MS
     }
+    return cloneBusinessSettings(value)
   } catch (_error) {
     return cloneDefaults()
   }

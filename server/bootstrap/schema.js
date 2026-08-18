@@ -27,7 +27,8 @@ export async function runBootstrapSchemaTasks({
   ensureUploadQuotaSchema,
   ensurePaymentChannelSchema,
   ensureSettlementPaymentSchema,
-  refreshUploadSortOrderFlags
+  refreshUploadSortOrderFlags,
+  ensurePerformanceIndexes
 }) {
   await ensureUserRoleSchema()
   await ensureAdminPasskeySchema()
@@ -54,4 +55,8 @@ export async function runBootstrapSchemaTasks({
   await ensurePaymentChannelSchema()
   await ensureSettlementPaymentSchema()
   await refreshUploadSortOrderFlags()
+  // 依赖上述运行时补列（support_*/settlement_*）存在，必须最后执行
+  if (typeof ensurePerformanceIndexes === 'function') {
+    await ensurePerformanceIndexes()
+  }
 }

@@ -1049,14 +1049,43 @@ function buildBannedUserMessage(user) {
   return `账号已被封禁至 ${formatDateTimeLabel(user?.banned_until)}`
 }
 
+// 认证热路径用户信息短 TTL 缓存：authRequired 每个需登录请求都会读取 users 表，
+// 这里用进程内缓存消掉这次查询。角色/封禁等安全变更务必调用 invalidateAuthUserCache
+// （admin 端点已接入；其余路径最多存在 TTL 时长的延迟窗口）
+const AUTH_USER_CACHE_TTL_MS = Math.max(
+  1_000,
+  Number(process.env.AUTH_USER_CACHE_TTL_MS != null ? process.env.AUTH_USER_CACHE_TTL_MS : 30_000) || 30_000
+)
+const AUTH_USER_CACHE_MAX_ENTRIES = 2000
+const authUserCache = new Map()
+
+function invalidateAuthUserCache(userId) {
+  if (Number(userId || 0) > 0) {
+    authUserCache.delete(Number(userId))
+    return
+  }
+  authUserCache.clear()
+}
+
 async function fetchAuthUserById(userId) {
   const safeUserId = Number(userId || 0)
   if (!safeUserId) return null
+  const cached = authUserCache.get(safeUserId)
+  if (cached && cached.expiresAt > Date.now()) {
+    return { ...cached.user }
+  }
   const [rows] = await pool.execute(
     'SELECT id, username, phone, role, banned_until, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
     [safeUserId]
   )
-  return rows[0] || null
+  const user = rows[0] || null
+  if (user) {
+    if (authUserCache.size >= AUTH_USER_CACHE_MAX_ENTRIES) {
+      authUserCache.clear()
+    }
+    authUserCache.set(safeUserId, { user, expiresAt: Date.now() + AUTH_USER_CACHE_TTL_MS })
+  }
+  return user ? { ...user } : null
 }
 
 /**
@@ -1358,6 +1387,7 @@ async function logoutCurrentSession(req, res) {
     touchAuthSession,
     updateAdminPasskeyUsage,
     fetchAuthUserById,
+    invalidateAuthUserCache,
     isUserCurrentlyBanned,
     buildBannedUserMessage,
     authRequired,

@@ -2,7 +2,7 @@
  * 管理端 HTTP 路由，处理审核、通行密钥和运营操作。
  */
 
-import { getSmsSecurityThresholds } from '../modules/business-settings/runtime.js'
+import { getSmsSecurityThresholds, invalidateBusinessSettingsCache } from '../modules/business-settings/runtime.js'
 import {
   createOperationLogService,
   sanitizeRemark,
@@ -32,6 +32,7 @@ export function registerAdminRoutes(deps) {
     smsCodeService,
     smsProvider,
     loadBusinessSettings,
+    invalidateAuthUserCache,
     orderLifecycleService
   } = deps
   const {
@@ -1344,6 +1345,7 @@ app.put(
         Number(req.auth?.userId || 0) || null
       ]
     )
+    invalidateBusinessSettingsCache()
 
     // 审计先写后响应：保证高危操作的日志先于响应落库
     await recordAdminOperationSafely({
@@ -1683,6 +1685,9 @@ app.put(
       'UPDATE users SET role = ? WHERE id = ?',
       [nextRole, userId]
     )
+    if (typeof invalidateAuthUserCache === 'function') {
+      invalidateAuthUserCache(userId)
+    }
     if (typeof revokeAllLoginSessionsByUserId === 'function') {
       await revokeAllLoginSessionsByUserId(userId)
     }
@@ -1756,6 +1761,9 @@ app.put(
        SET banned_until = DATE_ADD(NOW(), INTERVAL ${days} DAY)
        WHERE id = ${userId}`
     )
+    if (typeof invalidateAuthUserCache === 'function') {
+      invalidateAuthUserCache(userId)
+    }
     if (typeof revokeAllLoginSessionsByUserId === 'function') {
       await revokeAllLoginSessionsByUserId(userId)
     }
@@ -1815,6 +1823,9 @@ app.delete(
       'UPDATE users SET banned_until = NULL WHERE id = ?',
       [userId]
     )
+    if (typeof invalidateAuthUserCache === 'function') {
+      invalidateAuthUserCache(userId)
+    }
 
     const [updatedRows] = await pool.execute(
       'SELECT id, username, phone, role, banned_until, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
