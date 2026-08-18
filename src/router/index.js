@@ -1,12 +1,6 @@
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
+// 首页保持同步加载以优先渲染首屏，其余页面懒加载拆包
 import HomePage from '../views/HomePage.vue'
-import ListingDetailPage from '../views/ListingDetailPage.vue'
-import PublishPage from '../views/PublishPage.vue'
-import ProfilePage from '../views/ProfilePage.vue'
-import OrderDetailPage from '../views/OrderDetailPage.vue'
-import PaymentResultPage from '../views/PaymentResultPage.vue'
-import SupportConsolePage from '../views/SupportConsolePage.vue'
-import GunCodePage from '../views/GunCodePage.vue'
 import { isNativeAppRuntime } from '../utils/runtime.js'
 
 const routes = [
@@ -18,42 +12,42 @@ const routes = [
   {
     path: '/listings/:listingNo',
     name: 'listing-detail',
-    component: ListingDetailPage
+    component: () => import('../views/ListingDetailPage.vue')
   },
   {
     path: '/publish',
     name: 'publish-create',
-    component: PublishPage
+    component: () => import('../views/PublishPage.vue')
   },
   {
     path: '/publish/:id/edit',
     name: 'publish-edit',
-    component: PublishPage
+    component: () => import('../views/PublishPage.vue')
   },
   {
     path: '/profile',
     name: 'profile',
-    component: ProfilePage
+    component: () => import('../views/ProfilePage.vue')
   },
   {
     path: '/orders/:id',
     name: 'order-detail',
-    component: OrderDetailPage
+    component: () => import('../views/OrderDetailPage.vue')
   },
   {
     path: '/payment/result',
     name: 'payment-result',
-    component: PaymentResultPage
+    component: () => import('../views/PaymentResultPage.vue')
   },
   {
     path: '/support-console',
     name: 'support-console',
-    component: SupportConsolePage
+    component: () => import('../views/SupportConsolePage.vue')
   },
   {
     path: '/gun',
     name: 'gun-code',
-    component: GunCodePage
+    component: () => import('../views/GunCodePage.vue')
   },
   {
     path: '/boost',

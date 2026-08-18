@@ -727,21 +727,6 @@ export async function getCurrentOnlineUserCount() {
   const onlineUsersKey = buildPresenceOnlineUsersKey()
   await client.zRemRangeByScore(onlineUsersKey, 0, now)
   const count = Math.max(0, Number(await client.zCard(onlineUsersKey)) || 0)
-  // #region debug-point C:get-online-count
-  globalThis.fetch?.('http://127.0.0.1:7781/event', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'online-count-zero',
-      runId: 'pre-fix',
-      hypothesisId: 'C',
-      location: 'server/infrastructure/redis.js:getCurrentOnlineUserCount:count',
-      msg: '[DEBUG] current online user count queried',
-      data: { count },
-      ts: Date.now()
-    })
-  }).catch(() => {})
-  // #endregion
   return count
 }
 

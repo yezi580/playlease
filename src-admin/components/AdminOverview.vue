@@ -282,8 +282,14 @@
 </template>
 
 <script>
-import * as echarts from 'echarts'
+// echarts 按需引入：本页只用折线/柱状图 + 网格与提示框，避免全量打包
+import * as echarts from 'echarts/core'
+import { BarChart, LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import { apiFetch } from '../utils/api.js'
+
+echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 const EMPTY_OVERVIEW = Object.freeze({
   totalUsers: 0,

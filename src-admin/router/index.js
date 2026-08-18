@@ -1,14 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import AdminOverview from '../components/AdminOverview.vue'
-import AdminUsersCenter from '../components/AdminUsersCenter.vue'
-import AdminOrdersCenter from '../components/AdminOrdersCenter.vue'
-import AdminListingsCenter from '../components/AdminListingsCenter.vue'
-import AdminSecurityCenter from '../components/AdminSecurityCenter.vue'
-import ListingReviewCenter from '../components/ListingReviewCenter.vue'
-import AdminBusinessSettingsCenter from '../components/AdminBusinessSettingsCenter.vue'
-import OperationLogCenter from '../components/OperationLogCenter.vue'
-import AdminFeedbackCenter from '../components/AdminFeedbackCenter.vue'
 
+// 各中心页面懒加载拆包，进入对应板块时才下载（echarts 等重依赖只随概览页加载）
 export const adminSections = [
   {
     key: 'overview',
@@ -16,7 +8,7 @@ export const adminSections = [
     path: '/overview',
     label: '运营概览',
     description: '查看平台核心数据、系统状态与运营关注项',
-    component: AdminOverview
+    component: () => import('../components/AdminOverview.vue')
   },
   {
     key: 'users',
@@ -24,7 +16,7 @@ export const adminSections = [
     path: '/users',
     label: '用户管理',
     description: '管理用户资料、角色权限与账号状态',
-    component: AdminUsersCenter
+    component: () => import('../components/AdminUsersCenter.vue')
   },
   {
     key: 'orders',
@@ -32,7 +24,7 @@ export const adminSections = [
     path: '/orders',
     label: '订单管理',
     description: '跟踪订单履约、支付进度与售后处理',
-    component: AdminOrdersCenter
+    component: () => import('../components/AdminOrdersCenter.vue')
   },
   {
     key: 'listings',
@@ -40,7 +32,7 @@ export const adminSections = [
     path: '/listings',
     label: '商品管理',
     description: '查看商品信息、上架状态与经营表现',
-    component: AdminListingsCenter
+    component: () => import('../components/AdminListingsCenter.vue')
   },
   {
     key: 'listingReviews',
@@ -48,7 +40,7 @@ export const adminSections = [
     path: '/listing-reviews',
     label: '商品审核',
     description: '审核新发布或重新提交的商品内容',
-    component: ListingReviewCenter
+    component: () => import('../components/ListingReviewCenter.vue')
   },
   {
     key: 'feedback',
@@ -56,7 +48,7 @@ export const adminSections = [
     path: '/feedback',
     label: '问题反馈',
     description: '查看用户提交的问题反馈并跟进处理结果',
-    component: AdminFeedbackCenter
+    component: () => import('../components/AdminFeedbackCenter.vue')
   },
   {
     key: 'businessSettings',
@@ -64,7 +56,7 @@ export const adminSections = [
     path: '/business-settings',
     label: '参数配置',
     description: '集中维护比例、押金、抽成、赔付和运营阈值等业务参数',
-    component: AdminBusinessSettingsCenter
+    component: () => import('../components/AdminBusinessSettingsCenter.vue')
   },
   {
     key: 'operationLogs',
@@ -72,7 +64,7 @@ export const adminSections = [
     path: '/operation-logs',
     label: '操作日志',
     description: '追踪平台治理动作与关键变更记录',
-    component: OperationLogCenter
+    component: () => import('../components/OperationLogCenter.vue')
   },
   {
     key: 'security',
@@ -80,7 +72,7 @@ export const adminSections = [
     path: '/security',
     label: '安全设置',
     description: '管理 Passkey、受信任设备与二次校验策略',
-    component: AdminSecurityCenter
+    component: () => import('../components/AdminSecurityCenter.vue')
   }
 ]
 
