@@ -71,6 +71,9 @@ function buildRedisSocketOptions(overrides = {}) {
   return {
     connectTimeout: Math.min(REDIS_CONNECT_TIMEOUT_MS, REDIS_STARTUP_CONNECT_TIMEOUT_MS),
     reconnectStrategy: false,
+    // TCP keepalive：长空闲连接被网络路径静默丢弃时，内核探测包能及时发现并触发重连，
+    // 避免第一条「复活后」命令踩进半开连接无限挂起（与 db.js 的 MySQL keepalive 同理）
+    keepAlive: 30_000,
     ...overrides
   }
 }
