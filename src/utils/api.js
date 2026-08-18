@@ -128,6 +128,27 @@ export async function createAuthorizedObjectUrl(url, options = {}) {
  * @returns {Promise<Object>} 解析后的JSON响应数据
  * @throws {Error} 请求失败时抛出，包含 error.status 和 error.data 属性
  */
+// 请求超时兜底：响应丢失/挂起时让 Promise 正常 reject，避免界面永久停留在提交中/加载中
+const REQUEST_TIMEOUT_MS = 30_000
+
+function buildRequestTimeoutSignal() {
+  if (typeof AbortSignal === 'undefined' || typeof AbortSignal.timeout !== 'function') {
+    return undefined
+  }
+  return AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+}
+
+function normalizeRequestNetworkError(error, hasOwnSignal) {
+  if (
+    !hasOwnSignal
+    && error
+    && (error.name === 'TimeoutError' || error.name === 'AbortError')
+  ) {
+    return new Error(`请求超时（${Math.round(REQUEST_TIMEOUT_MS / 1000)}秒无响应），请刷新页面查看结果后重试`)
+  }
+  return error
+}
+
 export async function apiFetch(url, options = {}) {
   // 构建请求头：保留传入的自定义headers，自动补充Content-Type
   const headers = buildAuthHeaders(options.headers || {})
@@ -140,16 +161,18 @@ export async function apiFetch(url, options = {}) {
     headers.set('Content-Type', 'application/json')
   }
 
+  const hasOwnSignal = Boolean(options.signal)
   let response
   try {
     // 发起fetch请求，合并自定义配置和自动生成的headers
     response = await fetch(requestUrl, {
       ...options,
       credentials: requestCredentials,
-      headers
+      headers,
+      signal: hasOwnSignal ? options.signal : buildRequestTimeoutSignal()
     })
   } catch (networkError) {
-    throw networkError
+    throw normalizeRequestNetworkError(networkError, hasOwnSignal)
   }
 
   // 将响应体读取为文本（兼容空响应和非JSON格式）

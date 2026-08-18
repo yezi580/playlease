@@ -16,6 +16,9 @@ const REDIS_PASSWORD = String(process.env.REDIS_PASSWORD || '').trim()
 const REDIS_DB = Math.max(0, Number(process.env.REDIS_DB || 0) || 0)
 const REDIS_TLS = ['1', 'true', 'yes', 'on'].includes(String(process.env.REDIS_TLS || '').trim().toLowerCase())
 const REDIS_CONNECT_TIMEOUT_MS = Math.max(1000, Number(process.env.REDIS_CONNECT_TIMEOUT_MS || 10000) || 10000)
+// 单条命令兜底超时：连接半开（TCP 未收到 FIN）时命令会无限挂起，
+// 缓存类命令超时后按「Redis 不可用」降级处理，并强制销毁共享客户端触发重连
+const REDIS_COMMAND_TIMEOUT_MS = Math.max(500, Number(process.env.REDIS_COMMAND_TIMEOUT_MS || 3000) || 3000)
 const REDIS_STARTUP_CONNECT_TIMEOUT_MS = Math.min(2000, Math.max(1000, Number(process.env.REDIS_STARTUP_CONNECT_TIMEOUT_MS || 1500) || 1500))
 const REDIS_RECONNECT_COOLDOWN_MS = Math.max(1000, Number(process.env.REDIS_RECONNECT_COOLDOWN_MS || 30000) || 30000)
 const REDIS_KEY_PREFIX = String(process.env.REDIS_KEY_PREFIX || 'my-app').trim() || 'my-app'
@@ -190,35 +193,81 @@ export function buildListingDetailCacheKey(listingId) {
   return buildRedisKey('listing', 'detail', Number(listingId || 0))
 }
 
-export async function getListingDetailCache(listingId) {
+function resetSharedRedisClient() {
+  const pendingPromise = sharedRedisClientPromise
+  sharedRedisClientPromise = null
+  Promise.resolve(pendingPromise).then((client) => {
+    if (!client) return
+    try {
+      if (typeof client.destroy === 'function') {
+        client.destroy()
+      } else if (typeof client.disconnect === 'function') {
+        client.disconnect()
+      }
+    } catch (_error) {
+      // 忽略销毁失败，下次调用会重新建连
+    }
+  }).catch(() => {})
+}
+
+async function runCacheCommand(command, fallbackValue) {
   const client = await getRedisClient()
-  if (!client) return null
-  const raw = await client.get(buildListingDetailCacheKey(listingId))
+  if (!client) return fallbackValue
+
+  let timedOut = false
+  try {
+    return await Promise.race([
+      Promise.resolve(command(client)).catch((error) => {
+        console.error('[redis] cache command failed:', error?.message || error)
+        return fallbackValue
+      }),
+      new Promise((resolve) => {
+        setTimeout(() => {
+          timedOut = true
+          resolve(fallbackValue)
+        }, REDIS_COMMAND_TIMEOUT_MS)
+      })
+    ])
+  } finally {
+    if (timedOut) {
+      console.error(`[redis] cache command timed out after ${REDIS_COMMAND_TIMEOUT_MS}ms, resetting shared client`)
+      resetSharedRedisClient()
+    }
+  }
+}
+
+export async function getListingDetailCache(listingId) {
+  const raw = await runCacheCommand(
+    (client) => client.get(buildListingDetailCacheKey(listingId)),
+    null
+  )
   return raw ? safeJsonParse(raw, null) : null
 }
 
 export async function setListingDetailCache(listingId, payload, ttlSeconds = LISTING_DETAIL_CACHE_TTL_SECONDS) {
-  const client = await getRedisClient()
-  if (!client) return false
-  await client.set(
-    buildListingDetailCacheKey(listingId),
-    JSON.stringify(payload),
-    { EX: Math.max(30, Number(ttlSeconds || 0) || LISTING_DETAIL_CACHE_TTL_SECONDS) }
+  const ok = await runCacheCommand(
+    (client) => client.set(
+      buildListingDetailCacheKey(listingId),
+      JSON.stringify(payload),
+      { EX: Math.max(30, Number(ttlSeconds || 0) || LISTING_DETAIL_CACHE_TTL_SECONDS) }
+    ),
+    false
   )
-  return true
+  return Boolean(ok)
 }
 
 export async function invalidateListingDetailCache(listingId) {
-  const client = await getRedisClient()
-  if (!client) return 0
   const safeListingId = Number(listingId || 0)
   if (!safeListingId) return 0
-  return client.del(buildListingDetailCacheKey(safeListingId))
+  return Number(
+    await runCacheCommand(
+      (client) => client.del(buildListingDetailCacheKey(safeListingId)),
+      0
+    )
+  ) || 0
 }
 
 export async function invalidateListingDetailCaches(listingIds = []) {
-  const client = await getRedisClient()
-  if (!client) return 0
   const keys = [...new Set(
     (Array.isArray(listingIds) ? listingIds : [])
       .map((listingId) => Number(listingId || 0))
@@ -226,7 +275,9 @@ export async function invalidateListingDetailCaches(listingIds = []) {
       .map((listingId) => buildListingDetailCacheKey(listingId))
   )]
   if (!keys.length) return 0
-  return client.del(keys)
+  return Number(
+    await runCacheCommand((client) => client.del(keys), 0)
+  ) || 0
 }
 
 function buildLoginSessionKey(sessionId) {

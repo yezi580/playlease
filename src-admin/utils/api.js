@@ -233,17 +233,45 @@ export async function createAuthorizedObjectUrl(url, options = {}) {
   return URL.createObjectURL(blob)
 }
 
+// 请求超时兜底：响应丢失/挂起时让 Promise 正常 reject，避免界面永久停留在提交中
+const REQUEST_TIMEOUT_MS = 30_000
+
+function buildRequestTimeoutSignal() {
+  if (typeof AbortSignal === 'undefined' || typeof AbortSignal.timeout !== 'function') {
+    return undefined
+  }
+  return AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+}
+
+function normalizeRequestNetworkError(error, hasOwnSignal) {
+  if (
+    !hasOwnSignal
+    && error
+    && (error.name === 'TimeoutError' || error.name === 'AbortError')
+  ) {
+    return new Error(`请求超时（${Math.round(REQUEST_TIMEOUT_MS / 1000)}秒无响应），请刷新页面查看结果后重试`)
+  }
+  return error
+}
+
 export async function apiFetch(url, options = {}) {
   const headers = buildAuthHeaders(options.headers || {})
   if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'same-origin',
-    headers
-  })
+  const hasOwnSignal = Boolean(options.signal)
+  let response
+  try {
+    response = await fetch(url, {
+      ...options,
+      credentials: 'same-origin',
+      headers,
+      signal: hasOwnSignal ? options.signal : buildRequestTimeoutSignal()
+    })
+  } catch (networkError) {
+    throw normalizeRequestNetworkError(networkError, hasOwnSignal)
+  }
 
   const rawText = await response.text()
   let data = {}

@@ -2365,6 +2365,7 @@ app.put(
     return res.status(400).json({ message: '无效的商品ID' })
   }
 
+  const approveStartedAt = Date.now()
   try {
     const currentListing = await getAdminListingSummaryById(pool, listingId)
     if (!currentListing) {
@@ -2416,6 +2417,11 @@ app.put(
   } catch (error) {
     console.error('[admin] approve listing failed', error)
     res.status(500).json({ message: '审核通过失败' })
+  } finally {
+    const elapsedMs = Date.now() - approveStartedAt
+    if (elapsedMs > 3000) {
+      console.warn(`[admin] approve listing slow: listing=${listingId} elapsed=${elapsedMs}ms`)
+    }
   }
   }
 )
