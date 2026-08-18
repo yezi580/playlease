@@ -2203,6 +2203,8 @@ export default {
   gap: 24px;
   width: 100%;
   max-width: 900px;
+  /* 底栏为 fixed 全宽定位，补齐 .publish-wrap 的 1px 边框 + 20px 内边距，与上方表单卡片对齐 */
+  padding: 0 21px;
 }
 
 .submit-left {
@@ -2456,6 +2458,8 @@ export default {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+    /* 此时 submit-row 在 .publish-wrap 内且为 static，内边距由外层提供 */
+    padding: 0;
   }
 
   .submit-left {
