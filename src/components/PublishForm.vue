@@ -2204,9 +2204,9 @@ export default {
   justify-content: space-between;
   gap: 24px;
   width: 100%;
-  max-width: 900px;
-  /* 底栏为 fixed 全宽定位，补齐 .publish-wrap 的 1px 边框 + 20px 内边距，与上方表单卡片对齐 */
-  padding: 0 21px;
+  /* 底栏信息区比 900px 表单更宽，左右对称扩展 */
+  max-width: 1200px;
+  padding: 0 24px;
 }
 
 .submit-left {
