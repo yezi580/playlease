@@ -141,6 +141,15 @@ cd /opt/my-app
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml up -d --build
 ```
 
+⚠️ nginx 容器在 `up -d --build` 时通常**不会**被重建（镜像与编排未变化时保持 Running），
+而第 5 步的 `rm -rf` + `cp -a` 会替换 certs 目录的 inode，运行中容器的 bind mount 仍指向
+旧 inode（容器内看不到新证书），此时 `nginx -s reload` 会因证书缺失失败。因此每次部署后
+必须显式重启 nginx 容器，让 bind mount 重新解析并加载新配置:
+
+```bash
+docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml restart nginx
+```
+
 7. 查看运行状态:
 
 ```bash
