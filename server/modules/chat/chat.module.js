@@ -20,6 +20,10 @@ const normalizedChatBannedWords = Array.from(new Set(
     .filter(Boolean)
 )).sort((left, right) => right.length - left.length)
 
+// 敏感词正则只编译一次（此前每条消息都重建全部正则，词表现有 269 行）
+// String.replace 对 /g 正则会自动重置 lastIndex，跨消息复用是安全的
+const chatBannedWordPatterns = normalizedChatBannedWords.map((word) => new RegExp(escapeRegExp(word), 'giu'))
+
 function getConversationRoomName(conversationId) {
   return `conversation:${conversationId}`
 }
@@ -121,10 +125,9 @@ function buildBannedWordReplacement() {
 }
 
 function maskConversationBannedWords(content) {
-  if (!normalizedChatBannedWords.length) return String(content || '')
+  if (!chatBannedWordPatterns.length) return String(content || '')
 
-  return normalizedChatBannedWords.reduce((result, word) => {
-    const pattern = new RegExp(escapeRegExp(word), 'giu')
+  return chatBannedWordPatterns.reduce((result, pattern) => {
     return result.replace(pattern, buildBannedWordReplacement())
   }, String(content || ''))
 }
@@ -1956,6 +1959,12 @@ async function emitConversationMessage(conversation, message, actorUserId) {
     .filter((userId) => userId > 0)
 
   await Promise.all(participantUserIds.map(async (userId) => {
+    // 未读汇总需跨全部会话聚合（5 表 JOIN），只对当前有活跃连接的参与者计算并推送；
+    // 离线用户的 user room 无 socket，推送本就是空操作，其未读数在上线/打开页面时经
+    // GET /api/conversations/unread-summary 拉取
+    const roomSockets = await io.in(getUserRoomName(userId)).fetchSockets()
+    if (!roomSockets.length) return
+
     const unreadSummary = await getUnreadSummaryForUser(userId)
     io.to(getUserRoomName(userId)).emit('message:notify', {
       conversation_id: conversationId,

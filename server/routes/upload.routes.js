@@ -274,6 +274,10 @@ export function registerUploadRoutes(deps) {
     return path.join(baseDir, safeFileName)
   }
 
+  // 本地模式的缓存策略与 COS 上传时的 Cache-Control 对齐：
+  // 公开商品图长缓存（文件名唯一）；受保护图仅浏览器私有缓存，不进共享代理
+  const LOCAL_PUBLIC_CACHE_FOLDERS = new Set(['listing-images'])
+
   async function sendLocalManagedFile(res, folderName, fileName) {
     const filePath = resolveLocalManagedFilePath(folderName, fileName)
     if (!filePath) {
@@ -281,7 +285,14 @@ export function registerUploadRoutes(deps) {
     }
     try {
       await fs.promises.access(filePath, fs.constants.R_OK)
-      return res.sendFile(filePath)
+      res.setHeader(
+        'Cache-Control',
+        LOCAL_PUBLIC_CACHE_FOLDERS.has(folderName)
+          ? 'public, max-age=31536000, immutable'
+          : 'private, max-age=31536000, immutable'
+      )
+      // sendFile 默认会写 Cache-Control: public, max-age=0 覆盖上面的设置，必须显式关闭
+      return res.sendFile(filePath, { cacheControl: false })
     } catch (_error) {
       return res.status(404).json({ message: '文件不存在或无法访问' })
     }

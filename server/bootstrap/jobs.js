@@ -2,6 +2,23 @@
  * 后台任务启动逻辑，用于注册周期性维护任务。
  */
 
+// 重入保护包装：上一轮未跑完（如外部支付查单慢）时跳过本轮，防止任务叠加执行
+function withReentryGuard(label, task) {
+  let running = false
+  return async () => {
+    if (running) {
+      console.warn(`[${label}] 上一轮尚未结束，本轮跳过`)
+      return
+    }
+    running = true
+    try {
+      await task()
+    } finally {
+      running = false
+    }
+  }
+}
+
 export function startRecurringJobs({
   expirePendingPaymentOrders,
   captureOnlinePresenceSnapshot,
@@ -74,17 +91,22 @@ export function startRecurringJobs({
     }
   }
 
-  runExpiredOrderCleanup()
-  runOnlineSnapshotCapture()
-  runProcessingFundsReconcile()
-  runSettlementArbitration()
-  runListingHotStatsRefresh()
+  // 各任务的定时触发与启动首跑都走重入保护，慢轮（如外部支付查单）未结束时跳过本轮
+  const guardedRunners = {
+    cleanup: withReentryGuard('自动取消', runExpiredOrderCleanup),
+    onlineSnapshot: withReentryGuard('在线快照', runOnlineSnapshotCapture),
+    fundsReconcile: withReentryGuard('资金对账', runProcessingFundsReconcile),
+    settlementArbitration: withReentryGuard('结算仲裁', runSettlementArbitration),
+    listingHotStats: withReentryGuard('商品热度', runListingHotStatsRefresh)
+  }
 
-  const cleanupInterval = setInterval(runExpiredOrderCleanup, intervalMs)
-  const onlineSnapshotInterval = setInterval(runOnlineSnapshotCapture, onlineSnapshotIntervalMs)
-  const fundsReconcileInterval = setInterval(runProcessingFundsReconcile, fundsReconcileIntervalMs)
-  const settlementArbitrationInterval = setInterval(runSettlementArbitration, intervalMs)
-  const listingHotStatsInterval = setInterval(runListingHotStatsRefresh, listingHotStatsIntervalMs)
+  Object.values(guardedRunners).forEach((runner) => runner())
+
+  const cleanupInterval = setInterval(guardedRunners.cleanup, intervalMs)
+  const onlineSnapshotInterval = setInterval(guardedRunners.onlineSnapshot, onlineSnapshotIntervalMs)
+  const fundsReconcileInterval = setInterval(guardedRunners.fundsReconcile, fundsReconcileIntervalMs)
+  const settlementArbitrationInterval = setInterval(guardedRunners.settlementArbitration, intervalMs)
+  const listingHotStatsInterval = setInterval(guardedRunners.listingHotStats, listingHotStatsIntervalMs)
 
   return {
     cleanupInterval,
