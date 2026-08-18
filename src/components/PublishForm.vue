@@ -2185,7 +2185,9 @@ export default {
 .submit-row {
   position: fixed;
   bottom: 0;
-  left: 0;
+  /* 桌面端左侧为 240px 固定侧边栏（AppShell .page padding-left），
+     底栏需让出侧边栏宽度，与内容区的表单同轴居中且不被遮挡 */
+  left: 240px;
   right: 0;
   z-index: 1000;
   display: flex;
