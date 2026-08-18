@@ -52,7 +52,8 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   },
   platformCommission: {
     buyerServiceFeeRatePercent: 10,
-    sellerServiceFeeRatePercent: 10
+    sellerServiceFeeRatePercent: 10,
+    usedItemsCommissionRatePercent: 0
   },
   inviteReward: {
     buyerServiceFeeRewardRatePercent: 30
@@ -202,7 +203,8 @@ export function normalizeBusinessSettings(rawValue = {}) {
     },
     platformCommission: {
       buyerServiceFeeRatePercent: normalizeNumber(commissionSource.buyerServiceFeeRatePercent, defaults.platformCommission.buyerServiceFeeRatePercent, { min: 0, max: 100 }),
-      sellerServiceFeeRatePercent: normalizeNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100 })
+      sellerServiceFeeRatePercent: normalizeNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100 }),
+      usedItemsCommissionRatePercent: normalizeNumber(commissionSource.usedItemsCommissionRatePercent, defaults.platformCommission.usedItemsCommissionRatePercent, { min: 0, max: 100 })
     },
     inviteReward: {
       buyerServiceFeeRewardRatePercent: normalizeNumber(
@@ -343,6 +345,16 @@ export function calculateCompensationFeeAmount(amount, planValue, settings) {
 export function calculateServiceFeeFromSellerRent(amount, sellerServiceFeeRatePercent = 10) {
   const normalizedAmount = Math.max(0, Number(amount || 0))
   const normalizedRate = Math.max(0, Number(sellerServiceFeeRatePercent || 0))
+  return Math.floor(normalizedAmount * normalizedRate / 100)
+}
+
+/**
+ * 计算平台对额外物品使用金额的抽成（分）。
+ * 买家侧仍按申报金额全额从押金扣除，仅卖家收益侧按此费率抽成。
+ */
+export function calculateUsedItemsCommissionAmount(usedItemsAmount, usedItemsCommissionRatePercent = 0) {
+  const normalizedAmount = Math.max(0, Number(usedItemsAmount || 0))
+  const normalizedRate = Math.max(0, Number(usedItemsCommissionRatePercent || 0))
   return Math.floor(normalizedAmount * normalizedRate / 100)
 }
 

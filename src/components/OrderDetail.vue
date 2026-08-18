@@ -80,6 +80,10 @@
               <div><span>平台手续费</span><strong>￥{{ formatMoney(sellerServiceFee) }}</strong></div>
               <div><span>{{ sellerCompensationFeeLabel }}</span><strong>￥{{ formatMoney(sellerCompensationFee) }}</strong></div>
               <div><span>预计到账租金</span><strong>￥{{ formatMoney(sellerIncomeRent) }}</strong></div>
+              <div v-if="reportedItemsTotalAmount > 0">
+                <span>物品使用预计到账（已扣平台抽成 {{ usedItemsCommissionRateLabel }}）</span>
+                <strong>￥{{ formatMoney(reportedItemsNetIncome) }}</strong>
+              </div>
               <div><span>押金</span><strong>￥{{ formatMoney(order.deposit_amount) }}</strong></div>
             </template>
             <template v-else>
@@ -406,6 +410,23 @@ export default {
           this.sellerRentAmount,
           this.businessSettings.platformCommission?.sellerServiceFeeRatePercent
         ) - this.sellerCompensationFee
+      )
+    },
+    usedItemsCommissionRatePercent() {
+      return Math.max(0, Number(this.businessSettings.platformCommission?.usedItemsCommissionRatePercent || 0))
+    },
+    usedItemsCommissionRateLabel() {
+      return formatPercentLabel(this.usedItemsCommissionRatePercent)
+    },
+    reportedItemsTotalAmount() {
+      return (Array.isArray(this.order?.item_usage_reports) ? this.order.item_usage_reports : [])
+        .reduce((sum, row) => sum + Number(row?.reported_total_price || 0), 0)
+    },
+    reportedItemsNetIncome() {
+      return Math.max(
+        0,
+        this.reportedItemsTotalAmount
+          - calculateServiceFeeFromSellerRent(this.reportedItemsTotalAmount, this.usedItemsCommissionRatePercent)
       )
     },
     canOpenConversation() {

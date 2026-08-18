@@ -9,6 +9,7 @@ import {
   calculateCompensationFeeAmount,
   calculateSellerIncomeRent,
   calculateServiceFeeFromSellerRent,
+  calculateUsedItemsCommissionAmount,
   loadBusinessSettings
 } from '../business-settings/runtime.js'
 
@@ -221,12 +222,18 @@ export function createOrderLifecycleService({
         : inferSellerRentFromBuyerRent(buyerRentAmount))
     const businessSettings = await loadBusinessSettings(executor)
     const sellerServiceFeeRatePercent = businessSettings.platformCommission?.sellerServiceFeeRatePercent
+    const usedItemsCommissionRatePercent = businessSettings.platformCommission?.usedItemsCommissionRatePercent
     const buyerServiceFeeAmount = calculateBuyerServiceFeeAmount(buyerRentAmount, sellerRentAmount)
     const inviteRewardRatePercent = Math.max(0, Number(businessSettings.inviteReward?.buyerServiceFeeRewardRatePercent || 0))
+    // 额外物品抽成：买家侧仍全额从押金扣除，平台从卖家物品收益中按可配置费率抽成，并入平台总抽成
+    const usedItemsCommissionAmount = calculateUsedItemsCommissionAmount(
+      usedItemsAmount,
+      usedItemsCommissionRatePercent
+    )
     const platformFeeAmount = calculateServiceFeeFromSellerRent(
       sellerRentAmount,
       sellerServiceFeeRatePercent
-    )
+    ) + usedItemsCommissionAmount
     const compensationFeeAmount = calculateCompensationFeeAmount(
       sellerRentAmount,
       listingRow?.compensation_plan,
@@ -235,7 +242,7 @@ export function createOrderLifecycleService({
     const sellerIncomeAmount = Math.max(
       0,
       calculateSellerIncomeRent(sellerRentAmount, sellerServiceFeeRatePercent) - compensationFeeAmount
-    ) + usedItemsAmount
+    ) + usedItemsAmount - usedItemsCommissionAmount
     const buyerRefundAmount = Math.max(0, depositAmount - usedItemsAmount)
 
     return {
@@ -244,6 +251,7 @@ export function createOrderLifecycleService({
       sellerRentAmount,
       depositAmount,
       usedItemsAmount,
+      usedItemsCommissionAmount,
       buyerServiceFeeAmount,
       inviteRewardRatePercent,
       platformFeeAmount,

@@ -216,7 +216,7 @@
           <article class="panel">
             <div class="panel-head">
               <strong>平台抽成规则</strong>
-              <span>维护买家侧和卖家侧服务费率</span>
+              <span>维护买家侧和卖家侧服务费率、额外物品抽成率</span>
             </div>
             <div class="field-grid field-grid--double">
               <label class="field">
@@ -227,7 +227,12 @@
                 <span>卖家侧服务费率（%）</span>
                 <input v-model.number="form.platformCommission.sellerServiceFeeRatePercent" type="number" min="0" max="100" step="0.01">
               </label>
+              <label class="field">
+                <span>额外物品抽成率（%）</span>
+                <input v-model.number="form.platformCommission.usedItemsCommissionRatePercent" type="number" min="0" max="100" step="0.01">
+              </label>
             </div>
+            <p class="panel-tip">额外物品抽成率作用于卖家侧：买家按申报金额全额从押金扣除，平台按此费率从卖家的物品收益中抽成。</p>
           </article>
 
           <article class="panel">
@@ -694,6 +699,13 @@ export default {
   color: #6b7280;
   font-size: 13px;
   text-align: right;
+}
+
+.panel-tip {
+  margin: 12px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .field-grid {

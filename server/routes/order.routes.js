@@ -411,6 +411,7 @@ app.get('/api/orders/:id/settlement-preview', authRequired, authenticatedReadLim
       buyer_rent_amount: normalizeOrderMoneyFields({ amount: preview.buyerRentAmount, deposit_amount: 0 }).amount,
       deposit_amount: normalizeOrderMoneyFields({ amount: 0, deposit_amount: preview.depositAmount }).deposit_amount,
       used_items_amount: normalizeOrderMoneyFields({ amount: preview.usedItemsAmount, deposit_amount: 0 }).amount,
+      used_items_commission_amount: normalizeOrderMoneyFields({ amount: preview.usedItemsCommissionAmount || 0, deposit_amount: 0 }).amount,
       platform_fee_amount: normalizeOrderMoneyFields({ amount: preview.platformFeeAmount, deposit_amount: 0 }).amount,
       seller_income_amount: normalizeOrderMoneyFields({ amount: preview.sellerIncomeAmount, deposit_amount: 0 }).amount,
       buyer_refund_amount: normalizeOrderMoneyFields({ amount: preview.buyerRefundAmount, deposit_amount: 0 }).amount

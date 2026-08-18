@@ -338,7 +338,8 @@ const DEFAULT_ADMIN_BUSINESS_SETTINGS = Object.freeze({
   },
   platformCommission: {
     buyerServiceFeeRatePercent: 10,
-    sellerServiceFeeRatePercent: 10
+    sellerServiceFeeRatePercent: 10,
+    usedItemsCommissionRatePercent: 0
   },
   inviteReward: {
     buyerServiceFeeRewardRatePercent: 30
@@ -510,7 +511,8 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
     },
     platformCommission: {
       buyerServiceFeeRatePercent: normalizeAdminNumber(commissionSource.buyerServiceFeeRatePercent, defaults.platformCommission.buyerServiceFeeRatePercent, { min: 0, max: 100, precision: 2 }),
-      sellerServiceFeeRatePercent: normalizeAdminNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100, precision: 2 })
+      sellerServiceFeeRatePercent: normalizeAdminNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100, precision: 2 }),
+      usedItemsCommissionRatePercent: normalizeAdminNumber(commissionSource.usedItemsCommissionRatePercent, defaults.platformCommission.usedItemsCommissionRatePercent, { min: 0, max: 100, precision: 2 })
     },
     inviteReward: {
       buyerServiceFeeRewardRatePercent: normalizeAdminNumber(
