@@ -304,6 +304,9 @@ export default {
       if (this.order?.status === 'pending_payment' && this.userRole === 'seller') {
         return ''
       }
+      if (this.order?.status === 'paid' && this.userRole === 'seller' && !this.order?.verified_at) {
+        return '等待买家确认账号正常后继续履约。'
+      }
       if (this.order?.status === 'pending_payment') {
         return `请在 ${getPendingPaymentTimeoutMinutes(this.businessSettings)} 分钟内完成支付，支付成功后系统会自动分配客服并建立三方聊天室。`
       }
