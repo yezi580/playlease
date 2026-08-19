@@ -1640,6 +1640,8 @@ async function getConversationListForUser(viewerUserId, page = 1, pageSize = 20,
 
 async function getUnreadSummaryForUser(viewerUserId) {
   const safeUserId = Number(viewerUserId || 0)
+  // support_* 各口径必须与客服工作台列表（/api/support/orders、/api/support/presale-consultations）
+  // 的过滤条件保持一致（分配给本人 + 售后仅统计订单活跃状态），否则会出现列表无工单但红点常亮的幻影未读。
   const [rows] = await chatExecute(
     'getUnreadSummaryForUser',
     `SELECT
@@ -1652,6 +1654,8 @@ async function getUnreadSummaryForUser(viewerUserId) {
               WHEN cp.role = 'support'
                AND c.type = 'order'
                AND COALESCE(o.support_status, 'handling') = 'handling'
+               AND o.support_assignee_id = cp.user_id
+               AND o.status IN ('paid', 'support_handling', 'settlement_pending')
               THEN cp.unread_message_count
               ELSE 0
             END
@@ -1664,6 +1668,7 @@ async function getUnreadSummaryForUser(viewerUserId) {
               WHEN cp.role = 'support'
                AND c.type = 'presale'
                AND COALESCE(pc.support_status, 'handling') = 'handling'
+               AND pc.support_assignee_id = cp.user_id
               THEN cp.unread_message_count
               ELSE 0
             END
@@ -1675,8 +1680,17 @@ async function getUnreadSummaryForUser(viewerUserId) {
             CASE
               WHEN cp.role = 'support'
                AND (
-                 (c.type = 'order' AND COALESCE(o.support_status, 'handling') = 'handling')
-                 OR (c.type = 'presale' AND COALESCE(pc.support_status, 'handling') = 'handling')
+                 (
+                   c.type = 'order'
+                   AND COALESCE(o.support_status, 'handling') = 'handling'
+                   AND o.support_assignee_id = cp.user_id
+                   AND o.status IN ('paid', 'support_handling', 'settlement_pending')
+                 )
+                 OR (
+                   c.type = 'presale'
+                   AND COALESCE(pc.support_status, 'handling') = 'handling'
+                   AND pc.support_assignee_id = cp.user_id
+                 )
                )
               THEN cp.unread_message_count
               ELSE 0
