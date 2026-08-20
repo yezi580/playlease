@@ -81,8 +81,8 @@
       <div v-else class="admin-shell">
         <aside class="admin-sidebar">
           <div class="admin-brand">
-            <div class="admin-brand-mark">tp</div>
-            <strong>天蓬商行管理后台</strong>
+            <img class="admin-brand-mark admin-brand-mark-img" src="/web.jpg" alt="天蓬商行" />
+            <strong>天蓬商行</strong>
             <span>平台运营管理中心</span>
           </div>
 
@@ -763,6 +763,12 @@ export default {
   color: #eff6ff;
   font-size: 16px;
   box-shadow: 0 16px 30px rgba(59, 130, 246, 0.22);
+}
+
+.admin-brand-mark-img {
+  background: transparent;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.25);
+  object-fit: cover;
 }
 
 .admin-brand strong {
