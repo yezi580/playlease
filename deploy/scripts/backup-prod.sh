@@ -66,7 +66,7 @@ for var_name in LOCAL_RETENTION_DAYS COS_RETENTION_DAYS; do
   fi
 done
 
-DB_PASSWORD="$(read_env_value DB_PASSWORD)"
+DB_PASSWORD="$(read_env_value DB_ROOT_PASSWORD)"
 DB_NAME="$(read_env_value DB_NAME)"
 UPLOADS_DIR="${PROJECT_ROOT}/server/uploads"
 
