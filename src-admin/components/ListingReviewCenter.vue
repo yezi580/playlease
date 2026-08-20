@@ -166,6 +166,10 @@
                       <input :value="detail.rank_name || '--'" readonly>
                     </label>
                     <label>
+                      <span>绝密KD</span>
+                      <input :value="formatPlain(detail.secret_kd)" readonly>
+                    </label>
+                    <label>
                       <span>上号方式</span>
                       <input :value="detail.login_method || '--'" readonly>
                     </label>

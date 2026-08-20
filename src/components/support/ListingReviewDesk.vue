@@ -130,6 +130,7 @@
           <div class="detail-section">
             <div class="detail-grid">
               <label><span>段位</span><input :value="detail.rank_name || '--'" readonly></label>
+              <label><span>绝密KD</span><input :value="formatPlain(detail.secret_kd)" readonly></label>
               <label><span>上号方式</span><input :value="detail.login_method || '--'" readonly></label>
               <label><span>上号时间</span><input :value="detail.login_time_range || '--'" readonly></label>
               <label><span>保险等级</span><input :value="detail.insurance_level || '--'" readonly></label>
