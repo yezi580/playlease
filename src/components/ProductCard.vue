@@ -607,8 +607,7 @@ export default {
 .orange,
 .green,
 .purple {
-  /* 统一为更深的浅灰蓝背景 */
-  background: var(--bg-subtle);
+  /* 背景统一由 .info-box 的 --bg-info-card 控制，这里只管边框 */
   border-color: var(--border-strong);
 }
 
