@@ -15,6 +15,7 @@
   --bg-page: #f3f4f6; /* 加深网页大背景，进一步拉开层次 */
   --bg-card: #ffffff; /* 卡片底色改为纯白，拉开反差 */
   --bg-subtle: #f9fafb; /* 悬浮/次级浅色表面 */
+  --bg-info-card: #e2e8f0; /* 商品卡片内小卡片（info-box）的灰白底色 */
   --border-color: #e5e7eb; /* 边框同步变淡，勾勒卡片轮廓 */
   --border-strong: #d1d5db;
 
@@ -66,6 +67,7 @@ html[data-theme='dark'] {
   --bg-page: #0b101b;
   --bg-card: #131a28;
   --bg-subtle: #1a2334;
+  --bg-info-card: #1a2334;
   --border-color: #263349;
   --border-strong: #3b4a66;
 

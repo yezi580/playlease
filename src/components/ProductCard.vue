@@ -576,7 +576,7 @@ export default {
 
 .info-box {
   border-radius: 8px;
-  background: var(--bg-subtle); /* 再次加深内部信息框背景色 */
+  background: var(--bg-info-card); /* 再次加深内部信息框背景色 */
   border: 1px solid var(--border-strong); /* 加深内部信息框边框色 */
   padding: 8px 10px;
   font-size: 14px;
