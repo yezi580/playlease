@@ -651,7 +651,12 @@ export async function verifySmsVerificationCode({
   }
 
   if (consume) {
-    await client.del(codeKey)
+    // 消费以 DEL 结果为准：并发场景下同一验证码只有一个请求能 DEL 成功（返回 1），
+    // 后到者 DEL 返回 0 视为已被消费直接拒绝——否则 GET→比对→DEL 非原子，一个码可被并发消费两次
+    const deletedCount = Number(await client.del(codeKey) || 0)
+    if (deletedCount !== 1) {
+      return { ok: false, reason: 'code_consumed' }
+    }
   }
   await client.del(verifyFailKey, verifyLockKey)
 
