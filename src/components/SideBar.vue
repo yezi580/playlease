@@ -2,7 +2,7 @@
   <div class="sidebar">
     <div class="logo-wrap">
       <div class="logo">
-        <span class="logo-mark">tp</span>
+        <img class="logo-mark logo-mark-img" src="/web.jpg" alt="天蓬商行" />
         <div class="logo-text">
           <strong>天蓬商行</strong>
         </div>
@@ -211,6 +211,12 @@ export default {
   line-height: 1;
   text-transform: lowercase;
   box-shadow: 0 4px 10px rgba(6, 182, 212, 0.35);
+}
+
+.logo-mark-img {
+  background: transparent;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  object-fit: cover;
 }
 
 .logo-text {
