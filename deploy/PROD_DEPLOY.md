@@ -101,6 +101,7 @@ tar -czf deploy\artifacts\my-app-prod-deploy.tar.gz `
   --exclude=deploy/nginx/certs `
   --exclude=deploy/nginx/admin-allowlist.prod.conf `
   --exclude=deploy/nginx/admin-allowlist.extra.list `
+  --exclude=deploy/nginx/admin-allowlist.own.conf `
   deploy dist server
 ```
 
@@ -110,7 +111,7 @@ tar -czf deploy\artifacts\my-app-prod-deploy.tar.gz `
 - `server/uploads`
 - `server/.env`
 - `deploy/nginx/certs`
-- `deploy/nginx/admin-allowlist.prod.conf` / `admin-allowlist.extra.list`（线上由 update-admin-allowlist.sh 生成维护；上传仓库空模板会覆盖线上白名单，导致管理后台对全网开放。全新服务器初始化时需先跑一次该脚本再启动 nginx）
+- `deploy/nginx/admin-allowlist.prod.conf` / `admin-allowlist.extra.list` / `admin-allowlist.own.conf`（线上由 update-admin-allowlist.sh 生成维护；上传仓库空模板会覆盖线上白名单，导致管理后台对全网开放。全新服务器初始化时需先跑一次该脚本再启动 nginx）
 
 同时会上传生产必需的新配置文件:
 
