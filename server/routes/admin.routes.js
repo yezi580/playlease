@@ -80,25 +80,16 @@ export function registerAdminRoutes(deps) {
   const sanitizeAdminRemark = sanitizeRemark
   const getAdminListingSummaryById = getListingSummaryById
 
-  // 改名校验：所有角色复用聊天违禁词表；普通用户额外拦截客服/官方等冒充词
+  // 改名校验：复用聊天违禁词表（改名目标仅限客服账号，普通用户不可改名故无需冒充词拦截）
   const usernameBannedWords = Array.from(new Set(
     (Array.isArray(chatBannedWords) ? chatBannedWords : [])
       .map((word) => String(word || '').trim())
       .filter(Boolean)
   ))
-  const USERNAME_RESERVED_WORDS_FOR_USER_ROLE = Object.freeze(['客服', '官方', '平台', '管理', 'admin'])
 
-  function findUsernameBlockedWord(username, targetRole) {
+  function findUsernameBlockedWord(username) {
     const normalized = String(username || '').toLowerCase()
-    const bannedWord = usernameBannedWords.find((word) => normalized.includes(word.toLowerCase()))
-    if (bannedWord) return bannedWord
-    if (String(targetRole || '').trim() === 'user') {
-      const reservedWord = USERNAME_RESERVED_WORDS_FOR_USER_ROLE.find((word) =>
-        normalized.includes(String(word).toLowerCase())
-      )
-      if (reservedWord) return reservedWord
-    }
-    return ''
+    return usernameBannedWords.find((word) => normalized.includes(word.toLowerCase())) || ''
   }
 
   function resolvePolicyAllowedRoles(policy = {}) {
@@ -1774,11 +1765,15 @@ app.put(
       return res.status(404).json({ message: '用户不存在' })
     }
 
+    if (String(rows[0].role || '').trim() !== 'support') {
+      return res.status(400).json({ message: '仅支持修改客服账号的用户名' })
+    }
+
     if (nextUsername === String(rows[0].username || '').trim()) {
       return res.status(400).json({ message: '新用户名与当前用户名相同' })
     }
 
-    const blockedWord = findUsernameBlockedWord(nextUsername, rows[0].role)
+    const blockedWord = findUsernameBlockedWord(nextUsername)
     if (blockedWord) {
       return res.status(400).json({ message: `用户名包含不允许的词汇：${blockedWord}` })
     }

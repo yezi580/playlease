@@ -45,12 +45,14 @@
               <td>{{ item.id }}</td>
               <td>
                 <input
+                  v-if="isSupportUser(item)"
                   v-model.trim="usernameDrafts[item.id]"
                   type="text"
                   maxlength="20"
                   class="username-input"
                   :disabled="Boolean(usernameSubmittingMap[item.id])"
                 >
+                <template v-else>{{ item.username }}</template>
               </td>
               <td>{{ item.phone }}</td>
               <td>
@@ -274,7 +276,11 @@ export default {
       if (Boolean(this.roleSubmittingMap[item.id])) return true
       return String(draftRole) !== String(item.role)
     },
+    isSupportUser(item) {
+      return String(item?.role || '').trim() === 'support'
+    },
     shouldShowUsernameSave(item) {
+      if (!this.isSupportUser(item)) return false
       const draftUsername = this.usernameDrafts[item.id]
       if (draftUsername == null) return false
       if (Boolean(this.usernameSubmittingMap[item.id])) return true
@@ -329,6 +335,7 @@ export default {
       }
     },
     async saveUsername(item) {
+      if (!this.isSupportUser(item)) return
       const nextUsername = String(this.usernameDrafts[item.id] || '').trim()
       if (!nextUsername || nextUsername === String(item.username || '')) return
       if (nextUsername.length < 2 || nextUsername.length > 20) {
