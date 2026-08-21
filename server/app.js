@@ -2651,7 +2651,8 @@ registerAdminRoutes({
   smsProvider,
   loadBusinessSettings,
   invalidateAuthUserCache,
-  orderLifecycleService
+  orderLifecycleService,
+  chatBannedWords: CHAT_BANNED_WORDS
 })
 
 

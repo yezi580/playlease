@@ -33,7 +33,8 @@ export function registerAdminRoutes(deps) {
     smsProvider,
     loadBusinessSettings,
     invalidateAuthUserCache,
-    orderLifecycleService
+    orderLifecycleService,
+    chatBannedWords = []
   } = deps
   const {
     authRequired,
@@ -78,6 +79,27 @@ export function registerAdminRoutes(deps) {
   const { recordOperationSafely: recordAdminOperationSafely } = createOperationLogService({ pool })
   const sanitizeAdminRemark = sanitizeRemark
   const getAdminListingSummaryById = getListingSummaryById
+
+  // 改名校验：所有角色复用聊天违禁词表；普通用户额外拦截客服/官方等冒充词
+  const usernameBannedWords = Array.from(new Set(
+    (Array.isArray(chatBannedWords) ? chatBannedWords : [])
+      .map((word) => String(word || '').trim())
+      .filter(Boolean)
+  ))
+  const USERNAME_RESERVED_WORDS_FOR_USER_ROLE = Object.freeze(['客服', '官方', '平台', '管理', 'admin'])
+
+  function findUsernameBlockedWord(username, targetRole) {
+    const normalized = String(username || '').toLowerCase()
+    const bannedWord = usernameBannedWords.find((word) => normalized.includes(word.toLowerCase()))
+    if (bannedWord) return bannedWord
+    if (String(targetRole || '').trim() === 'user') {
+      const reservedWord = USERNAME_RESERVED_WORDS_FOR_USER_ROLE.find((word) =>
+        normalized.includes(String(word).toLowerCase())
+      )
+      if (reservedWord) return reservedWord
+    }
+    return ''
+  }
 
   function resolvePolicyAllowedRoles(policy = {}) {
     const roles = Array.isArray(policy.allowedRoles) && policy.allowedRoles.length
@@ -1719,6 +1741,91 @@ app.put(
   } catch (error) {
     console.error('[admin] update user role failed', error)
     res.status(500).json({ message: '更新用户角色失败' })
+  }
+  }
+)
+
+app.put(
+  '/api/admin/users/:id/username',
+  authRequired,
+  adminOnly,
+  async (req, res) => {
+  const userId = Math.max(0, Number(req.params?.id || 0) || 0)
+  const nextUsername = String(req.body?.username || '').trim()
+
+  if (!userId) {
+    return res.status(400).json({ message: '无效的用户ID' })
+  }
+
+  if (nextUsername.length < 2 || nextUsername.length > 20) {
+    return res.status(400).json({ message: '用户名长度需在 2 到 20 个字符之间' })
+  }
+
+  if (/[\r\n\t]/.test(nextUsername)) {
+    return res.status(400).json({ message: '用户名不能包含换行或制表符' })
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, username, phone, role, banned_until, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+      [userId]
+    )
+    if (!rows.length) {
+      return res.status(404).json({ message: '用户不存在' })
+    }
+
+    if (nextUsername === String(rows[0].username || '').trim()) {
+      return res.status(400).json({ message: '新用户名与当前用户名相同' })
+    }
+
+    const blockedWord = findUsernameBlockedWord(nextUsername, rows[0].role)
+    if (blockedWord) {
+      return res.status(400).json({ message: `用户名包含不允许的词汇：${blockedWord}` })
+    }
+
+    // 库表为 utf8mb4_unicode_ci，同名校验天然不区分大小写
+    const [duplicateRows] = await pool.execute(
+      'SELECT id FROM users WHERE username = ? AND id <> ? LIMIT 1',
+      [nextUsername, userId]
+    )
+    if (duplicateRows.length) {
+      return res.status(409).json({ message: '该用户名已被其他用户使用' })
+    }
+
+    await pool.execute(
+      'UPDATE users SET username = ? WHERE id = ?',
+      [nextUsername, userId]
+    )
+    if (typeof invalidateAuthUserCache === 'function') {
+      invalidateAuthUserCache(userId)
+    }
+
+    const [updatedRows] = await pool.execute(
+      'SELECT id, username, phone, role, banned_until, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+      [userId]
+    )
+
+    // 审计先写后响应：保证高危操作的日志先于响应落库
+    await recordAdminOperationSafely({
+      operatorUserId: req.auth?.userId,
+      operatorName: req.auth?.username,
+      module: 'user',
+      action: 'update_username',
+      targetType: 'user',
+      targetId: userId,
+      targetLabel: `${updatedRows[0]?.username || rows[0]?.username || '用户'} (#${userId})`,
+      beforeSnapshot: rows[0],
+      afterSnapshot: updatedRows[0],
+      remark: `用户名由 ${rows[0]?.username || '--'} 改为 ${nextUsername}`
+    })
+
+    res.json({
+      message: '用户名已更新',
+      user: updatedRows[0]
+    })
+  } catch (error) {
+    console.error('[admin] update user username failed', error)
+    res.status(500).json({ message: '更新用户名失败' })
   }
   }
 )

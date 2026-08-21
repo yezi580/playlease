@@ -36,13 +36,22 @@
               <th>封禁天数</th>
               <th>封禁操作</th>
               <th>角色操作</th>
+              <th>改名操作</th>
               <th>注册时间</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in users" :key="item.id">
               <td>{{ item.id }}</td>
-              <td>{{ item.username }}</td>
+              <td>
+                <input
+                  v-model.trim="usernameDrafts[item.id]"
+                  type="text"
+                  maxlength="20"
+                  class="username-input"
+                  :disabled="Boolean(usernameSubmittingMap[item.id])"
+                >
+              </td>
               <td>{{ item.phone }}</td>
               <td>
                 <select
@@ -103,6 +112,17 @@
                   {{ roleSubmittingMap[item.id] ? '保存中...' : '保存' }}
                 </button>
               </td>
+              <td>
+                <button
+                  v-if="shouldShowUsernameSave(item)"
+                  type="button"
+                  class="row-btn"
+                  :disabled="Boolean(usernameSubmittingMap[item.id])"
+                  @click="saveUsername(item)"
+                >
+                  {{ usernameSubmittingMap[item.id] ? '保存中...' : '改名' }}
+                </button>
+              </td>
               <td>{{ formatDateTime(item.created_at) }}</td>
             </tr>
           </tbody>
@@ -114,6 +134,9 @@
       </p>
       <p v-if="userBanMessage" class="inline-message" :class="{ 'inline-message--error': userBanMessageType === 'error' }">
         {{ userBanMessage }}
+      </p>
+      <p v-if="usernameMessage" class="inline-message" :class="{ 'inline-message--error': usernameMessageType === 'error' }">
+        {{ usernameMessage }}
       </p>
     </div>
 
@@ -191,7 +214,11 @@ export default {
       userRoleMessage: '',
       userRoleMessageType: 'success',
       userBanMessage: '',
-      userBanMessageType: 'success'
+      userBanMessageType: 'success',
+      usernameDrafts: {},
+      usernameSubmittingMap: {},
+      usernameMessage: '',
+      usernameMessageType: 'success'
     }
   },
   async mounted() {
@@ -210,6 +237,7 @@ export default {
       this.error = ''
       this.userRoleMessage = ''
       this.userBanMessage = ''
+      this.usernameMessage = ''
       try {
         const params = new URLSearchParams({
           page: '1',
@@ -220,6 +248,10 @@ export default {
         this.users = this.sortUsers(Array.isArray(data.list) ? data.list : [])
         this.roleDrafts = this.users.reduce((acc, item) => {
           acc[item.id] = item.role
+          return acc
+        }, {})
+        this.usernameDrafts = this.users.reduce((acc, item) => {
+          acc[item.id] = item.username
           return acc
         }, {})
         this.banDaysDrafts = this.users.reduce((acc, item) => {
@@ -241,6 +273,12 @@ export default {
       if (!draftRole) return false
       if (Boolean(this.roleSubmittingMap[item.id])) return true
       return String(draftRole) !== String(item.role)
+    },
+    shouldShowUsernameSave(item) {
+      const draftUsername = this.usernameDrafts[item.id]
+      if (draftUsername == null) return false
+      if (Boolean(this.usernameSubmittingMap[item.id])) return true
+      return String(draftUsername).trim() !== String(item.username || '')
     },
     isUserBanned(item) {
       if (!item?.banned_until) return false
@@ -286,6 +324,44 @@ export default {
       } finally {
         this.roleSubmittingMap = {
           ...this.roleSubmittingMap,
+          [item.id]: false
+        }
+      }
+    },
+    async saveUsername(item) {
+      const nextUsername = String(this.usernameDrafts[item.id] || '').trim()
+      if (!nextUsername || nextUsername === String(item.username || '')) return
+      if (nextUsername.length < 2 || nextUsername.length > 20) {
+        this.usernameMessageType = 'error'
+        this.usernameMessage = '用户名长度需在 2 到 20 个字符之间'
+        return
+      }
+
+      this.usernameSubmittingMap = {
+        ...this.usernameSubmittingMap,
+        [item.id]: true
+      }
+      this.usernameMessage = ''
+
+      try {
+        const data = await apiFetch(`/api/admin/users/${item.id}/username`, {
+          method: 'PUT',
+          body: JSON.stringify({ username: nextUsername })
+        })
+        const updatedUser = data.user || {}
+        this.applyUpdatedUser(updatedUser)
+        this.usernameMessageType = 'success'
+        this.usernameMessage = `已将用户 #${item.id} 的用户名改为 ${updatedUser.username || nextUsername}`
+      } catch (error) {
+        this.usernameDrafts = {
+          ...this.usernameDrafts,
+          [item.id]: item.username
+        }
+        this.usernameMessageType = 'error'
+        this.usernameMessage = error.message || '更新用户名失败'
+      } finally {
+        this.usernameSubmittingMap = {
+          ...this.usernameSubmittingMap,
           [item.id]: false
         }
       }
@@ -367,6 +443,10 @@ export default {
       this.roleDrafts = {
         ...this.roleDrafts,
         [updatedUser.id]: updatedUser.role || this.roleDrafts[updatedUser.id]
+      }
+      this.usernameDrafts = {
+        ...this.usernameDrafts,
+        [updatedUser.id]: updatedUser.username || this.usernameDrafts[updatedUser.id]
       }
       this.banDaysDrafts = {
         ...this.banDaysDrafts,
@@ -472,7 +552,8 @@ export default {
 
 .toolbar-input,
 .role-select,
-.days-input {
+.days-input,
+.username-input {
   min-height: 40px;
   padding: 0 12px;
   border-radius: 10px;
@@ -556,6 +637,11 @@ export default {
 
 .days-input {
   width: 92px;
+  min-height: 36px;
+}
+
+.username-input {
+  width: 150px;
   min-height: 36px;
 }
 
