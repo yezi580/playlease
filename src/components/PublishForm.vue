@@ -786,6 +786,10 @@ export default {
     window.addEventListener('resize', this.handleViewportResize)
     window.addEventListener('keydown', this.handlePreviewKeydown)
     this.$el?.addEventListener('wheel', this.handleNumberInputWheel, { passive: false })
+    // 暂不做 50M 起租的前后端校验（开发测试阶段需小额账号），仅进入发布页时提示
+    if (!this.isEditMode) {
+      showWarningToast('出租哈夫币余额要求 50M 起', { duration: 3200 })
+    }
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.handleViewportResize)
