@@ -192,11 +192,13 @@
 
       <section class="publish-section">
         <h3>额外物品与图片</h3>
+        <p v-if="!useSellerPricingView" class="items-price-note">「出售」物品按下列单价在使用结算时从押金中扣除，「赠送」物品不扣费。</p>
 
         <div class="items-table" v-if="!isMobile">
           <div class="item-head-empty"></div>
           <div class="col-label">方式</div>
           <div class="col-label">数量</div>
+          <div class="col-label">单价</div>
           <div class="col-label">总价</div>
 
           <template v-for="item in saleItems" :key="item.key">
@@ -209,6 +211,9 @@
             </div>
             <div class="item-col">
               <input class="item-qty-input readonly-input" :value="getItemQuantity(item.key)" readonly />
+            </div>
+            <div class="item-col">
+              <div class="auto-total">{{ getItemUnitPrice(item.key) }}</div>
             </div>
             <div class="item-col">
               <div class="auto-total">{{ getItemTotal(item.key) }}</div>
@@ -236,6 +241,7 @@
               </div>
             <div class="item-card-body">
               <span class="item-mode-mobile">方式: {{ getItemModeLabel(item.key) }}</span>
+              <span class="item-mode-mobile">单价: {{ getItemUnitPrice(item.key) }}</span>
               <div class="item-qty-mobile">
                 <span class="qty-label">数量:</span>
                 <input class="item-qty-input readonly-input qty-val" :value="getItemQuantity(item.key)" readonly />
@@ -412,10 +418,22 @@ import {
   getCachedBusinessSettings,
   getCompensationPlanOption,
   getEnabledSaleItems,
-  getBuyerRentLabel
+  getBuyerRentLabel,
+  resolveBuyerUnitPriceInCent
 } from '../utils/businessSettings.js'
 import { showWarningToast } from '../utils/toast.js'
 import OrderModal from './OrderModal.vue'
+
+// 额外物品目录视图：同时携带卖家价与买家侧结算价，展示时按角色取用
+function buildSaleItemsView(settings) {
+  return getEnabledSaleItems(settings).map((item) => ({
+    key: item.key,
+    name: item.itemName,
+    remark: item.remark,
+    sellerUnitPriceInCent: Number(item.unitPriceInCent || 0),
+    buyerUnitPriceInCent: resolveBuyerUnitPriceInCent(item)
+  }))
+}
 
 export default {
   name: 'ListingDetail',
@@ -462,7 +480,7 @@ export default {
       showOrderModal: false,
       isMobile: window.innerWidth <= 1200,
       businessSettings: getCachedBusinessSettings(),
-      saleItems: getEnabledSaleItems().map((item) => ({ key: item.key, name: item.itemName, remark: item.remark })),
+      saleItems: buildSaleItemsView(getCachedBusinessSettings()),
       protectedBanImages: [],
       protectedBanVideo: '',
       protectedMediaRequestId: 0,
@@ -506,6 +524,14 @@ export default {
       return deposit + this.displayRentPrice
     },
     totalItemsPrice() {
+      // 买家视角按买家侧结算价汇总（从押金扣除口径），卖家视角为卖家收益口径
+      if (!this.useSellerPricingView) {
+        const priceMap = new Map(this.saleItems.map((item) => [item.key, Number(item.buyerUnitPriceInCent || 0)]))
+        return (this.detail?.items || []).reduce((sum, item) => {
+          if (item?.item_mode === 'gift') return sum
+          return sum + Number(item?.quantity || 0) * (priceMap.get(item.item_key) || 0)
+        }, 0)
+      }
       return (this.detail?.items || []).reduce((sum, item) => {
         if (item?.item_mode === 'gift') return sum
         return sum + parseAmount(item?.total_price)
@@ -570,11 +596,7 @@ export default {
     window.addEventListener('resize', this.handleResize)
     window.addEventListener('keydown', this.handlePreviewKeydown)
     this.businessSettings = await fetchBusinessSettings()
-    this.saleItems = getEnabledSaleItems(this.businessSettings).map((item) => ({
-      key: item.key,
-      name: item.itemName,
-      remark: item.remark
-    }))
+    this.saleItems = buildSaleItemsView(this.businessSettings)
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize)
@@ -755,8 +777,24 @@ export default {
       const item = this.getItemByKey(itemKey)
       return item && item.quantity !== null && item.quantity !== undefined ? String(item.quantity) : '0'
     },
+    // 单价按角色展示：买家视角为买家侧结算价，卖家视角为卖家价（互相不可见）
+    getItemUnitPrice(itemKey) {
+      const catalogItem = this.saleItems.find((item) => item.key === itemKey)
+      if (!catalogItem) return '—'
+      const detailItem = this.getItemByKey(itemKey)
+      if (detailItem?.item_mode === 'gift') return '—'
+      const unitPriceInCent = this.useSellerPricingView
+        ? catalogItem.sellerUnitPriceInCent
+        : catalogItem.buyerUnitPriceInCent
+      return `${this.formatMoney(unitPriceInCent)} 元`
+    },
     getItemTotal(itemKey) {
       const item = this.getItemByKey(itemKey)
+      if (!this.useSellerPricingView && item?.item_mode !== 'gift') {
+        const catalogItem = this.saleItems.find((entry) => entry.key === itemKey)
+        const quantity = Number(item?.quantity || 0)
+        return `${this.formatMoney(quantity * Number(catalogItem?.buyerUnitPriceInCent || 0))} 元`
+      }
       return `${this.formatMoney(item?.total_price || 0)} 元`
     },
     getItemModeLabel(itemKey) {
@@ -1053,9 +1091,15 @@ export default {
 
 .items-table {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 0.9fr 0.9fr 0.9fr 1.1fr;
   gap: 10px 12px;
   align-items: center;
+}
+
+.items-price-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .item-head-empty {

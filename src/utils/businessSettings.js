@@ -55,8 +55,7 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   },
   platformCommission: {
     buyerServiceFeeRatePercent: 10,
-    sellerServiceFeeRatePercent: 10,
-    usedItemsCommissionRatePercent: 0
+    sellerServiceFeeRatePercent: 10
   },
   inviteReward: {
     buyerServiceFeeRewardRatePercent: 30
@@ -69,13 +68,13 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   },
   saleItems: [
     { key: 'topCard', itemName: '顶级保险卡', unitPriceInCent: 200, enabled: true },
-    { key: 'awmBullet', itemName: 'AWM子弹（发）', unitPriceInCent: 60, enabled: true },
+    { key: 'awmBullet', itemName: 'AWM子弹（发）', unitPriceInCent: 60, buyerUnitPriceInCent: 80, enabled: true },
     { key: 'barrettBullet', itemName: '巴雷特子弹（发）', remark: '指穿甲弹，别的不值钱', unitPriceInCent: 30, enabled: true },
     { key: 'bullet762x54R', itemName: '6级7.62×54R（组）', unitPriceInCent: 600, enabled: true },
     { key: 'bullet762x51', itemName: '6级7.62×51（组）', unitPriceInCent: 600, enabled: true },
     { key: 'bullet68x51', itemName: '6级6.8×51（组）', unitPriceInCent: 600, enabled: true },
-    { key: 'helmetLv6', itemName: '6级头盔', unitPriceInCent: 200, enabled: true },
-    { key: 'armorLv6', itemName: '6级护甲', unitPriceInCent: 200, enabled: true },
+    { key: 'helmetLv6', itemName: '6级头盔', unitPriceInCent: 200, buyerUnitPriceInCent: 250, enabled: true },
+    { key: 'armorLv6', itemName: '6级护甲', unitPriceInCent: 200, buyerUnitPriceInCent: 250, enabled: true },
     { key: 'coffeeBean', itemName: '高级咖啡豆', unitPriceInCent: 300, enabled: true },
     { key: 'bulletPart', itemName: '高级子弹零件', unitPriceInCent: 300, enabled: true }
   ],
@@ -193,8 +192,7 @@ export function normalizeBusinessSettings(rawValue = {}) {
     },
     platformCommission: {
       buyerServiceFeeRatePercent: normalizeNumber(commissionSource.buyerServiceFeeRatePercent, defaults.platformCommission.buyerServiceFeeRatePercent, { min: 0, max: 100 }),
-      sellerServiceFeeRatePercent: normalizeNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100 }),
-      usedItemsCommissionRatePercent: normalizeNumber(commissionSource.usedItemsCommissionRatePercent, defaults.platformCommission.usedItemsCommissionRatePercent, { min: 0, max: 100 })
+      sellerServiceFeeRatePercent: normalizeNumber(commissionSource.sellerServiceFeeRatePercent, defaults.platformCommission.sellerServiceFeeRatePercent, { min: 0, max: 100 })
     },
     inviteReward: {
       buyerServiceFeeRewardRatePercent: normalizeNumber(
@@ -223,6 +221,7 @@ export function normalizeBusinessSettings(rawValue = {}) {
         itemName: normalizeSaleItemDisplayName(defaultItem.key, matched?.itemName, defaultItem.itemName),
         remark: defaultItem.remark,
         unitPriceInCent: normalizeNumber(priceSource?.unitPriceInCent, defaultItem.unitPriceInCent, { min: 0, max: 99999999, integer: true }),
+        buyerUnitPriceInCent: normalizeNumber(matched?.buyerUnitPriceInCent, defaultItem.buyerUnitPriceInCent || 0, { min: 0, max: 99999999, integer: true }),
         enabled: enabledSource?.enabled === undefined ? defaultItem.enabled : Boolean(enabledSource?.enabled)
       }
     }),
@@ -281,6 +280,19 @@ export function getCachedBusinessSettings() {
 
 export function getEnabledSaleItems(settings = null) {
   return normalizeBusinessSettings(settings || getCachedBusinessSettings()).saleItems.filter((item) => item.enabled)
+}
+
+/**
+ * 解析物品的买家侧结算单价（分）。
+ * 买家价仅在高于卖家价时生效（买家侧升价），否则与卖家价一致。
+ */
+export function resolveBuyerUnitPriceInCent(saleItem, settings = null) {
+  const item = saleItem?.unitPriceInCent !== undefined
+    ? saleItem
+    : getEnabledSaleItems(settings).find((entry) => entry.key === saleItem?.key)
+  const sellerPrice = Math.max(0, Number(item?.unitPriceInCent || 0))
+  const buyerPrice = Math.max(0, Number(item?.buyerUnitPriceInCent || 0))
+  return buyerPrice > sellerPrice ? buyerPrice : sellerPrice
 }
 
 export function getKnifeSkinOptions(settings = null) {

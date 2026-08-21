@@ -1,4 +1,4 @@
-import { formatPercentLabel } from './businessSettings.js'
+import { formatPercentLabel, resolveBuyerUnitPriceInCent } from './businessSettings.js'
 
 export const MAX_BAN_IMAGE_SIZE = 5 * 1024 * 1024
 export const MAX_BAN_VIDEO_SIZE = 100 * 1024 * 1024
@@ -168,7 +168,9 @@ export function buildSaleItems(enabledSaleItems = []) {
     key: item.key,
     name: item.itemName,
     remark: item.remark,
-    priceInYuan: Number(item.unitPriceInCent || 0) / 100
+    priceInYuan: Number(item.unitPriceInCent || 0) / 100,
+    // 买家侧结算单价（元）：高于卖家价时为买家扣款口径，用于押金覆盖计算（不展示给卖家）
+    buyerPriceInYuan: resolveBuyerUnitPriceInCent(item) / 100
   }))
 }
 

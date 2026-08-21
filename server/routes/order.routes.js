@@ -397,24 +397,47 @@ app.get('/api/orders/:id/settlement-preview', authRequired, authenticatedReadLim
       return res.status(404).json({ message: '订单不存在' })
     }
     const currentUserId = Number(req.auth.userId)
+    const isBuyerView = currentUserId === Number(accessOrder.buyer_id)
+    const isSellerView = currentUserId === Number(accessOrder.seller_id)
     if (
-      currentUserId !== Number(accessOrder.buyer_id)
-      && currentUserId !== Number(accessOrder.seller_id)
+      !isBuyerView
+      && !isSellerView
       && currentUserId !== Number(accessOrder.support_assignee_id || 0)
     ) {
       return res.status(403).json({ message: '无权查看此订单结算信息' })
     }
     const preview = await orderLifecycleService.buildSettlementPreview(orderId)
+    // 金额按角色过滤：额外物品买家扣款/卖家收益分属两侧，互相不可见（买家侧升价保密），
+    // 平台抽成与对方租金仅客服可见
+    const baseFields = {
+      deposit_amount: normalizeOrderMoneyFields({ amount: 0, deposit_amount: preview.depositAmount }).deposit_amount
+    }
+    const buyerFields = isBuyerView || !isSellerView
+      ? {
+          buyer_rent_amount: normalizeOrderMoneyFields({ amount: preview.buyerRentAmount, deposit_amount: 0 }).amount,
+          used_items_amount: normalizeOrderMoneyFields({ amount: preview.usedItemsAmount, deposit_amount: 0 }).amount,
+          buyer_refund_amount: normalizeOrderMoneyFields({ amount: preview.buyerRefundAmount, deposit_amount: 0 }).amount
+        }
+      : {}
+    const sellerFields = isSellerView || !isBuyerView
+      ? {
+          rent_amount: normalizeOrderMoneyFields({ amount: preview.rentAmount, deposit_amount: 0 }).amount,
+          seller_rent_amount: normalizeOrderMoneyFields({ amount: preview.sellerRentAmount, deposit_amount: 0 }).amount,
+          seller_income_amount: normalizeOrderMoneyFields({ amount: preview.sellerIncomeAmount, deposit_amount: 0 }).amount
+        }
+      : {}
+    const supportFields = !isBuyerView && !isSellerView
+      ? {
+          platform_fee_amount: normalizeOrderMoneyFields({ amount: preview.platformFeeAmount, deposit_amount: 0 }).amount,
+          used_items_seller_amount: normalizeOrderMoneyFields({ amount: preview.usedItemsSellerAmount || 0, deposit_amount: 0 }).amount,
+          used_items_markup_amount: normalizeOrderMoneyFields({ amount: preview.usedItemsMarkupAmount || 0, deposit_amount: 0 }).amount
+        }
+      : {}
     res.json({
-      rent_amount: normalizeOrderMoneyFields({ amount: preview.rentAmount, deposit_amount: 0 }).amount,
-      seller_rent_amount: normalizeOrderMoneyFields({ amount: preview.sellerRentAmount, deposit_amount: 0 }).amount,
-      buyer_rent_amount: normalizeOrderMoneyFields({ amount: preview.buyerRentAmount, deposit_amount: 0 }).amount,
-      deposit_amount: normalizeOrderMoneyFields({ amount: 0, deposit_amount: preview.depositAmount }).deposit_amount,
-      used_items_amount: normalizeOrderMoneyFields({ amount: preview.usedItemsAmount, deposit_amount: 0 }).amount,
-      used_items_commission_amount: normalizeOrderMoneyFields({ amount: preview.usedItemsCommissionAmount || 0, deposit_amount: 0 }).amount,
-      platform_fee_amount: normalizeOrderMoneyFields({ amount: preview.platformFeeAmount, deposit_amount: 0 }).amount,
-      seller_income_amount: normalizeOrderMoneyFields({ amount: preview.sellerIncomeAmount, deposit_amount: 0 }).amount,
-      buyer_refund_amount: normalizeOrderMoneyFields({ amount: preview.buyerRefundAmount, deposit_amount: 0 }).amount
+      ...baseFields,
+      ...buyerFields,
+      ...sellerFields,
+      ...supportFields
     })
   } catch (error) {
     handleOrderLifecycleError(error, res, '加载结算预览失败')

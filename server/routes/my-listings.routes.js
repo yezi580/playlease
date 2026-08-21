@@ -4,7 +4,8 @@
 
 import {
   getSaleItemConfig,
-  loadBusinessSettings
+  loadBusinessSettings,
+  resolveBuyerUnitPriceInCent
 } from '../modules/business-settings/runtime.js'
 import { assignListingReviewToLeastBusySupport } from '../modules/listing/listing-review.service.js'
 
@@ -29,7 +30,6 @@ export function registerMyListingsRoutes(deps) {
     toNullableInteger,
     normalizeInsuranceLevel,
     normalizeListingItemMode,
-    centToRoundedYuan,
     getObsoleteListingImageUrls,
     getObsoleteBanMediaUrls,
     computeListingDerivedValues,
@@ -249,12 +249,13 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
     const qty = toNullableInteger(editItemsPayload[itemKey]?.quantity) ?? 0
     const itemMode = normalizeListingItemMode(editItemsPayload[itemKey]?.itemMode || editItemsPayload[itemKey]?.mode)
     if (itemMode === 'gift') continue
-    editItemsTotalCent += qty * config.unitPriceInCent
+    // 押金须覆盖买家侧结算价（含买家侧升价），文案不透露具体金额以免向卖家泄露买家价
+    editItemsTotalCent += qty * resolveBuyerUnitPriceInCent(config.unitPriceInCent, config.buyerUnitPriceInCent)
   }
   const minimumItemsCoverageAmount = Math.ceil(editItemsTotalCent * itemCoverageRate / 100)
   if (minimumItemsCoverageAmount > 0 && editDepositCent < minimumItemsCoverageAmount) {
     return res.status(400).json({
-      message: `押金（¥${centToRoundedYuan(editDepositCent)}）不能低于额外物品覆盖金额（¥${centToRoundedYuan(minimumItemsCoverageAmount)}）`
+      message: '押金不足以覆盖额外物品使用的扣除风险，请提高押金或减少额外物品数量'
     })
   }
 

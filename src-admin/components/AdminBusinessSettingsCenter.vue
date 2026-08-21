@@ -216,7 +216,7 @@
           <article class="panel">
             <div class="panel-head">
               <strong>平台抽成规则</strong>
-              <span>维护买家侧和卖家侧服务费率、额外物品抽成率</span>
+              <span>维护买家侧和卖家侧服务费率</span>
             </div>
             <div class="field-grid field-grid--double">
               <label class="field">
@@ -227,12 +227,8 @@
                 <span>卖家侧服务费率（%）</span>
                 <input v-model.number="form.platformCommission.sellerServiceFeeRatePercent" type="number" min="0" max="100" step="0.01">
               </label>
-              <label class="field">
-                <span>额外物品抽成率（%）</span>
-                <input v-model.number="form.platformCommission.usedItemsCommissionRatePercent" type="number" min="0" max="100" step="0.01">
-              </label>
             </div>
-            <p class="panel-tip">额外物品抽成率作用于卖家侧：买家按申报金额全额从押金扣除，平台按此费率从卖家的物品收益中抽成。</p>
+            <p class="panel-tip">额外物品不再按比例抽成：平台收益来自「买家价 − 卖家价」差价，在物品定价区按物品配置。</p>
           </article>
 
           <article class="panel">
@@ -362,7 +358,7 @@
           <article class="panel">
             <div class="panel-head">
               <strong>出售额外物品定价</strong>
-              <span>管理可售物品名称、价格和启用状态</span>
+              <span>管理可售物品名称、双边价格和启用状态</span>
             </div>
             <div class="array-grid">
               <div v-for="item in form.saleItems" :key="item.key" class="compact-item-card">
@@ -375,7 +371,7 @@
                   <input v-model.trim="item.itemName" type="text" maxlength="40" style="min-height: 36px; padding: 6px 10px;">
                 </label>
                 <label class="field">
-                  <span>售价（元）</span>
+                  <span>售价（元，卖家结算价）</span>
                   <input
                     :value="formatYuan(item.unitPriceInCent)"
                     type="number"
@@ -385,8 +381,21 @@
                     style="min-height: 36px; padding: 6px 10px;"
                   >
                 </label>
+                <label class="field">
+                  <span>买家价（元，结算扣款价）</span>
+                  <input
+                    :value="item.buyerUnitPriceInCent > 0 ? formatYuan(item.buyerUnitPriceInCent) : ''"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="留空或低于售价 = 买家同价"
+                    @input="updateSaleItemBuyerPrice(item, $event.target.value)"
+                    style="min-height: 36px; padding: 6px 10px;"
+                  >
+                </label>
               </div>
             </div>
+            <p class="panel-tip">买家结算时按「买家价」从押金扣除，卖家按「售价」全额入账，差价归平台；双方只能看到各自一侧的价格。买家价不高于售价时视为买家同价。</p>
           </article>
 
         </div>
@@ -505,6 +514,9 @@ export default {
     },
     updateSaleItemPrice(item, value) {
       item.unitPriceInCent = yuanToCent(value)
+    },
+    updateSaleItemBuyerPrice(item, value) {
+      item.buyerUnitPriceInCent = yuanToCent(value)
     },
     handleNumberInputKeydown(event) {
       const input = event.target

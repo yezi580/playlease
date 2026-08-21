@@ -732,11 +732,20 @@ export default {
     totalItemsPrice() {
       return this.saleItems.reduce((sum, item) => sum + this.calcTotal(item.key), 0)
     },
+    // 押金覆盖按买家侧结算价计算（含买家侧升价），该口径不展示给卖家
+    buyerItemsCoverageTotal() {
+      return this.saleItems.reduce((sum, item) => {
+        const qty = Number(this.publishForm.items[item.key]?.quantity || 0)
+        const mode = this.publishForm.items[item.key]?.mode === 'gift' ? 'gift' : 'sale'
+        if (mode === 'gift') return sum
+        return sum + qty * Number(item?.buyerPriceInYuan || 0)
+      }, 0)
+    },
     recommendedDeposit() {
       const depositMin = Number(this.MIN_DEPOSIT_YUAN || MIN_DEPOSIT_YUAN)
       const depositMax = Number(this.MAX_DEPOSIT_YUAN || MAX_DEPOSIT_YUAN)
       const rentBasedRecommend = this.computedRentPrice * Number(this.businessSettings.listingRecommendations?.recommendDepositRatioPercent || 100) / 100
-      const itemsCoverageAmount = this.totalItemsPrice * Number(this.businessSettings.listingRecommendations?.itemsDepositCoveragePercent || 100) / 100
+      const itemsCoverageAmount = this.buyerItemsCoverageTotal * Number(this.businessSettings.listingRecommendations?.itemsDepositCoveragePercent || 100) / 100
       const rounded = Math.ceil(Math.max(rentBasedRecommend, itemsCoverageAmount, depositMin))
       return Math.min(depositMax, rounded)
     },
@@ -1073,9 +1082,9 @@ export default {
           const deposit = Number(value)
           if (!Number.isInteger(deposit) || deposit < 0) return '押金请输入有效的非负整数'
           if (deposit < this.MIN_DEPOSIT_YUAN || deposit > this.MAX_DEPOSIT_YUAN) return `押金范围为 ${this.MIN_DEPOSIT_YUAN} - ${this.MAX_DEPOSIT_YUAN} 元`
-          const minimumItemsCoverageAmount = this.totalItemsPrice * Number(this.businessSettings.listingRecommendations?.itemsDepositCoveragePercent || 100) / 100
+          const minimumItemsCoverageAmount = this.buyerItemsCoverageTotal * Number(this.businessSettings.listingRecommendations?.itemsDepositCoveragePercent || 100) / 100
           if (deposit < minimumItemsCoverageAmount) {
-            return `押金（¥${deposit}）不能低于额外物品覆盖金额（¥${this.formatMoneyValue(minimumItemsCoverageAmount)}）`
+            return '押金不足以覆盖额外物品使用的扣除风险，请提高押金或减少额外物品数量'
           }
           return ''
         }

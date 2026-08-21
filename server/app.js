@@ -1843,6 +1843,7 @@ async function ensureOrderWorkflowSchema() {
       item_mode ENUM('sale', 'gift') NOT NULL DEFAULT 'sale' COMMENT '道具处理方式',
       quantity INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '快照数量',
       unit_price BIGINT NOT NULL DEFAULT 0 COMMENT '快照单价（分）',
+      buyer_unit_price BIGINT NOT NULL DEFAULT 0 COMMENT '买家侧结算单价快照（分，0=与卖家价一致）',
       total_price BIGINT NOT NULL DEFAULT 0 COMMENT '快照总价（分）',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
       FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
@@ -1851,6 +1852,29 @@ async function ensureOrderWorkflowSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   )
 
+  const orderItemSnapshotColumns = [
+    {
+      name: 'buyer_unit_price',
+      sql: `ALTER TABLE order_item_snapshots
+            ADD COLUMN buyer_unit_price BIGINT NOT NULL DEFAULT 0 COMMENT '买家侧结算单价快照（分，0=与卖家价一致）' AFTER unit_price`
+    }
+  ]
+
+  for (const column of orderItemSnapshotColumns) {
+    const [rows] = await pool.execute(
+      `SELECT COLUMN_NAME
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'order_item_snapshots'
+         AND COLUMN_NAME = ?
+       LIMIT 1`,
+      [databaseName, column.name]
+    )
+    if (!rows.length) {
+      await pool.execute(column.sql)
+    }
+  }
+
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS order_item_usage_reports (
       id INT AUTO_INCREMENT PRIMARY KEY COMMENT '订单额外物品使用记录ID',
@@ -1858,7 +1882,8 @@ async function ensureOrderWorkflowSchema() {
       item_key VARCHAR(40) NOT NULL COMMENT '道具标识',
       snapshot_quantity INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '快照数量',
       reported_quantity INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '买家填报使用数量',
-      reported_total_price BIGINT NOT NULL DEFAULT 0 COMMENT '买家填报总价（分）',
+      reported_total_price BIGINT NOT NULL DEFAULT 0 COMMENT '买家填报总价（分，卖家侧结算口径）',
+      buyer_total_price BIGINT NOT NULL DEFAULT 0 COMMENT '买家侧扣款总价（分，含买家侧升价）',
       buyer_note VARCHAR(500) DEFAULT NULL COMMENT '买家补充说明',
       buyer_reported_by INT DEFAULT NULL COMMENT '填报人用户ID',
       buyer_reported_at DATETIME DEFAULT NULL COMMENT '填报时间',
@@ -1872,6 +1897,29 @@ async function ensureOrderWorkflowSchema() {
       INDEX idx_order_item_usage_order_id (order_id, id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   )
+
+  const orderItemUsageReportColumns = [
+    {
+      name: 'buyer_total_price',
+      sql: `ALTER TABLE order_item_usage_reports
+            ADD COLUMN buyer_total_price BIGINT NOT NULL DEFAULT 0 COMMENT '买家侧扣款总价（分，含买家侧升价）' AFTER reported_total_price`
+    }
+  ]
+
+  for (const column of orderItemUsageReportColumns) {
+    const [rows] = await pool.execute(
+      `SELECT COLUMN_NAME
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'order_item_usage_reports'
+         AND COLUMN_NAME = ?
+       LIMIT 1`,
+      [databaseName, column.name]
+    )
+    if (!rows.length) {
+      await pool.execute(column.sql)
+    }
+  }
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS order_settlements (

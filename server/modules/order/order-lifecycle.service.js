@@ -9,8 +9,9 @@ import {
   calculateCompensationFeeAmount,
   calculateSellerIncomeRent,
   calculateServiceFeeFromSellerRent,
-  calculateUsedItemsCommissionAmount,
-  loadBusinessSettings
+  getSaleItemConfig,
+  loadBusinessSettings,
+  resolveBuyerUnitPriceInCent
 } from '../business-settings/runtime.js'
 
 export class OrderLifecycleError extends Error {
@@ -153,7 +154,7 @@ export function createOrderLifecycleService({
     }
   }
 
-  async function saveOrderItemSnapshots(executor, orderId, listingId) {
+  async function saveOrderItemSnapshots(executor, orderId, listingId, businessSettings = null) {
     const [itemsRows] = await executor.execute(
       `SELECT item_key, item_name, item_mode, quantity, unit_price, total_price
        FROM listing_items
@@ -166,24 +167,34 @@ export function createOrderLifecycleService({
       return
     }
 
+    // 买家侧结算单价在下单时点快照，后续后台调价不影响已成交订单
+    const saleItemConfig = getSaleItemConfig(businessSettings || await loadBusinessSettings(executor))
+
     for (const row of itemsRows) {
+      const sellerUnitPrice = Number(row.unit_price || 0)
+      const itemMode = row.item_mode || 'sale'
+      const buyerUnitPrice = itemMode === 'gift'
+        ? 0
+        : resolveBuyerUnitPriceInCent(sellerUnitPrice, saleItemConfig[row.item_key]?.buyerUnitPriceInCent)
       await executor.execute(
         `INSERT INTO order_item_snapshots (
-          order_id, item_key, item_name, item_mode, quantity, unit_price, total_price
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          order_id, item_key, item_name, item_mode, quantity, unit_price, buyer_unit_price, total_price
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
           item_name = VALUES(item_name),
           item_mode = VALUES(item_mode),
           quantity = VALUES(quantity),
           unit_price = VALUES(unit_price),
+          buyer_unit_price = VALUES(buyer_unit_price),
           total_price = VALUES(total_price)`,
         [
           orderId,
           row.item_key,
           getSaleItemDisplayName(row.item_key, row.item_name),
-          row.item_mode || 'sale',
+          itemMode,
           Number(row.quantity || 0),
-          Number(row.unit_price || 0),
+          sellerUnitPrice,
+          buyerUnitPrice,
           Number(row.total_price || 0)
         ]
       )
@@ -196,8 +207,15 @@ export function createOrderLifecycleService({
       fail(404, { message: '订单不存在' })
     }
 
+    // 额外物品按买卖双侧计价：买家按买家价从押金扣除，卖家按卖家价全额入账，差价归平台。
+    // 旧申报记录无买家总价（0）时回退卖家口径，与历史订单行为一致。
     const [[usageRow]] = await executor.execute(
-      `SELECT COALESCE(SUM(reported_total_price), 0) AS used_items_amount
+      `SELECT
+          COALESCE(SUM(reported_total_price), 0) AS used_items_seller_amount,
+          COALESCE(SUM(CASE
+            WHEN reported_quantity > 0 AND buyer_total_price > 0 THEN buyer_total_price
+            ELSE reported_total_price
+          END), 0) AS used_items_buyer_amount
        FROM order_item_usage_reports
        WHERE order_id = ?`,
       [orderId]
@@ -205,7 +223,10 @@ export function createOrderLifecycleService({
 
     const buyerRentAmount = Number(order.amount || 0)
     const depositAmount = Number(order.deposit_amount || 0)
-    const usedItemsAmount = Number(usageRow?.used_items_amount || 0)
+    // usedItemsAmount = 买家侧扣款合计（从押金扣除的口径，沿用列语义）
+    const usedItemsAmount = Number(usageRow?.used_items_buyer_amount || 0)
+    const usedItemsSellerAmount = Number(usageRow?.used_items_seller_amount || 0)
+    const usedItemsMarkupAmount = Math.max(0, usedItemsAmount - usedItemsSellerAmount)
     const [[listingRow]] = Number(order.listing_id || 0) > 0
       ? await executor.execute(
         `SELECT rent_price, compensation_plan
@@ -222,18 +243,13 @@ export function createOrderLifecycleService({
         : inferSellerRentFromBuyerRent(buyerRentAmount))
     const businessSettings = await loadBusinessSettings(executor)
     const sellerServiceFeeRatePercent = businessSettings.platformCommission?.sellerServiceFeeRatePercent
-    const usedItemsCommissionRatePercent = businessSettings.platformCommission?.usedItemsCommissionRatePercent
     const buyerServiceFeeAmount = calculateBuyerServiceFeeAmount(buyerRentAmount, sellerRentAmount)
     const inviteRewardRatePercent = Math.max(0, Number(businessSettings.inviteReward?.buyerServiceFeeRewardRatePercent || 0))
-    // 额外物品抽成：买家侧仍全额从押金扣除，平台从卖家物品收益中按可配置费率抽成，并入平台总抽成
-    const usedItemsCommissionAmount = calculateUsedItemsCommissionAmount(
-      usedItemsAmount,
-      usedItemsCommissionRatePercent
-    )
+    // 额外物品差价（买家价 − 卖家价）并入平台收益，卖家按卖家价全额入账
     const platformFeeAmount = calculateServiceFeeFromSellerRent(
       sellerRentAmount,
       sellerServiceFeeRatePercent
-    ) + usedItemsCommissionAmount
+    ) + usedItemsMarkupAmount
     const compensationFeeAmount = calculateCompensationFeeAmount(
       sellerRentAmount,
       listingRow?.compensation_plan,
@@ -242,7 +258,7 @@ export function createOrderLifecycleService({
     const sellerIncomeAmount = Math.max(
       0,
       calculateSellerIncomeRent(sellerRentAmount, sellerServiceFeeRatePercent) - compensationFeeAmount
-    ) + usedItemsAmount - usedItemsCommissionAmount
+    ) + usedItemsSellerAmount
     const buyerRefundAmount = Math.max(0, depositAmount - usedItemsAmount)
 
     return {
@@ -251,7 +267,8 @@ export function createOrderLifecycleService({
       sellerRentAmount,
       depositAmount,
       usedItemsAmount,
-      usedItemsCommissionAmount,
+      usedItemsSellerAmount,
+      usedItemsMarkupAmount,
       buyerServiceFeeAmount,
       inviteRewardRatePercent,
       platformFeeAmount,
@@ -322,6 +339,8 @@ export function createOrderLifecycleService({
       sellerRentAmount: rentAmount,
       depositAmount,
       usedItemsAmount: 0,
+      usedItemsSellerAmount: 0,
+      usedItemsMarkupAmount: 0,
       buyerServiceFeeAmount: 0,
       inviteRewardRatePercent: 0,
       platformFeeAmount: 0,
@@ -339,6 +358,8 @@ export function createOrderLifecycleService({
       sellerRentAmount: buyerRentAmount,
       depositAmount,
       usedItemsAmount: 0,
+      usedItemsSellerAmount: 0,
+      usedItemsMarkupAmount: 0,
       buyerServiceFeeAmount: 0,
       inviteRewardRatePercent: 0,
       platformFeeAmount: buyerRentAmount,
@@ -712,7 +733,7 @@ export function createOrderLifecycleService({
             ]
           )
 
-          await saveOrderItemSnapshots(conn, result.insertId, listingId)
+          await saveOrderItemSnapshots(conn, result.insertId, listingId, businessSettings)
 
           await conn.execute(
             `UPDATE listings SET listing_status = 'rented' WHERE id = ? AND listing_status = 'active'`,
@@ -950,7 +971,7 @@ export function createOrderLifecycleService({
       }
 
       const [snapshotRows] = await conn.execute(
-        `SELECT item_key, item_name, item_mode, quantity, unit_price, total_price
+        `SELECT item_key, item_name, item_mode, quantity, unit_price, buyer_unit_price, total_price
          FROM order_item_snapshots
          WHERE order_id = ?
          ORDER BY id ASC`,
@@ -963,16 +984,21 @@ export function createOrderLifecycleService({
         if (!snapshot || snapshot.item_mode !== 'sale') continue
         const snapshotQuantity = Number(snapshot.quantity || 0)
         const quantity = Math.max(0, Math.min(snapshotQuantity, Number(item.reported_quantity || 0)))
-        const totalPrice = quantity * Number(snapshot.unit_price || 0)
+        const sellerUnitPrice = Number(snapshot.unit_price || 0)
+        // 旧订单快照无买家价（0）时按卖家价结算，行为与历史一致
+        const buyerUnitPrice = resolveBuyerUnitPriceInCent(sellerUnitPrice, snapshot.buyer_unit_price)
+        const totalPrice = quantity * sellerUnitPrice
+        const buyerTotalPrice = quantity * buyerUnitPrice
         await conn.execute(
           `INSERT INTO order_item_usage_reports (
-            order_id, item_key, snapshot_quantity, reported_quantity, reported_total_price,
+            order_id, item_key, snapshot_quantity, reported_quantity, reported_total_price, buyer_total_price,
             buyer_note, buyer_reported_by, buyer_reported_at, seller_confirmed, seller_confirmed_by, seller_confirmed_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), 0, NULL, NULL)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0, NULL, NULL)
           ON DUPLICATE KEY UPDATE
             snapshot_quantity = VALUES(snapshot_quantity),
             reported_quantity = VALUES(reported_quantity),
             reported_total_price = VALUES(reported_total_price),
+            buyer_total_price = VALUES(buyer_total_price),
             buyer_note = VALUES(buyer_note),
             buyer_reported_by = VALUES(buyer_reported_by),
             buyer_reported_at = NOW(),
@@ -985,6 +1011,7 @@ export function createOrderLifecycleService({
             snapshotQuantity,
             quantity,
             totalPrice,
+            buyerTotalPrice,
             note || null,
             userId
           ]

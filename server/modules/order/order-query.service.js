@@ -312,11 +312,27 @@ export function createOrderQueryService({
 
     if (listing) {
       const [itemsRows] = await pool.execute(
-        `SELECT item_key, item_name, item_mode, quantity, unit_price, total_price
+        `SELECT item_key, item_name, item_mode, quantity, unit_price, buyer_unit_price, total_price
          FROM order_item_snapshots WHERE order_id = ? ORDER BY id ASC`,
         [orderId]
       )
-      items = itemsRows.map((row) => normalizeSaleItemRow(row))
+      // 买卖双方价格视角隔离：买家只看到买家侧结算价，卖家只看到卖家价
+      items = itemsRows.map((row) => {
+        const { buyer_unit_price, ...normalized } = normalizeSaleItemRow(row)
+        if (!isBuyer) {
+          return normalized
+        }
+        const quantity = Number(normalized.quantity || 0)
+        const sellerPrice = Number(normalized.unit_price || 0)
+        const buyerPrice = normalized.item_mode === 'gift'
+          ? 0
+          : (Number(buyer_unit_price || 0) > sellerPrice ? Number(buyer_unit_price) : sellerPrice)
+        return {
+          ...normalized,
+          unit_price: buyerPrice,
+          total_price: normalized.item_mode === 'gift' ? 0 : quantity * buyerPrice
+        }
+      })
 
       const [imagesRows] = await pool.execute(
         `SELECT image_url FROM listing_images WHERE listing_id = ? ORDER BY ${getListingImagesOrderSql()}`,
@@ -327,7 +343,7 @@ export function createOrderQueryService({
     }
 
     const [usageRows] = await pool.execute(
-      `SELECT item_key, snapshot_quantity, reported_quantity, reported_total_price, buyer_note, buyer_reported_at, seller_confirmed, seller_confirmed_at
+      `SELECT item_key, snapshot_quantity, reported_quantity, reported_total_price, buyer_total_price, buyer_note, buyer_reported_at, seller_confirmed, seller_confirmed_at
        FROM order_item_usage_reports
        WHERE order_id = ?
        ORDER BY id ASC`,
@@ -381,27 +397,48 @@ export function createOrderQueryService({
       : null
     payload.items = items
     payload.images = images
-    payload.item_usage_reports = usageRows.map((row) => normalizeOrderMoneyFields({
-      ...row,
-      amount: row.reported_total_price,
-      deposit_amount: 0
-    }))
-    payload.item_usage_reports = payload.item_usage_reports.map((row) => ({
-      ...row,
-      reported_total_price: row.amount
-    }))
+    // 申报金额按角色映射：买家看买家侧扣款口径，卖家看卖家侧收益口径
+    payload.item_usage_reports = usageRows.map((row) => {
+      const { buyer_total_price, ...rest } = row
+      const sellerAmount = Number(rest.reported_total_price || 0)
+      const buyerAmount = Number(rest.reported_quantity || 0) > 0 && Number(buyer_total_price || 0) > 0
+        ? Number(buyer_total_price)
+        : sellerAmount
+      const effectiveAmount = isBuyer ? buyerAmount : sellerAmount
+      const normalized = normalizeOrderMoneyFields({
+        ...rest,
+        reported_total_price: effectiveAmount,
+        amount: effectiveAmount,
+        deposit_amount: 0
+      })
+      return {
+        ...normalized,
+        reported_total_price: normalized.amount
+      }
+    })
     if (settlementRow) {
       const normalizedSettlement = normalizeOrderMoneyFields({
         amount: settlementRow.rent_amount,
         deposit_amount: settlementRow.deposit_amount
       })
+      // 结算金额按角色过滤：used_items_amount 为买家扣款口径（不发给卖家），
+      // seller_income_amount 含卖家物品收益（不发给买家），平台抽成双方均不可见
+      const buyerVisible = isBuyer
+        ? {
+            used_items_amount: normalizeOrderMoneyFields({ amount: settlementRow.used_items_amount, deposit_amount: 0 }).amount,
+            buyer_refund_amount: normalizeOrderMoneyFields({ amount: settlementRow.buyer_refund_amount, deposit_amount: 0 }).amount
+          }
+        : {}
+      const sellerVisible = isSeller
+        ? {
+            seller_income_amount: normalizeOrderMoneyFields({ amount: settlementRow.seller_income_amount, deposit_amount: 0 }).amount
+          }
+        : {}
       payload.settlement = {
         rent_amount: normalizedSettlement.amount,
         deposit_amount: normalizedSettlement.deposit_amount,
-        used_items_amount: normalizeOrderMoneyFields({ amount: settlementRow.used_items_amount, deposit_amount: 0 }).amount,
-        platform_fee_amount: normalizeOrderMoneyFields({ amount: settlementRow.platform_fee_amount, deposit_amount: 0 }).amount,
-        seller_income_amount: normalizeOrderMoneyFields({ amount: settlementRow.seller_income_amount, deposit_amount: 0 }).amount,
-        buyer_refund_amount: normalizeOrderMoneyFields({ amount: settlementRow.buyer_refund_amount, deposit_amount: 0 }).amount,
+        ...buyerVisible,
+        ...sellerVisible,
         status: settlementRow.status || 'draft',
         executed_at: settlementRow.executed_at || null
       }
