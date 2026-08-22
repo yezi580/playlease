@@ -676,6 +676,10 @@ export function buildListingOrderLockKey(listingId) {
   return buildRedisKey('lock', 'listing-order', Number(listingId || 0))
 }
 
+export function buildJobLockKey(jobName) {
+  return buildRedisKey('lock', 'job', String(jobName || '').trim())
+}
+
 export function createLockToken() {
   return crypto.randomBytes(18).toString('base64url')
 }

@@ -351,6 +351,7 @@ export function registerAuthRoutes(deps) {
     authIpLimiter,
     authRequired,
     authenticatedReadLimiter,
+    isShuttingDown = () => false,
     issueAuthSession,
     setAuthCookie,
     revokeAllLoginSessionsByUserId,
@@ -364,6 +365,11 @@ export function registerAuthRoutes(deps) {
   } = deps
 
   app.get('/api/health', (_req, res) => {
+    // 优雅停机期间返回 503：编排器/负载均衡据此把本实例摘出流量（容器存活检查以外的摘除信号）
+    if (isShuttingDown()) {
+      res.status(503).json({ ok: false, reason: 'shutting_down' })
+      return
+    }
     res.json({ ok: true })
   })
 

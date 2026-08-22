@@ -1,6 +1,22 @@
 /**
  * 后台任务启动逻辑，用于注册周期性维护任务。
+ *
+ * 任务同时受两层保护：
+ * - 进程内重入保护：上一轮未跑完时跳过本轮，防止任务叠加执行
+ * - 跨实例分布式锁：蓝绿双容器（或多实例）并存时，同一轮任务全局只有一个实例执行
  */
+
+import {
+  acquireDistributedLock,
+  buildJobLockKey,
+  createLockToken,
+  releaseDistributedLock
+} from '../infrastructure/redis.js'
+
+// 跨实例任务锁 TTL：需覆盖最慢一轮任务（资金对账含外部支付查单）；
+// 实例崩溃来不及释放时靠 TTL 自动失效，避免任务永久停摆。
+// 单轮跑超 TTL 的极端情况下可能双跑，底层操作有事务 + 行锁兜底。
+const JOB_LOCK_TTL_MS = Math.max(30_000, Number(process.env.JOB_LOCK_TTL_MS || 300_000) || 300_000)
 
 // 重入保护包装：上一轮未跑完（如外部支付查单慢）时跳过本轮，防止任务叠加执行
 function withReentryGuard(label, task) {
@@ -15,6 +31,25 @@ function withReentryGuard(label, task) {
       await task()
     } finally {
       running = false
+    }
+  }
+}
+
+// 单实例执行包装：抢不到锁说明另一实例正在跑本轮，直接跳过。
+// Redis 不可用时 acquireDistributedLock 返回 true（fail-open，与订单锁同一约定）：
+// 宁可偶尔双跑也不要任务停摆——降级场景通常只剩单实例在服务。
+function withSingleNodeLock(lockName, task) {
+  return async () => {
+    const lockKey = buildJobLockKey(lockName)
+    const token = createLockToken()
+    const acquired = await acquireDistributedLock(lockKey, token, JOB_LOCK_TTL_MS)
+    if (!acquired) {
+      return
+    }
+    try {
+      await task()
+    } finally {
+      await releaseDistributedLock(lockKey, token)
     }
   }
 }
@@ -91,28 +126,31 @@ export function startRecurringJobs({
     }
   }
 
-  // 各任务的定时触发与启动首跑都走重入保护，慢轮（如外部支付查单）未结束时跳过本轮
+  // 锁在重入保护外层：本地上一轮未结束时直接跳过，不去碰 Redis；
+  // 抢到锁后才进入实际执行，异常/正常结束都释放锁
   const guardedRunners = {
-    cleanup: withReentryGuard('自动取消', runExpiredOrderCleanup),
-    onlineSnapshot: withReentryGuard('在线快照', runOnlineSnapshotCapture),
-    fundsReconcile: withReentryGuard('资金对账', runProcessingFundsReconcile),
-    settlementArbitration: withReentryGuard('结算仲裁', runSettlementArbitration),
-    listingHotStats: withReentryGuard('商品热度', runListingHotStatsRefresh)
+    cleanup: withSingleNodeLock('cleanup', withReentryGuard('自动取消', runExpiredOrderCleanup)),
+    onlineSnapshot: withSingleNodeLock('online-snapshot', withReentryGuard('在线快照', runOnlineSnapshotCapture)),
+    fundsReconcile: withSingleNodeLock('funds-reconcile', withReentryGuard('资金对账', runProcessingFundsReconcile)),
+    settlementArbitration: withSingleNodeLock('settlement-arbitration', withReentryGuard('结算仲裁', runSettlementArbitration)),
+    listingHotStats: withSingleNodeLock('listing-hot-stats', withReentryGuard('商品热度', runListingHotStatsRefresh))
   }
 
   Object.values(guardedRunners).forEach((runner) => runner())
 
-  const cleanupInterval = setInterval(guardedRunners.cleanup, intervalMs)
-  const onlineSnapshotInterval = setInterval(guardedRunners.onlineSnapshot, onlineSnapshotIntervalMs)
-  const fundsReconcileInterval = setInterval(guardedRunners.fundsReconcile, fundsReconcileIntervalMs)
-  const settlementArbitrationInterval = setInterval(guardedRunners.settlementArbitration, intervalMs)
-  const listingHotStatsInterval = setInterval(guardedRunners.listingHotStats, listingHotStatsIntervalMs)
+  const intervals = [
+    setInterval(guardedRunners.cleanup, intervalMs),
+    setInterval(guardedRunners.onlineSnapshot, onlineSnapshotIntervalMs),
+    setInterval(guardedRunners.fundsReconcile, fundsReconcileIntervalMs),
+    setInterval(guardedRunners.settlementArbitration, intervalMs),
+    setInterval(guardedRunners.listingHotStats, listingHotStatsIntervalMs)
+  ]
 
   return {
-    cleanupInterval,
-    onlineSnapshotInterval,
-    fundsReconcileInterval,
-    settlementArbitrationInterval,
-    listingHotStatsInterval
+    // 优雅停机时调用：停掉所有周期触发，避免排干期间又新起一轮慢任务
+    // （已在进行中的一轮不会被中断，靠任务自身的幂等设计保证可重入）
+    stop() {
+      intervals.forEach((timer) => clearInterval(timer))
+    }
   }
 }

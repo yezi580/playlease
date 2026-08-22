@@ -79,6 +79,18 @@ services:
       MOCK_PAYMENT_AUTO_SUCCESS_SECONDS: ${MOCK_PAYMENT_AUTO_SUCCESS_SECONDS:-3}
       MOCK_PAYMENT_EXPIRES_MINUTES: ${MOCK_PAYMENT_EXPIRES_MINUTES:-15}
       MOCK_WITHDRAW_IMMEDIATE_SUCCESS: ${MOCK_WITHDRAW_IMMEDIATE_SUCCESS:-true}
+    # 优雅停机：api 收到 SIGTERM 后先排干在途请求（应用内上限 15s，见 SHUTDOWN_DRAIN_TIMEOUT_MS），
+    # 宽限期必须大于应用内排干上限，否则等来的是 SIGKILL，排干失去意义
+    stop_grace_period: 30s
+    # 存活检查仅探测进程可用（不查 DB，避免 MySQL 短暂重启时误判）；
+    # 优雅停机期间 /api/health 返回 503，为后续蓝绿切换脚本提供就绪信号
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      # 启动要跑 schema 引导任务后才 listen，宽限启动期不计数
+      start_period: 60s
     volumes:
       - ./server/uploads:/app/uploads
     depends_on:

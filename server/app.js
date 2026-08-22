@@ -189,6 +189,8 @@ function createCorsOriginValidator(allowedOrigins = []) {
 
 // ==================== 应用初始化 ====================
 const app = express()
+// 优雅停机标记：置 true 后 /api/health 返回 503，编排器/网关据此把本实例摘出流量
+let isShuttingDown = false
 const CORS_ALLOWED_ORIGINS = parseCommaSeparatedEnv(process.env.CORS_ALLOWED_ORIGINS)
 const corsOriginValidator = createCorsOriginValidator(CORS_ALLOWED_ORIGINS)
 const httpServer = createServer(app)
@@ -2653,6 +2655,7 @@ registerAuthRoutes({
   authIpLimiter,
   authRequired,
   authenticatedReadLimiter,
+  isShuttingDown: () => isShuttingDown,
   issueAuthSession,
   setAuthCookie: authModule.setAuthCookie,
   revokeAllLoginSessionsByUserId: authModule.revokeAllLoginSessionsByUserId,
@@ -2870,7 +2873,11 @@ export function createApp() {
   return {
     app,
     httpServer,
+    io,
     port,
+    markShuttingDown: () => {
+      isShuttingDown = true
+    },
     ensureUserRoleSchema,
     ensureAdminPasskeySchema,
     ensureAdminTrustedDeviceSchema,
