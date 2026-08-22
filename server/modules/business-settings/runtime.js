@@ -5,6 +5,9 @@
 const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   ratioRecommendation: {
     specialKnives: ['赤枭', '怜悯'],
+    // 发布页基础比例填写区间的上下限
+    baseRatioMin: 35,
+    baseRatioMax: 120,
     grid9: {
       specialKnife: 40,
       otherKnife: 41,
@@ -175,9 +178,15 @@ export function normalizeBusinessSettings(rawValue = {}) {
   const securitySource = source.securityThresholds && typeof source.securityThresholds === 'object'
     ? source.securityThresholds
     : {}
+  const baseRatioMin = normalizeNumber(ratioSource.baseRatioMin, defaults.ratioRecommendation.baseRatioMin, { min: 1, max: 1000, integer: true })
+  const baseRatioMax = normalizeNumber(ratioSource.baseRatioMax, defaults.ratioRecommendation.baseRatioMax, { min: 1, max: 1000, integer: true })
+  // 下限不得高于上限，配置颠倒时整体回退默认区间
+  const hasValidBaseRatioRange = baseRatioMin <= baseRatioMax
   return {
     ratioRecommendation: {
       specialKnives: normalizeStringList(ratioSource.specialKnives, defaults.ratioRecommendation.specialKnives),
+      baseRatioMin: hasValidBaseRatioRange ? baseRatioMin : defaults.ratioRecommendation.baseRatioMin,
+      baseRatioMax: hasValidBaseRatioRange ? baseRatioMax : defaults.ratioRecommendation.baseRatioMax,
       grid9: {
         specialKnife: normalizeNumber(ratioSource.grid9?.specialKnife, defaults.ratioRecommendation.grid9.specialKnife, { min: 1, max: 1000, integer: true }),
         otherKnife: normalizeNumber(ratioSource.grid9?.otherKnife, defaults.ratioRecommendation.grid9.otherKnife, { min: 1, max: 1000, integer: true }),
@@ -372,6 +381,14 @@ export function calculateBuyerServiceFeeAmount(buyerRentAmount, sellerRentAmount
 export function calculateSellerIncomeRent(amount, sellerServiceFeeRatePercent = 10) {
   const normalizedAmount = Math.max(0, Number(amount || 0))
   return Math.max(0, normalizedAmount - calculateServiceFeeFromSellerRent(normalizedAmount, sellerServiceFeeRatePercent))
+}
+
+export function getBaseRatioRange(settings) {
+  const normalizedSettings = normalizeBusinessSettings(settings)
+  return {
+    min: Number(normalizedSettings.ratioRecommendation.baseRatioMin || DEFAULT_BUSINESS_SETTINGS.ratioRecommendation.baseRatioMin),
+    max: Number(normalizedSettings.ratioRecommendation.baseRatioMax || DEFAULT_BUSINESS_SETTINGS.ratioRecommendation.baseRatioMax)
+  }
 }
 
 export function getPendingPaymentTimeoutMinutes(settings) {

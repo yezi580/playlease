@@ -8,6 +8,9 @@ const RENT_DAYS_BELOW_THRESHOLD_MAX = 30
 const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   ratioRecommendation: {
     specialKnives: ['赤枭', '怜悯'],
+    // 发布页基础比例填写区间的上下限
+    baseRatioMin: 35,
+    baseRatioMax: 120,
     grid9: {
       specialKnife: 40,
       otherKnife: 41,
@@ -165,9 +168,15 @@ export function normalizeBusinessSettings(rawValue = {}) {
   const discoverySource = source.discoveryThresholds && typeof source.discoveryThresholds === 'object' ? source.discoveryThresholds : {}
   const operationalSource = source.operationalThresholds && typeof source.operationalThresholds === 'object' ? source.operationalThresholds : {}
   const securitySource = source.securityThresholds && typeof source.securityThresholds === 'object' ? source.securityThresholds : {}
+  const baseRatioMin = normalizeNumber(ratioSource.baseRatioMin, defaults.ratioRecommendation.baseRatioMin, { min: 1, max: 1000, integer: true })
+  const baseRatioMax = normalizeNumber(ratioSource.baseRatioMax, defaults.ratioRecommendation.baseRatioMax, { min: 1, max: 1000, integer: true })
+  // 下限不得高于上限，配置颠倒时整体回退默认区间
+  const hasValidBaseRatioRange = baseRatioMin <= baseRatioMax
   return {
     ratioRecommendation: {
       specialKnives: normalizeStringList(ratioSource.specialKnives, defaults.ratioRecommendation.specialKnives),
+      baseRatioMin: hasValidBaseRatioRange ? baseRatioMin : defaults.ratioRecommendation.baseRatioMin,
+      baseRatioMax: hasValidBaseRatioRange ? baseRatioMax : defaults.ratioRecommendation.baseRatioMax,
       grid9: {
         specialKnife: normalizeNumber(ratioSource.grid9?.specialKnife, defaults.ratioRecommendation.grid9.specialKnife, { min: 1, max: 1000, integer: true }),
         otherKnife: normalizeNumber(ratioSource.grid9?.otherKnife, defaults.ratioRecommendation.grid9.otherKnife, { min: 1, max: 1000, integer: true }),
@@ -335,6 +344,14 @@ export function getInviteRewardRuleText(settings = null) {
   const normalizedSettings = normalizeBusinessSettings(settings || getCachedBusinessSettings())
   const rewardRate = Number(normalizedSettings.inviteReward?.buyerServiceFeeRewardRatePercent || 0)
   return `永久返现：被邀请人每完成一笔订单，邀请人即可获得平台向买家收取服务费的${rewardRate}%作为返现`
+}
+
+export function getBaseRatioRange(settings = null) {
+  const normalizedSettings = normalizeBusinessSettings(settings || getCachedBusinessSettings())
+  return {
+    min: Number(normalizedSettings.ratioRecommendation.baseRatioMin || DEFAULT_BUSINESS_SETTINGS.ratioRecommendation.baseRatioMin),
+    max: Number(normalizedSettings.ratioRecommendation.baseRatioMax || DEFAULT_BUSINESS_SETTINGS.ratioRecommendation.baseRatioMax)
+  }
 }
 
 export function calculateBaseRatio(gridSize, knifeSkinText, settings = null) {

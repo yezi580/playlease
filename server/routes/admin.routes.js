@@ -304,6 +304,9 @@ function buildAdminSmsVerifyErrorResponse(result, thresholds = buildDefaultAdmin
 const DEFAULT_ADMIN_BUSINESS_SETTINGS = Object.freeze({
   ratioRecommendation: {
     specialKnives: ['赤枭', '怜悯'],
+    // 发布页基础比例填写区间的上下限
+    baseRatioMin: 35,
+    baseRatioMax: 120,
     grid9: {
       specialKnife: 40,
       otherKnife: 41,
@@ -484,12 +487,18 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
   const securitySource = source.securityThresholds && typeof source.securityThresholds === 'object'
     ? source.securityThresholds
     : {}
+  const baseRatioMin = normalizeAdminInteger(ratioSource.baseRatioMin, defaults.ratioRecommendation.baseRatioMin, { min: 1, max: 1000 })
+  const baseRatioMax = normalizeAdminInteger(ratioSource.baseRatioMax, defaults.ratioRecommendation.baseRatioMax, { min: 1, max: 1000 })
+  // 下限不得高于上限，配置颠倒时整体回退默认区间
+  const hasValidBaseRatioRange = baseRatioMin <= baseRatioMax
   return {
     ratioRecommendation: {
       specialKnives: normalizeAdminStringList(
         ratioSource.specialKnives,
         defaults.ratioRecommendation.specialKnives
       ),
+      baseRatioMin: hasValidBaseRatioRange ? baseRatioMin : defaults.ratioRecommendation.baseRatioMin,
+      baseRatioMax: hasValidBaseRatioRange ? baseRatioMax : defaults.ratioRecommendation.baseRatioMax,
       grid9: {
         specialKnife: normalizeAdminInteger(ratioSource.grid9?.specialKnife, defaults.ratioRecommendation.grid9.specialKnife, { min: 1, max: 1000 }),
         otherKnife: normalizeAdminInteger(ratioSource.grid9?.otherKnife, defaults.ratioRecommendation.grid9.otherKnife, { min: 1, max: 1000 }),

@@ -284,8 +284,8 @@
           </label>
 
           <label>
-            <span>基础比例</span>
-            <input v-model.trim="publishForm.baseRatio" type="number" min="38" max="55" step="1" :placeholder="`推荐值：${recommendedBaseRatio}`" @input="handleNonNegativeIntegerInput('baseRatio')" @blur="handleFieldBlur('baseRatio')" />
+            <span>基础比例<em class="inline-label-hint">{{ baseRatioRange.min }} - {{ baseRatioRange.max }}</em></span>
+            <input v-model.trim="publishForm.baseRatio" type="number" :min="baseRatioRange.min" :max="baseRatioRange.max" step="1" :placeholder="`推荐值：${recommendedBaseRatio}`" @input="handleNonNegativeIntegerInput('baseRatio')" @blur="handleFieldBlur('baseRatio')" />
             <small v-if="fieldErrors.baseRatio" class="field-hint error-field-hint">{{ fieldErrors.baseRatio }}</small>
           </label>
 
@@ -532,6 +532,7 @@ import { VIRTUAL_ASSET_AGREEMENT, OWNER_AGREEMENT } from '../constants/agreement
 import {
   calculateBaseRatio,
   fetchBusinessSettings,
+  getBaseRatioRange,
   formatPercentLabel,
   getCachedBusinessSettings,
   getCompensationPlanOption,
@@ -665,9 +666,12 @@ export default {
 
       return ratio
     },
+    baseRatioRange() {
+      return getBaseRatioRange(this.businessSettings)
+    },
     computedBaseRatio() {
       const userValue = Number(this.publishForm.baseRatio)
-      if (Number.isInteger(userValue) && userValue >= 38 && userValue <= 55) {
+      if (Number.isInteger(userValue) && userValue >= this.baseRatioRange.min && userValue <= this.baseRatioRange.max) {
         return userValue
       }
       return this.recommendedBaseRatio
@@ -1095,7 +1099,9 @@ export default {
         case 'baseRatio': {
           if (value === '' || value === null || value === undefined) return ''
           const baseRatio = Number(value)
-          return Number.isInteger(baseRatio) && baseRatio >= 38 && baseRatio <= 55 ? '' : '基础比例需为 38 - 55 的整数'
+          return Number.isInteger(baseRatio) && baseRatio >= this.baseRatioRange.min && baseRatio <= this.baseRatioRange.max
+            ? ''
+            : `基础比例需为 ${this.baseRatioRange.min} - ${this.baseRatioRange.max} 的整数`
         }
         case 'rentDays': {
           if (value === '' || value === null || value === undefined) return ''

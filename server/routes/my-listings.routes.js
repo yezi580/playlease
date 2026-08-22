@@ -3,6 +3,7 @@
  */
 
 import {
+  getBaseRatioRange,
   getSaleItemConfig,
   loadBusinessSettings,
   resolveBuyerUnitPriceInCent
@@ -304,7 +305,8 @@ app.put('/api/my-listings/:id', authRequired, authenticatedWriteLimiter, async (
     const derivedValues = computeListingDerivedValues(payload, businessSettings)
     const hafuCoin = toUnsignedInteger(payload.hafuCoin)
     const userBaseRatio = toUnsignedInteger(payload.baseRatio)
-    const finalBaseRatio = (userBaseRatio >= 38 && userBaseRatio <= 55) ? userBaseRatio : derivedValues.baseRatio
+    const { min: baseRatioMin, max: baseRatioMax } = getBaseRatioRange(businessSettings)
+    const finalBaseRatio = (userBaseRatio >= baseRatioMin && userBaseRatio <= baseRatioMax) ? userBaseRatio : derivedValues.baseRatio
     const userRentDays = toUnsignedInteger(payload.rentDays)
     const { maxRentDays: rentDaysLimit } = resolveRentDaysRecommendation(payload.hafuCoin, businessSettings)
     const canUseUserRentDays = userRentDays >= 1 && (rentDaysLimit <= 0 || userRentDays <= rentDaysLimit)
