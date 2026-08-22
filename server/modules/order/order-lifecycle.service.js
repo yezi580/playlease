@@ -201,14 +201,8 @@ export function createOrderLifecycleService({
     }
   }
 
-  async function buildSettlementPreview(executor, orderId) {
-    const order = await fetchOrderById(executor, orderId)
-    if (!order) {
-      fail(404, { message: '订单不存在' })
-    }
-
-    // 额外物品按买卖双侧计价：买家按买家价从押金扣除，卖家按卖家价全额入账，差价归平台。
-    // 旧申报记录无买家总价（0）时回退卖家口径，与历史订单行为一致。
+  // 额外物品申报汇总：买家侧扣款合计（从押金扣除口径）与卖家侧入账合计
+  async function fetchItemUsageTotals(executor, orderId) {
     const [[usageRow]] = await executor.execute(
       `SELECT
           COALESCE(SUM(reported_total_price), 0) AS used_items_seller_amount,
@@ -220,12 +214,27 @@ export function createOrderLifecycleService({
        WHERE order_id = ?`,
       [orderId]
     )
+    return {
+      usedItemsSellerAmount: Number(usageRow?.used_items_seller_amount || 0),
+      usedItemsBuyerAmount: Number(usageRow?.used_items_buyer_amount || 0)
+    }
+  }
+
+  async function buildSettlementPreview(executor, orderId) {
+    const order = await fetchOrderById(executor, orderId)
+    if (!order) {
+      fail(404, { message: '订单不存在' })
+    }
+
+    // 额外物品按买卖双侧计价：买家按买家价从押金扣除，卖家按卖家价全额入账，差价归平台。
+    // 旧申报记录无买家总价（0）时回退卖家口径，与历史订单行为一致。
+    const usageTotals = await fetchItemUsageTotals(executor, orderId)
 
     const buyerRentAmount = Number(order.amount || 0)
     const depositAmount = Number(order.deposit_amount || 0)
     // usedItemsAmount = 买家侧扣款合计（从押金扣除的口径，沿用列语义）
-    const usedItemsAmount = Number(usageRow?.used_items_buyer_amount || 0)
-    const usedItemsSellerAmount = Number(usageRow?.used_items_seller_amount || 0)
+    const usedItemsAmount = Number(usageTotals.usedItemsBuyerAmount || 0)
+    const usedItemsSellerAmount = Number(usageTotals.usedItemsSellerAmount || 0)
     const usedItemsMarkupAmount = Math.max(0, usedItemsAmount - usedItemsSellerAmount)
     const [[listingRow]] = Number(order.listing_id || 0) > 0
       ? await executor.execute(
@@ -293,6 +302,9 @@ export function createOrderLifecycleService({
     const manualPayoutNote = payoutMode === 'manual'
       ? String(options.manualPayoutNote || '').trim().slice(0, 500) || null
       : null
+    const frozenLiableParty = ['seller', 'buyer'].includes(String(options.frozenLiableParty || '').trim())
+      ? String(options.frozenLiableParty).trim()
+      : null
     await executor.execute(
       `INSERT INTO order_settlements (
         order_id,
@@ -304,10 +316,11 @@ export function createOrderLifecycleService({
         buyer_refund_amount,
         payout_mode,
         manual_payout_note,
+        frozen_liable_party,
         status,
         executed_by_support_id,
         executed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         rent_amount = VALUES(rent_amount),
         deposit_amount = VALUES(deposit_amount),
@@ -317,6 +330,7 @@ export function createOrderLifecycleService({
         buyer_refund_amount = VALUES(buyer_refund_amount),
         payout_mode = VALUES(payout_mode),
         manual_payout_note = VALUES(manual_payout_note),
+        frozen_liable_party = VALUES(frozen_liable_party),
         status = VALUES(status),
         executed_by_support_id = VALUES(executed_by_support_id),
         executed_at = VALUES(executed_at)`,
@@ -330,6 +344,7 @@ export function createOrderLifecycleService({
         preview.buyerRefundAmount,
         payoutMode,
         manualPayoutNote,
+        frozenLiableParty,
         status,
         supportUserId ? Number(supportUserId) : null,
         status === 'executed' ? new Date() : null
@@ -359,22 +374,46 @@ export function createOrderLifecycleService({
     }
   }
 
-  function buildFrozenFundsSettlementPreview(order) {
+  // 冻结资金裁决结算：额外物品款照常结算（卖家价给卖家、差价归平台，与普通结算一致），
+  // 责任方只决定「押金余额」与「租金」的归属——
+  // - 卖家责任：押金余额退买家、租金归平台、卖家无租金收益
+  // - 买家责任：押金余额归平台、租金全额归卖家
+  // 冻结单未申报物品时物品金额为 0，公式退化为纯押金/租金裁决
+  async function buildFrozenFundsSettlementPreview(executor, order, liableParty = 'seller') {
     const buyerRentAmount = Number(order.amount || 0)
     const depositAmount = Number(order.deposit_amount || 0)
-    return {
+    const usageTotals = await fetchItemUsageTotals(executor, order.id)
+    const usedItemsBuyerAmount = Number(usageTotals.usedItemsBuyerAmount || 0)
+    const usedItemsSellerAmount = Number(usageTotals.usedItemsSellerAmount || 0)
+    const usedItemsMarkupAmount = Math.max(0, usedItemsBuyerAmount - usedItemsSellerAmount)
+    const isBuyerLiable = String(liableParty || '').trim() === 'buyer'
+
+    const base = {
       rentAmount: buyerRentAmount,
       buyerRentAmount,
       sellerRentAmount: buyerRentAmount,
       depositAmount,
-      usedItemsAmount: 0,
-      usedItemsSellerAmount: 0,
-      usedItemsMarkupAmount: 0,
+      usedItemsAmount: usedItemsBuyerAmount,
+      usedItemsSellerAmount,
+      usedItemsMarkupAmount,
       buyerServiceFeeAmount: 0,
       inviteRewardRatePercent: 0,
-      platformFeeAmount: buyerRentAmount,
-      sellerIncomeAmount: 0,
-      buyerRefundAmount: depositAmount
+      frozenLiableParty: isBuyerLiable ? 'buyer' : 'seller'
+    }
+
+    if (isBuyerLiable) {
+      return {
+        ...base,
+        platformFeeAmount: Math.max(0, depositAmount - usedItemsSellerAmount),
+        sellerIncomeAmount: buyerRentAmount + usedItemsSellerAmount,
+        buyerRefundAmount: 0
+      }
+    }
+    return {
+      ...base,
+      platformFeeAmount: buyerRentAmount + usedItemsMarkupAmount,
+      sellerIncomeAmount: usedItemsSellerAmount,
+      buyerRefundAmount: Math.max(0, depositAmount - usedItemsBuyerAmount)
     }
   }
 
@@ -1498,7 +1537,7 @@ export function createOrderLifecycleService({
     return requestCancel({ orderId, userId, reason: note })
   }
 
-  async function executeSettlement({ orderId, supportUserId, payoutMode = 'huifu', manualNote = '' }) {
+  async function executeSettlement({ orderId, supportUserId, payoutMode = 'huifu', manualNote = '', liableParty = 'seller' }) {
     return runWithDistributedLock(
       typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
       '当前订单正在执行分账，请稍后再试',
@@ -1509,6 +1548,7 @@ export function createOrderLifecycleService({
         let isRegularSettlement = false
         let isManualPayout = String(payoutMode || '').trim() === 'manual'
         let manualPayoutNote = String(manualNote || '').trim().slice(0, 500)
+        let frozenLiableParty = String(liableParty || '').trim() === 'buyer' ? 'buyer' : 'seller'
         const conn = await pool.getConnection()
         try {
           await conn.beginTransaction()
@@ -1540,15 +1580,10 @@ export function createOrderLifecycleService({
             fail(400, { message: '卖家确认额外物品后，才可执行分账' })
           }
 
-          // 手动结单仅适用于普通结算：冻结裁决卖家无收益，无需线下收款
-          if (isManualPayout && !isRegularSettlement) {
-            fail(400, { message: '手动结单仅适用于普通结算流程，冻结资金订单请按冻结规则执行分账' })
-          }
-
-          // 对账收口等重入场景不携带 payoutMode，以已持久化的模式为准，
+          // 对账收口等重入场景不携带 payoutMode/liableParty，以已持久化的取值为准，
           // 避免手动结单后的退款确认重入时再次尝试给未进件卖家打款
           const [[settlementRow]] = await conn.execute(
-            `SELECT payout_mode, manual_payout_note
+            `SELECT payout_mode, manual_payout_note, frozen_liable_party
              FROM order_settlements
              WHERE order_id = ?
              LIMIT 1`,
@@ -1561,8 +1596,21 @@ export function createOrderLifecycleService({
               manualPayoutNote = String(settlementRow.manual_payout_note).slice(0, 500)
             }
           }
+          if (isFrozenSettlement
+            && ['seller', 'buyer'].includes(String(settlementRow?.frozen_liable_party || '').trim())) {
+            frozenLiableParty = String(settlementRow.frozen_liable_party).trim()
+          }
 
-          if (isRegularSettlement && !isManualPayout && Number(order.seller_id || 0) > 0) {
+          preview = isFrozenSettlement
+            ? await buildFrozenFundsSettlementPreview(conn, order, frozenLiableParty)
+            : await buildSettlementPreview(conn, orderId)
+
+          // 需要给卖家打款时（普通结算应结款、冻结裁决物品款/买家责任租金）校验进件；
+          // 线下手动收款不依赖汇付，跳过校验
+          const needsSellerPayoutAccount = !isManualPayout
+            && Number(order.seller_id || 0) > 0
+            && Number(preview?.sellerIncomeAmount || 0) > 0
+          if (needsSellerPayoutAccount) {
             const [sellerAccounts] = await conn.execute(
               `SELECT bind_status, huifu_id, acct_id
                FROM user_settlement_accounts
@@ -1575,16 +1623,18 @@ export function createOrderLifecycleService({
               || String(sellerAccount.bind_status || '').trim() !== 'active'
               || !String(sellerAccount.huifu_id || '').trim()
               || !String(sellerAccount.acct_id || '').trim()) {
-              fail(400, { message: '卖家尚未完成个人进件与绑卡（收款账号未配置或未启用），无法执行分账。如卖家无法进件，请使用手动结单，由客服线下联系卖家收款' })
+              fail(400, {
+                message: isFrozenSettlement
+                  ? '卖家尚未完成个人进件与绑卡，无法执行冻结裁决打款。请改用线下手动收款，由客服联系卖家支付'
+                  : '卖家尚未完成个人进件与绑卡（收款账号未配置或未启用），无法执行分账。如卖家无法进件，请使用手动结单，由客服线下联系卖家收款'
+              })
             }
           }
 
-          preview = isFrozenSettlement
-            ? buildFrozenFundsSettlementPreview(order)
-            : await buildSettlementPreview(conn, orderId)
           await upsertSettlement(conn, orderId, preview, 'draft', supportUserId, {
             payoutMode: isManualPayout ? 'manual' : 'huifu',
-            manualPayoutNote: manualPayoutNote
+            manualPayoutNote: manualPayoutNote,
+            frozenLiableParty: isFrozenSettlement ? frozenLiableParty : null
           })
           await conn.execute(
             `UPDATE orders
@@ -1619,9 +1669,11 @@ export function createOrderLifecycleService({
         const buyerRefundReason = isFrozenSettlement
           ? '客服执行冻结资金结算-押金原路退回'
           : '客服执行结算-押金原路退回'
-        const sellerPayoutRemark = '客服执行结算-卖家余额支付'
+        const sellerPayoutRemark = isFrozenSettlement
+          ? '客服执行冻结裁决-卖家余额支付'
+          : '客服执行结算-卖家余额支付'
         const needsRefund = Number(preview?.buyerRefundAmount || 0) > 0
-        const needsPayout = !isFrozenSettlement && !isManualPayout && Number(order?.seller_id || 0) > 0 && Number(preview?.sellerIncomeAmount || 0) > 0
+        const needsPayout = !isManualPayout && Number(order?.seller_id || 0) > 0 && Number(preview?.sellerIncomeAmount || 0) > 0
 
         let refundResult = needsRefund ? await fetchLatestRefundByReason(pool, orderId, buyerRefundReason) : null
         let payoutResult = needsPayout ? await fetchLatestPayoutByRemark(pool, orderId, sellerPayoutRemark) : null
@@ -1693,7 +1745,9 @@ export function createOrderLifecycleService({
             actorUserId: supportUserId,
             actorRole: 'support',
             content: isFrozenSettlement
-              ? '客服已按冻结资金规则发起资金处理：押金将原路退回买家，租金归平台，等待支付通道确认结果。'
+              ? (frozenLiableParty === 'buyer'
+                ? '客服已按冻结裁决（买家责任）发起资金处理：买家押金归平台，租金将结算给卖家，等待支付通道确认结果。'
+                : '客服已按冻结裁决（卖家责任）发起资金处理：押金余额将原路退回买家，租金归平台，等待支付通道确认结果。')
               : (isManualPayout
                 ? '客服已发起手动结单资金处理：买家将原路收到退款，卖家结算款将由客服线下联系支付，当前等待支付通道确认结果。'
                 : '客服已发起订单资金处理：买家将原路收到退款，卖家将收到平台余额支付打款，当前等待支付通道确认结果。')
@@ -1707,7 +1761,8 @@ export function createOrderLifecycleService({
           await finalizeConn.beginTransaction()
           await upsertSettlement(finalizeConn, orderId, preview, 'executed', supportUserId, {
             payoutMode: isManualPayout ? 'manual' : 'huifu',
-            manualPayoutNote: manualPayoutNote
+            manualPayoutNote: manualPayoutNote,
+            frozenLiableParty: isFrozenSettlement ? frozenLiableParty : null
           })
           if (!isFrozenSettlement) {
             pendingRewardInfo = await awardInviteRewardForSettlement(finalizeConn, order, preview)
@@ -1763,7 +1818,13 @@ export function createOrderLifecycleService({
           actorUserId: supportUserId,
           actorRole: 'support',
           content: isFrozenSettlement
-            ? '客服已按冻结资金规则完成结算：押金已原路退回买家，买家支付租金计入平台收益，卖家无收益。'
+            ? (frozenLiableParty === 'buyer'
+              ? (isManualPayout
+                ? '客服已完成冻结裁决（买家责任）：买家押金归平台，卖家租金及物品款将由客服线下联系支付。'
+                : '客服已完成冻结裁决（买家责任）：买家押金归平台，租金及物品款已结算给卖家。')
+              : (isManualPayout
+                ? '客服已完成冻结裁决（卖家责任）：押金余额已原路退回买家，租金计入平台，卖家物品款将由客服线下联系支付。'
+                : '客服已完成冻结裁决（卖家责任）：押金余额已原路退回买家，租金计入平台收益。'))
             : (isManualPayout
               ? '客服已完成手动结单：买家退款已原路退回，卖家结算款将由客服线下联系支付。'
               : '客服已完成结算：买家退款已原路退回，卖家结算款已通过余额支付发起/到账。')
@@ -2341,6 +2402,13 @@ export function createOrderLifecycleService({
     returnToSettlementBySupport,
     freezeFundsBySupport,
     releaseFrozenFundsBySupport,
-    buildSettlementPreview: async (orderId) => buildSettlementPreview(pool, orderId)
+    buildSettlementPreview: async (orderId) => buildSettlementPreview(pool, orderId),
+    buildFrozenFundsSettlementPreview: async (orderId, liableParty = 'seller') => {
+      const order = await fetchOrderById(pool, orderId)
+      if (!order) {
+        fail(404, { message: '订单不存在' })
+      }
+      return buildFrozenFundsSettlementPreview(pool, order, liableParty)
+    }
   }
 }

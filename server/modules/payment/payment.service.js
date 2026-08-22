@@ -1337,7 +1337,7 @@ export function createPaymentService(config = {}) {
     if (refund) {
       refund = await syncRefundWithProvider(refund)
     }
-    if (supportScene === 'settlement_funds_processing' && payout) {
+    if (['settlement_funds_processing', 'frozen_funds_processing'].includes(supportScene) && payout) {
       payout = await syncSettlementPayoutWithProvider(payout)
     }
 
@@ -1368,7 +1368,7 @@ export function createPaymentService(config = {}) {
     }
 
     const refundDone = !refund || String(refund.status || '').trim() === 'success'
-    const payoutDone = supportScene !== 'settlement_funds_processing'
+    const payoutDone = !['settlement_funds_processing', 'frozen_funds_processing'].includes(supportScene)
       || !payout
       || String(payout.status || '').trim() === 'success'
 
@@ -1400,7 +1400,7 @@ export function createPaymentService(config = {}) {
     if (refund && !refundDone) {
       processingNotes.push('退款处理中')
     }
-    if (supportScene === 'settlement_funds_processing' && payout && !payoutDone) {
+    if (['settlement_funds_processing', 'frozen_funds_processing'].includes(supportScene) && payout && !payoutDone) {
       processingNotes.push('打款处理中')
     }
     if (processingNotes.length) {

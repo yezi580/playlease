@@ -44,6 +44,8 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
   const keyword = sanitizeSupportSearchKeyword(req.query?.keyword)
   const assigneeScope = 'mine'
   const pendingTimeoutMinutes = 24 * 60
+  // 冻结资金超时告警阈值（小时）：冻结单长期未裁决，买卖双方资金悬置
+  const frozenTimeoutHours = Math.max(1, Number(process.env.FROZEN_FUNDS_TIMEOUT_HOURS || 48) || 48)
 
   try {
     const activeStatuses = ['paid', 'support_handling', 'settlement_pending']
@@ -137,6 +139,14 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
               THEN 1 ELSE 0
             END
           ) AS pending_timeout_total,
+          SUM(
+            CASE
+              WHEN status = 'support_handling'
+               AND support_scene = 'fund_frozen'
+               AND TIMESTAMPDIFF(HOUR, support_requested_at, NOW()) >= ?
+              THEN 1 ELSE 0
+            END
+          ) AS frozen_timeout_total,
           SUM(CASE WHEN support_status = 'handling' AND support_assignee_id = ? THEN 1 ELSE 0 END) AS my_handling_count,
           SUM(CASE WHEN support_status = 'resolved' AND support_assignee_id = ? THEN 1 ELSE 0 END) AS my_resolved_total,
           SUM(
@@ -152,6 +162,7 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
          AND support_status IN ('handling', 'resolved')`,
       [
         pendingTimeoutMinutes,
+        frozenTimeoutHours,
         req.auth.userId,
         req.auth.userId,
         req.auth.userId,
@@ -234,7 +245,9 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
       counts,
       alerts: {
         pending_timeout_total: Number(statsRow?.pending_timeout_total || 0),
-        pending_timeout_minutes: pendingTimeoutMinutes
+        pending_timeout_minutes: pendingTimeoutMinutes,
+        frozen_timeout_total: Number(statsRow?.frozen_timeout_total || 0),
+        frozen_timeout_hours: frozenTimeoutHours
       },
       workload: {
         my_handling_count: Number(statsRow?.my_handling_count || 0),

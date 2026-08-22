@@ -151,6 +151,10 @@
         <span>{{ isAfterSaleDesk ? '超时提醒' : '当前列表' }}</span>
         <strong>{{ isAfterSaleDesk ? alerts.pending_timeout_total : (currentCounts[activeStatus] || 0) }}</strong>
       </article>
+      <article v-if="isAfterSaleDesk" class="summary-card summary-card--frozen-timeout">
+        <span>冻结超时（≥{{ alerts.frozen_timeout_hours }}小时）</span>
+        <strong>{{ alerts.frozen_timeout_total }}</strong>
+      </article>
     </div>
 
     <div class="shell">
@@ -621,6 +625,87 @@
         </section>
       </div>
     </Transition>
+
+    <Transition name="freeze-dialog-fade">
+      <div
+        v-if="frozenVerdictDialogVisible"
+        class="freeze-dialog-overlay"
+        @click.self="closeFrozenVerdictDialog"
+      >
+        <section class="freeze-dialog" role="dialog" aria-modal="true" aria-label="冻结资金裁决">
+          <div class="freeze-dialog__body">
+            <div class="note-head">
+              <h4>冻结资金裁决</h4>
+              <span v-if="frozenVerdictPayoutMode === 'manual' && frozenVerdictSellerIncomeCents > 0">{{ frozenVerdictNoteDraft.length }}/500</span>
+            </div>
+
+            <div class="verdict-party">
+              <button
+                type="button"
+                class="verdict-party__option"
+                :class="{ 'verdict-party__option--active': frozenVerdictLiable === 'seller' }"
+                :disabled="settlementSubmitting"
+                @click="setFrozenVerdictLiable('seller')"
+              >
+                <strong>卖家责任</strong>
+                <span>押金余额退买家 · 租金归平台</span>
+              </button>
+              <button
+                type="button"
+                class="verdict-party__option"
+                :class="{ 'verdict-party__option--active': frozenVerdictLiable === 'buyer' }"
+                :disabled="settlementSubmitting"
+                @click="setFrozenVerdictLiable('buyer')"
+              >
+                <strong>买家责任</strong>
+                <span>押金余额归平台 · 租金归卖家</span>
+              </button>
+            </div>
+
+            <p class="manual-settle-tips">
+              额外物品款照常结算（卖家价给卖家、差价归平台）。{{ frozenVerdictLiable === 'seller' ? '卖家责任：押金余额原路退回买家，租金计入平台，卖家无租金收益。' : '买家责任：买家押金余额归平台，租金全额结算给卖家。' }}
+            </p>
+
+            <div class="verdict-amounts">
+              <div v-for="row in frozenVerdictAmountRows" :key="row.label" class="verdict-amounts__row">
+                <span>{{ row.label }}</span>
+                <strong>{{ row.value }}</strong>
+              </div>
+            </div>
+
+            <div v-if="frozenVerdictSellerIncomeCents > 0" class="verdict-payout-mode">
+              <span class="verdict-payout-mode__label">卖家款支付方式</span>
+              <label class="verdict-payout-mode__option">
+                <input v-model="frozenVerdictPayoutMode" type="radio" value="huifu" :disabled="settlementSubmitting" />
+                <span>汇付自动打款（需卖家已进件）</span>
+              </label>
+              <label class="verdict-payout-mode__option">
+                <input v-model="frozenVerdictPayoutMode" type="radio" value="manual" :disabled="settlementSubmitting" />
+                <span>线下手动支付</span>
+              </label>
+            </div>
+
+            <textarea
+              v-if="frozenVerdictPayoutMode === 'manual' && frozenVerdictSellerIncomeCents > 0"
+              v-model.trim="frozenVerdictNoteDraft"
+              class="note-textarea freeze-dialog__textarea"
+              rows="3"
+              maxlength="500"
+              placeholder="必填：说明线下收款安排，例如「卖家无法汇付进件，已约定微信转账支付裁决款」。"
+            ></textarea>
+          </div>
+
+          <div class="freeze-dialog__footer">
+            <button type="button" class="ghost-btn" :disabled="settlementSubmitting" @click="closeFrozenVerdictDialog">
+              取消
+            </button>
+            <button type="button" class="primary-btn" :disabled="settlementSubmitting" @click="executeFrozenVerdict">
+              {{ settlementSubmitting ? '提交中...' : '确认裁决' }}
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
     </div>
     <ListingReviewDesk v-if="deskMode === 'review'" @reviewed="fetchReviewPendingCount" />
     </template>
@@ -676,7 +761,7 @@ export default {
       keywordDraft: '',
       activeStatus: 'handling',
       counts: { pending: 0, handling: 0, resolved: 0 },
-      alerts: { pending_timeout_total: 0 },
+      alerts: { pending_timeout_total: 0, frozen_timeout_total: 0, frozen_timeout_hours: 48 },
       workload: { my_handling_count: 0, my_resolved_total: 0, my_resolved_today: 0 },
       orders: [],
       activeOrderId: 0,
@@ -690,6 +775,12 @@ export default {
       manualSettleNoteDraft: '',
       manualSettlePreview: null,
       manualSettlePreviewLoading: false,
+      frozenVerdictDialogVisible: false,
+      frozenVerdictLiable: 'seller',
+      frozenVerdictPayoutMode: 'huifu',
+      frozenVerdictNoteDraft: '',
+      frozenVerdictPreview: null,
+      frozenVerdictPreviewLoading: false,
       noteSaving: false,
       statusSubmitting: false,
       cancelSubmitting: false,
@@ -806,6 +897,31 @@ export default {
       if (!this.manualSettlePreview) return '结算金额以平台核算为准'
       return `卖家应结算款 ￥${formatMoneyFixed(this.manualSettlePreview.seller_income_amount)}`
     },
+    frozenVerdictAmountRows() {
+      if (this.frozenVerdictPreviewLoading) {
+        return [
+          { label: '买家退款', value: '计算中' },
+          { label: '卖家应得', value: '计算中' },
+          { label: '平台收益', value: '计算中' }
+        ]
+      }
+      const preview = this.frozenVerdictPreview
+      if (!preview) {
+        return [
+          { label: '买家退款', value: '--' },
+          { label: '卖家应得', value: '--' },
+          { label: '平台收益', value: '--' }
+        ]
+      }
+      return [
+        { label: '买家退款', value: `￥${formatMoneyFixed(preview.buyer_refund_amount)}` },
+        { label: '卖家应得', value: `￥${formatMoneyFixed(preview.seller_income_amount)}` },
+        { label: '平台收益', value: `￥${formatMoneyFixed(preview.platform_fee_amount)}` }
+      ]
+    },
+    frozenVerdictSellerIncomeCents() {
+      return Number(this.frozenVerdictPreview?.seller_income_amount || 0)
+    },
     canCancelOrder() {
       return this.activeOrder?.status === 'support_handling'
         && this.activeOrder?.support_scene === 'cancel_request'
@@ -849,6 +965,9 @@ export default {
         this.manualSettleDialogVisible = false
         this.manualSettleNoteDraft = ''
         this.manualSettlePreview = null
+        this.frozenVerdictDialogVisible = false
+        this.frozenVerdictNoteDraft = ''
+        this.frozenVerdictPreview = null
         this.$nextTick(() => {
           this.updateScrollbar('detail')
         })
@@ -1097,7 +1216,9 @@ export default {
           resolved: Number(data.counts?.resolved || 0)
         }
         this.alerts = {
-          pending_timeout_total: Number(data.alerts?.pending_timeout_total || 0)
+          pending_timeout_total: Number(data.alerts?.pending_timeout_total || 0),
+          frozen_timeout_total: Number(data.alerts?.frozen_timeout_total || 0),
+          frozen_timeout_hours: Number(data.alerts?.frozen_timeout_hours || 48)
         }
         this.workload = {
           my_handling_count: Number(data.workload?.my_handling_count || 0),
@@ -1396,6 +1517,11 @@ export default {
       if (!this.activeOrder) return
       const isFrozenSettlement = this.activeOrder?.status === 'support_handling'
         && this.activeOrder?.support_scene === 'fund_frozen'
+      // 冻结单走裁决弹窗：按责任方（卖家/买家）分账，不再使用单一冻结规则
+      if (isFrozenSettlement) {
+        this.openFrozenVerdictDialog()
+        return
+      }
       const confirmed = await showConfirm({
         title: '执行分账',
         message: isFrozenSettlement
@@ -1473,6 +1599,76 @@ export default {
         }
       } catch (error) {
         showErrorToast(error.message || '手动结单失败')
+      } finally {
+        this.settlementSubmitting = false
+      }
+    },
+    openFrozenVerdictDialog() {
+      if (!this.activeOrder || this.settlementSubmitting) return
+      this.frozenVerdictLiable = 'seller'
+      this.frozenVerdictPayoutMode = 'huifu'
+      this.frozenVerdictNoteDraft = ''
+      this.frozenVerdictPreview = null
+      this.frozenVerdictDialogVisible = true
+      this.loadFrozenVerdictPreview('seller')
+    },
+    async loadFrozenVerdictPreview(liableParty) {
+      if (!this.activeOrder) return
+      const orderId = this.activeOrder.id
+      this.frozenVerdictPreviewLoading = true
+      try {
+        const preview = await apiFetch(
+          `/api/orders/${orderId}/settlement-preview?mode=frozen&liableParty=${liableParty}`
+        )
+        if (Number(this.activeOrderId) === Number(orderId) && this.frozenVerdictLiable === liableParty) {
+          this.frozenVerdictPreview = preview || null
+        }
+      } catch (_error) {
+        // 金额预览失败不阻塞裁决，弹窗显示 -- 并以服务端核算为准
+      } finally {
+        this.frozenVerdictPreviewLoading = false
+      }
+    },
+    setFrozenVerdictLiable(liableParty) {
+      if (this.settlementSubmitting || liableParty === this.frozenVerdictLiable) return
+      this.frozenVerdictLiable = liableParty
+      this.frozenVerdictPayoutMode = 'huifu'
+      this.frozenVerdictPreview = null
+      this.loadFrozenVerdictPreview(liableParty)
+    },
+    closeFrozenVerdictDialog() {
+      if (this.settlementSubmitting) return
+      this.frozenVerdictDialogVisible = false
+    },
+    async executeFrozenVerdict() {
+      if (!this.activeOrder || this.settlementSubmitting) return
+      const manualMode = this.frozenVerdictPayoutMode === 'manual'
+      if (manualMode && !this.frozenVerdictNoteDraft) {
+        showErrorToast('请填写备注，说明线下收款安排')
+        return
+      }
+      this.settlementSubmitting = true
+      try {
+        await stepUpFetch(
+          `/api/support/orders/${this.activeOrder.id}/execute-settlement`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              liableParty: this.frozenVerdictLiable,
+              payoutMode: this.frozenVerdictPayoutMode,
+              manualNote: manualMode ? this.frozenVerdictNoteDraft : ''
+            })
+          },
+          'support_execute_settlement'
+        )
+        this.frozenVerdictDialogVisible = false
+        showSuccessToast('冻结裁决已发起，资金处理结果以支付通道确认为准')
+        await this.fetchOrders(this.activeStatus)
+        if (this.activeOrderId) {
+          await this.fetchTimeline(this.activeOrderId)
+        }
+      } catch (error) {
+        showErrorToast(error.message || '冻结裁决失败')
       } finally {
         this.settlementSubmitting = false
       }
@@ -1678,6 +1874,12 @@ export default {
   border: 1px solid var(--border-color);
   border-radius: 18px;
   background: var(--bg-card);
+}
+
+/* 冻结超时卡：有超时单时给警示描边，静默时与普通汇总卡一致 */
+.summary-card--frozen-timeout {
+  border-color: var(--warning-border);
+  background: linear-gradient(180deg, var(--warning-bg) 0%, var(--bg-card) 100%);
 }
 
 .desk-mode-bar {
@@ -2318,6 +2520,91 @@ export default {
   line-height: 1.7;
   color: var(--text-main);
   word-break: break-word;
+}
+
+.verdict-party {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.verdict-party__option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.verdict-party__option strong {
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.verdict-party__option span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.verdict-party__option--active {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+}
+
+.verdict-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.verdict-amounts__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.verdict-amounts__row span {
+  color: var(--text-muted);
+}
+
+.verdict-amounts__row strong {
+  color: var(--text-main);
+}
+
+.verdict-payout-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.verdict-payout-mode__label {
+  color: var(--text-muted);
+}
+
+.verdict-payout-mode__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-main);
+}
+
+.verdict-payout-mode__option input[type='radio'] {
+  accent-color: var(--brand-primary);
 }
 
 .freeze-dialog__footer {

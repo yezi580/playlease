@@ -1933,6 +1933,7 @@ async function ensureOrderWorkflowSchema() {
       buyer_refund_amount BIGINT NOT NULL DEFAULT 0 COMMENT '买家退款金额（分）',
       payout_mode ENUM('huifu', 'manual') NOT NULL DEFAULT 'huifu' COMMENT '卖家结算款支付方式（汇付余额支付/客服线下手动支付）',
       manual_payout_note VARCHAR(500) DEFAULT NULL COMMENT '手动结单备注（客服填写的原因与线下收款安排）',
+      frozen_liable_party ENUM('seller', 'buyer') DEFAULT NULL COMMENT '冻结裁决责任方（仅冻结结算有值）',
       status ENUM('draft', 'executed') NOT NULL DEFAULT 'draft' COMMENT '结算状态',
       executed_by_support_id INT DEFAULT NULL COMMENT '执行分账的客服ID',
       executed_at DATETIME DEFAULT NULL COMMENT '执行时间',
@@ -1954,6 +1955,11 @@ async function ensureOrderWorkflowSchema() {
       name: 'manual_payout_note',
       sql: `ALTER TABLE order_settlements
             ADD COLUMN manual_payout_note VARCHAR(500) DEFAULT NULL COMMENT '手动结单备注（客服填写的原因与线下收款安排）' AFTER payout_mode`
+    },
+    {
+      name: 'frozen_liable_party',
+      sql: `ALTER TABLE order_settlements
+            ADD COLUMN frozen_liable_party ENUM('seller', 'buyer') DEFAULT NULL COMMENT '冻结裁决责任方（仅冻结结算有值）' AFTER manual_payout_note`
     }
   ]
 

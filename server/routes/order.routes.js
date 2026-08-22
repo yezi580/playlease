@@ -406,7 +406,19 @@ app.get('/api/orders/:id/settlement-preview', authRequired, authenticatedReadLim
     ) {
       return res.status(403).json({ message: '无权查看此订单结算信息' })
     }
-    const preview = await orderLifecycleService.buildSettlementPreview(orderId)
+    // mode=frozen 为冻结资金裁决预览（按责任方分账），供客服裁决弹窗使用；
+    // 金额按角色过滤规则与普通预览一致，真实执行以 executeSettlement 服务端核算为准
+    const previewMode = String(req.query?.mode || '').trim()
+    let preview = null
+    if (previewMode === 'frozen') {
+      const liableParty = String(req.query?.liableParty || 'seller').trim()
+      if (!['seller', 'buyer'].includes(liableParty)) {
+        return res.status(400).json({ message: '无效的冻结裁决责任方' })
+      }
+      preview = await orderLifecycleService.buildFrozenFundsSettlementPreview(orderId, liableParty)
+    } else {
+      preview = await orderLifecycleService.buildSettlementPreview(orderId)
+    }
     // 金额按角色过滤：额外物品买家扣款/卖家收益分属两侧，互相不可见（买家侧升价保密），
     // 平台抽成与对方租金仅客服可见
     const baseFields = {
@@ -452,27 +464,33 @@ app.put('/api/support/orders/:id/execute-settlement', authRequired, supportOnly,
   }
 
   try {
-    // payoutMode='manual' 为手动结单：押金仍原路退回买家，卖家结算款由客服线下联系支付，
+    // payoutMode='manual' 为手动结单/线下收款：押金仍原路退回买家，卖家结算款由客服线下联系支付，
     // 用于卖家无法完成汇付进件的场景
     const payoutMode = String(req.body?.payoutMode || 'huifu').trim()
     if (!['huifu', 'manual'].includes(payoutMode)) {
       return res.status(400).json({ message: '无效的分账方式' })
     }
+    // liableParty 仅冻结资金裁决使用：卖家责任（默认）/买家责任
+    const liableParty = String(req.body?.liableParty || 'seller').trim()
+    if (!['seller', 'buyer'].includes(liableParty)) {
+      return res.status(400).json({ message: '无效的冻结裁决责任方' })
+    }
     let manualNote = ''
     if (payoutMode === 'manual') {
       manualNote = String(req.body?.manualNote || '').trim()
       if (!manualNote) {
-        return res.status(400).json({ message: '请填写手动结单备注，说明线下收款安排' })
+        return res.status(400).json({ message: '请填写备注，说明线下收款安排' })
       }
       if (manualNote.length > 500) {
-        return res.status(400).json({ message: '手动结单备注不能超过 500 字' })
+        return res.status(400).json({ message: '备注不能超过 500 字' })
       }
     }
     const order = await orderLifecycleService.executeSettlement({
       orderId,
       supportUserId: req.auth.userId,
       payoutMode,
-      manualNote
+      manualNote,
+      liableParty
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {
