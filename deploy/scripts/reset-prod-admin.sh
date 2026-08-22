@@ -43,6 +43,30 @@ COMPOSE_FILE="${PROJECT_ROOT}/deploy/compose/docker-compose.prod.yml"
   exit 1
 }
 
+# 蓝绿双色后不再有名为 api 的服务：优先选活跃色（upstream 文件里没标 down 的那个），
+# 判断不了就退回任一在跑的色——密码哈希/会话注销在任一色上执行效果一致
+UPSTREAM_CONF="${PROJECT_ROOT}/deploy/nginx/upstream-backend.conf"
+API_SERVICE=""
+if [ -f "${UPSTREAM_CONF}" ]; then
+  if grep -q 'api-blue:3000 down' "${UPSTREAM_CONF}"; then
+    API_SERVICE="api-green"
+  elif grep -q 'api-green:3000 down' "${UPSTREAM_CONF}"; then
+    API_SERVICE="api-blue"
+  fi
+fi
+if [ -z "${API_SERVICE}" ]; then
+  for candidate in api-blue api-green; do
+    if [ -n "$(docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps -q "${candidate}")" ]; then
+      API_SERVICE="${candidate}"
+      break
+    fi
+  done
+fi
+[ -n "${API_SERVICE}" ] || {
+  echo "No running api container found (api-blue / api-green)." >&2
+  exit 1
+}
+
 read_env_value() {
   local key="$1"
   local line
@@ -88,7 +112,7 @@ MASKED_USERNAME="${NEW_PHONE:0:3}****${NEW_PHONE:7:4}"
 PASSWORD_HASH="$(
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec -T \
     -e ADMIN_RESET_PASSWORD="${NEW_PASSWORD}" \
-    api node --input-type=module -e "import bcrypt from 'bcryptjs'; const password = process.env.ADMIN_RESET_PASSWORD || ''; if (!password) { console.error('Missing password'); process.exit(1); } console.log(await bcrypt.hash(password, 10));" | tr -d '\r'
+    "${API_SERVICE}" node --input-type=module -e "import bcrypt from 'bcryptjs'; const password = process.env.ADMIN_RESET_PASSWORD || ''; if (!password) { console.error('Missing password'); process.exit(1); } console.log(await bcrypt.hash(password, 10));" | tr -d '\r'
 )"
 
 [ -n "${PASSWORD_HASH}" ] || {
@@ -100,7 +124,7 @@ HASH_CHECK_RESULT="$(
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec -T \
     -e ADMIN_RESET_PASSWORD="${NEW_PASSWORD}" \
     -e ADMIN_RESET_HASH="${PASSWORD_HASH}" \
-    api node --input-type=module -e "import bcrypt from 'bcryptjs'; const password = process.env.ADMIN_RESET_PASSWORD || ''; const hash = process.env.ADMIN_RESET_HASH || ''; if (!password || !hash) { console.error('Missing password/hash'); process.exit(1); } console.log(await bcrypt.compare(password, hash));" | tr -d '\r'
+    "${API_SERVICE}" node --input-type=module -e "import bcrypt from 'bcryptjs'; const password = process.env.ADMIN_RESET_PASSWORD || ''; const hash = process.env.ADMIN_RESET_HASH || ''; if (!password || !hash) { console.error('Missing password/hash'); process.exit(1); } console.log(await bcrypt.compare(password, hash));" | tr -d '\r'
 )"
 
 [ "${HASH_CHECK_RESULT}" = "true" ] || {
@@ -128,7 +152,7 @@ REVOKED_SESSIONS="unknown"
 if REVOKED_OUTPUT="$(
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec -T \
     -e ADMIN_TARGET_USER_ID="${TARGET_USER_ID}" \
-    api node --input-type=module -e "import { revokeAllLoginSessionsByUserId } from './infrastructure/redis.js'; const userId = Number(process.env.ADMIN_TARGET_USER_ID || 0); if (!userId) { console.error('Missing user id'); process.exit(1); } const count = await revokeAllLoginSessionsByUserId(userId); console.log(count);" 2>/dev/null | tr -d '\r'
+    "${API_SERVICE}" node --input-type=module -e "import { revokeAllLoginSessionsByUserId } from './infrastructure/redis.js'; const userId = Number(process.env.ADMIN_TARGET_USER_ID || 0); if (!userId) { console.error('Missing user id'); process.exit(1); } const count = await revokeAllLoginSessionsByUserId(userId); console.log(count);" 2>/dev/null | tr -d '\r'
 )"; then
   REVOKED_SESSIONS="${REVOKED_OUTPUT}"
 fi
@@ -140,7 +164,7 @@ UPDATED_HASH_CHECK_RESULT="$(
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec -T \
     -e ADMIN_RESET_PASSWORD="${NEW_PASSWORD}" \
     -e ADMIN_RESET_HASH="${UPDATED_HASH}" \
-    api node --input-type=module -e "import bcrypt from 'bcryptjs'; const password = process.env.ADMIN_RESET_PASSWORD || ''; const hash = process.env.ADMIN_RESET_HASH || ''; if (!password || !hash) { console.error('Missing password/hash'); process.exit(1); } console.log(await bcrypt.compare(password, hash));" | tr -d '\r'
+    "${API_SERVICE}" node --input-type=module -e "import bcrypt from 'bcryptjs'; const password = process.env.ADMIN_RESET_PASSWORD || ''; const hash = process.env.ADMIN_RESET_HASH || ''; if (!password || !hash) { console.error('Missing password/hash'); process.exit(1); } console.log(await bcrypt.compare(password, hash));" | tr -d '\r'
 )"
 
 [ "${UPDATED_HASH_CHECK_RESULT}" = "true" ] || {

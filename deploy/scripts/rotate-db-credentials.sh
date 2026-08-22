@@ -119,8 +119,8 @@ upsert_env_value "DB_USER" "${APP_DB_USER}"
 upsert_env_value "DB_ROOT_PASSWORD" "${NEW_ROOT_PASSWORD}"
 chmod 600 "${ENV_FILE}"
 
-echo "==> 3/4 重建 mysql / api 容器（短暂中断，健康检查通过后自动恢复）"
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d mysql api
+echo "==> 3/4 重建 mysql / api-blue / api-green 容器（短暂中断，健康检查通过后自动恢复）"
+docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate mysql api-blue api-green
 
 echo "==> 4/4 验证 ${APP_DB_USER} 连接"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec -T \

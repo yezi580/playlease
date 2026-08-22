@@ -9,6 +9,8 @@ cp -a /opt/my-app/server/uploads /tmp/my-app-uploads.bak
 cp /opt/my-app/deploy/nginx/admin-allowlist.prod.conf /tmp/my-app-admin-allowlist.bak 2>/dev/null || true
 cp /opt/my-app/deploy/nginx/admin-allowlist.extra.list /tmp/my-app-admin-allowlist-extra.bak 2>/dev/null || true
 cp /opt/my-app/deploy/nginx/admin-allowlist.own.conf /tmp/my-app-admin-allowlist-own.bak 2>/dev/null || true
+# 蓝绿 upstream 是线上运行状态（记录当前活跃色），tar 包里是默认模板，必须保回来
+cp /opt/my-app/deploy/nginx/upstream-backend.conf /tmp/my-app-upstream.bak 2>/dev/null || true
 
 echo "=== 解压部署包 ==="
 tar -xzf /opt/my-app-prod-deploy.tar.gz -C /opt/my-app
@@ -20,6 +22,7 @@ rm -rf /opt/my-app/server/uploads && cp -a /tmp/my-app-uploads.bak /opt/my-app/s
 if [ -f /tmp/my-app-admin-allowlist.bak ]; then cp /tmp/my-app-admin-allowlist.bak /opt/my-app/deploy/nginx/admin-allowlist.prod.conf; fi
 if [ -f /tmp/my-app-admin-allowlist-extra.bak ]; then cp /tmp/my-app-admin-allowlist-extra.bak /opt/my-app/deploy/nginx/admin-allowlist.extra.list; fi
 if [ -f /tmp/my-app-admin-allowlist-own.bak ]; then cp /tmp/my-app-admin-allowlist-own.bak /opt/my-app/deploy/nginx/admin-allowlist.own.conf; fi
+if [ -f /tmp/my-app-upstream.bak ]; then cp /tmp/my-app-upstream.bak /opt/my-app/deploy/nginx/upstream-backend.conf; fi
 
 echo "=== 验证封禁逻辑已部署 ==="
 grep -n "不能封禁管理员账号" /opt/my-app/server/routes/admin.routes.js

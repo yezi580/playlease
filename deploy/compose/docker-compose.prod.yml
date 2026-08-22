@@ -33,9 +33,19 @@ services:
       timeout: 5s
       retries: 10
 
-  api:
+  # ===== 蓝绿双 api 容器 =====
+  # 活跃色承载流量（由 nginx 的 upstream-backend.conf 控制），闲置色常驻运行作为热备/回滚目标。
+  # 两色共用镜像 tag my-app-api:current：只有 api-blue 带 build 段，构建一次即更新 tag，
+  # 发布脚本只重建「闲置色」，重建动作永远不会碰正在接流量的活跃色。
+  # ⚠️ 日常发布只用 deploy/scripts/blue-green-deploy.sh；不要手工对活跃色 up --force-recreate
+  #    （那会重启正在接流量的容器，回到有停机窗口的旧模式）。
+  # 优雅停机（两色同配）：SIGTERM 后排干在途请求（应用内上限 15s = SHUTDOWN_DRAIN_TIMEOUT_MS），
+  # stop_grace_period 必须大于它；healthcheck 仅探测进程存活（不查 DB），
+  # 停机期间 /api/health 返回 503，供蓝绿脚本判断就绪/摘流量。
+  api-blue:
     build:
       context: ../../server
+    image: my-app-api:current
     restart: unless-stopped
     env_file:
       - ../env/prod.env
@@ -43,8 +53,43 @@ services:
       PORT: 3000
       # Node 侧同步北京时间：new Date()/序列化落库与 MySQL NOW() 保持同一时区
       TZ: Asia/Shanghai
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      # 启动要跑 schema 引导任务后才 listen，宽限启动期不计数
+      start_period: 60s
+    # 双色各绑一个宿主机端口（本机调试/巡检用；nginx 走容器内网，不依赖这两个映射）
     ports:
-      - "127.0.0.1:${API_PORT}:3000"
+      - "127.0.0.1:${API_BLUE_PORT:-3101}:3000"
+    volumes:
+      - ../../server/uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api-green:
+    image: my-app-api:current
+    restart: unless-stopped
+    env_file:
+      - ../env/prod.env
+    environment:
+      PORT: 3000
+      # Node 侧同步北京时间：new Date()/序列化落库与 MySQL NOW() 保持同一时区
+      TZ: Asia/Shanghai
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    ports:
+      - "127.0.0.1:${API_GREEN_PORT:-3102}:3000"
     volumes:
       - ../../server/uploads:/app/uploads
     depends_on:
@@ -60,12 +105,19 @@ services:
       - "${PUBLIC_HTTP_PORT}:80"
       - "${PUBLIC_HTTPS_PORT}:443"
     volumes:
+      # 主配置带 worker_shutdown_timeout：切换 reload 后旧 worker 最多再活 30s，
+      # 防止 websocket 长连接把旧 worker 无限期留住
+      - ../nginx/nginx.main.conf:/etc/nginx/nginx.conf:ro
       - ../nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      # 蓝绿上游（线上运行状态文件，由 blue-green-deploy.sh 原地重写切换，
+      # ⚠️ 只能 cat > 原地写保 inode，rm+cp/sed -i 会让容器看不到新内容）
+      - ../nginx/upstream-backend.conf:/etc/nginx/conf.d/upstream.conf:ro
       - ${NGINX_CERTS_DIR}:/etc/nginx/certs:ro
       - ${ADMIN_ALLOWLIST_FILE}:/etc/nginx/includes/admin-allowlist.conf:ro
       - ../../dist:/usr/share/nginx/html:ro
     depends_on:
-      - api
+      - api-blue
+      - api-green
 
 volumes:
   mysql_data_prod:

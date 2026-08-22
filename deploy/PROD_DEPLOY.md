@@ -13,10 +13,12 @@
 ## 当前生产配置
 
 - 生产环境变量: `deploy/env/prod.env`
-- 生产编排文件: `deploy/compose/docker-compose.prod.yml`
+- 生产编排文件: `deploy/compose/docker-compose.prod.yml`（蓝绿双 api：`api-blue`/`api-green`）
 - 生产 MySQL 配置: `deploy/mysql/my.cnf`
-- 生产 Nginx 配置: `deploy/nginx/nginx.prod.conf`
-- 根目录 `docker-compose.yml` 与 `nginx/nginx.prod.conf` 已同步为 `xysh88.com`
+- 生产 Nginx 主配置: `deploy/nginx/nginx.main.conf`（挂载为 `/etc/nginx/nginx.conf`）
+- 生产 Nginx 站点配置: `deploy/nginx/nginx.prod.conf`
+- 蓝绿上游切换文件: `deploy/nginx/upstream-backend.conf`（线上运行状态，勿手改）
+- 蓝绿发布脚本: `deploy/scripts/blue-green-deploy.sh`
 - 服务器项目目录: `/opt/my-app`
 
 ## 自建 MySQL / Redis
@@ -148,27 +150,56 @@ rm -rf /opt/my-app/server/uploads && cp -a /tmp/my-app-uploads.bak /opt/my-app/s
 # rm -rf /tmp/my-app-certs.bak /tmp/my-app-uploads.bak
 ```
 
-6. 在服务器启动生产环境:
+6. 在服务器发布（蓝绿，零停机）:
 
 ```bash
 cd /opt/my-app
-docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml up -d --build
+bash deploy/scripts/blue-green-deploy.sh deploy
 ```
 
-⚠️ nginx 容器在 `up -d --build` 时通常**不会**被重建（镜像与编排未变化时保持 Running），
-而第 5 步的 `rm -rf` + `cp -a` 会替换 certs 目录的 inode，运行中容器的 bind mount 仍指向
-旧 inode（容器内看不到新证书），此时 `nginx -s reload` 会因证书缺失失败。因此每次部署后
-必须显式重启 nginx 容器，让 bind mount 重新解析并加载新配置:
+脚本流程：构建新镜像（tag `my-app-api:current`）→ 只重建**闲置色**容器（活跃色不动）→ 等它
+healthcheck 变 healthy（超时 240s 自动中止，流量不受影响）→ `cat >` 原地重写
+`deploy/nginx/upstream-backend.conf` 交换 down 标记 → `nginx -t` 校验 → `nginx -s reload`
+平滑切流量。旧色保持运行，既是热备也是回滚目标：
 
 ```bash
-docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml restart nginx
+# 回滚 / 手动切换活跃色（不构建）
+bash deploy/scripts/blue-green-deploy.sh switch
+
+# 查看活跃色与双色健康状态
+bash deploy/scripts/blue-green-deploy.sh status
+```
+
+蓝绿要点（踩过的坑都记在这）：
+
+- **切流量只靠 nginx reload**（平滑，旧 worker 靠 `worker_shutdown_timeout 30s` 收尾存量连接，
+  websocket 客户端会自动重连到新色），不再需要每次部署 `restart nginx`。
+- **`upstream-backend.conf` 是线上运行状态**（记录当前活跃色），`remote-deploy-extract.sh`
+  会备份恢复，不要手工编辑；脚本重写它必须 `cat >` 原地写保 inode。
+- **两色并存时周期任务靠跨实例 Redis 锁互斥**（`JOBS_LOCK_TTL_MS`，Redis 不可用时 fail-open），
+  同一轮任务全局只执行一次。
+- **不要对活跃色手工 `up --force-recreate`**——那会重启正在接流量的容器，回到有停机窗口的
+  旧模式。`docker compose up -d` 只在这些场景使用：首次部署、编排文件变化（mysql/redis/nginx
+  配置或挂载）、全量重建。
+- 宿主机 `127.0.0.1:3101/3102` 分别映射 blue/green（调试用；nginx 走容器内网不依赖它们）。
+- api 保留优雅停机：SIGTERM 后 `/api/health` 置 503、停周期任务、排干在途请求再退出
+  （应用内上限 15s = `SHUTDOWN_DRAIN_TIMEOUT_MS`，容器宽限 30s = `stop_grace_period`，
+  前者必须小于后者）。停机窗口内到达的支付回调由渠道侧重试 + 资金对账任务自动补齐。
+
+⚠️ 仅当 **nginx 自身配置/挂载变更**（如 `nginx.prod.conf`、`nginx.main.conf`、证书目录）时才需要
+重建 nginx 容器（有秒级中断，低频操作）：
+
+```bash
+docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml up -d --force-recreate nginx
 ```
 
 7. 查看运行状态:
 
 ```bash
+bash /opt/my-app/deploy/scripts/blue-green-deploy.sh status
+# 或直接看容器/日志
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml ps
-docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml logs -f api
+docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml logs -f api-blue
 ```
 
 8. 如需维护生产管理员账号，可在服务器执行:
@@ -182,7 +213,7 @@ bash /opt/my-app/deploy/scripts/reset-prod-admin.sh <旧手机号> <新手机号
 - 该脚本会把指定旧手机号对应的用户改成新的管理员手机号和密码
 - 会同步更新后台显示用户名为脱敏手机号，例如 `176****1608`
 - 会清理该管理员已绑定的 Passkey、受信任设备，并尽量注销现有登录会话
-- 运行前请先确认 `api`、`mysql`、`redis` 容器已正常启动
+- 运行前请先确认 `api-blue`/`api-green`、`mysql`、`redis` 容器已正常启动（脚本自动选活跃色执行）
 
 9. 查看 MySQL 慢查询、连接数与服务器监控:
 
@@ -214,4 +245,5 @@ bash /opt/my-app/deploy/scripts/check-prod-host-metrics.sh 3
 - 主站可访问: `https://xysh88.com`
 - 后台可访问: `https://admin.xysh88.com`
 - 健康检查: `https://xysh88.com/api/health`
+- `docker compose ps` 中 `api-blue`/`api-green` 应显示 `(healthy)`（启动后有 60s 的 `start_period` 宽限），nginx upstream 指向的那一色为活跃色
 - MySQL/Redis 仅映射到 `127.0.0.1`，不直接暴露公网
