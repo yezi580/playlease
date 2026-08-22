@@ -2,6 +2,8 @@
  * 客服相关 HTTP 路由，处理工作台与工单操作。
  */
 
+import { getDepositHoldSettings, loadBusinessSettings } from '../modules/business-settings/runtime.js'
+
 export function registerSupportRoutes(deps) {
   const {
     app,
@@ -46,6 +48,8 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
   const pendingTimeoutMinutes = 24 * 60
   // 冻结资金超时告警阈值（小时）：冻结单长期未裁决，买卖双方资金悬置
   const frozenTimeoutHours = Math.max(1, Number(process.env.FROZEN_FUNDS_TIMEOUT_HOURS || 48) || 48)
+  // 押金举报超时告警阈值（小时）：来自业务参数配置（冷静期 disputeTimeoutHours）
+  const depositDisputeTimeoutHours = getDepositHoldSettings(await loadBusinessSettings(pool)).disputeTimeoutHours
 
   try {
     const activeStatuses = ['paid', 'support_handling', 'settlement_pending']
@@ -147,6 +151,14 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
               THEN 1 ELSE 0
             END
           ) AS frozen_timeout_total,
+          SUM(
+            CASE
+              WHEN status = 'support_handling'
+               AND support_scene = 'deposit_dispute'
+               AND TIMESTAMPDIFF(HOUR, support_requested_at, NOW()) >= ?
+               THEN 1 ELSE 0
+            END
+          ) AS deposit_dispute_timeout_total,
           SUM(CASE WHEN support_status = 'handling' AND support_assignee_id = ? THEN 1 ELSE 0 END) AS my_handling_count,
           SUM(CASE WHEN support_status = 'resolved' AND support_assignee_id = ? THEN 1 ELSE 0 END) AS my_resolved_total,
           SUM(
@@ -163,6 +175,7 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
       [
         pendingTimeoutMinutes,
         frozenTimeoutHours,
+        depositDisputeTimeoutHours,
         req.auth.userId,
         req.auth.userId,
         req.auth.userId,
@@ -178,6 +191,7 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
           o.listing_title,
           o.listing_cover_image,
           o.status,
+          o.deposit_amount,
           o.buyer_id,
           o.seller_id,
           o.seller_name,
@@ -247,7 +261,9 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
         pending_timeout_total: Number(statsRow?.pending_timeout_total || 0),
         pending_timeout_minutes: pendingTimeoutMinutes,
         frozen_timeout_total: Number(statsRow?.frozen_timeout_total || 0),
-        frozen_timeout_hours: frozenTimeoutHours
+        frozen_timeout_hours: frozenTimeoutHours,
+        deposit_dispute_timeout_total: Number(statsRow?.deposit_dispute_timeout_total || 0),
+        deposit_dispute_timeout_hours: depositDisputeTimeoutHours
       },
       workload: {
         my_handling_count: Number(statsRow?.my_handling_count || 0),
@@ -261,30 +277,32 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
         const buyerDisplayName = row.buyer_username || `用户 #${Number(row.buyer_id || 0)}`
         const sellerDisplayName = row.seller_username || row.seller_name || '卖家'
         const supportAssigneeDisplayName = row.support_assignee_username || ''
-        const issueReason = row.support_scene === 'cancel_request'
-          ? '取消订单申请'
-          : (row.support_scene === 'cancel_refund_processing'
-              ? '取消退款处理中'
-              : (row.support_scene === 'settlement_funds_processing'
-                  ? '结算打款处理中'
-                  : (row.support_scene === 'frozen_funds_processing'
-                      ? '冻结资金处理中'
-          : (row.support_scene === 'settlement_dispute'
-              ? '结算争议处理'
-              : (row.support_scene === 'fund_frozen'
-                  ? '资金冻结处理中'
-                  : '订单监督中')))))
+        const sceneReasonMap = {
+          cancel_request: '取消订单申请',
+          cancel_refund_processing: '取消退款处理中',
+          settlement_funds_processing: '结算打款处理中',
+          frozen_funds_processing: '冻结资金处理中',
+          settlement_dispute: '结算争议处理',
+          deposit_dispute: '押金违规举报待裁决',
+          deposit_funds_processing: '押金裁决资金处理中',
+          fund_frozen: '资金冻结处理中'
+        }
+        const issueReason = sceneReasonMap[String(row.support_scene || '')] || '订单监督中'
         const issueNote = row.support_scene === 'cancel_request'
           ? (row.cancel_reason || row.support_note || '')
-          : (row.support_scene === 'cancel_refund_processing'
-              ? (row.support_note || '正在等待支付通道确认原路退款结果')
-              : (row.support_scene === 'settlement_funds_processing'
-                  ? (row.support_note || '正在等待支付通道确认退款/打款结果')
-                  : (row.support_scene === 'frozen_funds_processing'
-                      ? (row.support_note || '正在等待支付通道确认冻结资金处理结果')
-          : (row.support_scene === 'fund_frozen'
-              ? (row.support_freeze_reason || row.support_note || '')
-              : (row.support_note || '')))))
+          : row.support_scene === 'cancel_refund_processing'
+            ? (row.support_note || '正在等待支付通道确认原路退款结果')
+            : row.support_scene === 'settlement_funds_processing'
+              ? (row.support_note || '正在等待支付通道确认退款/打款结果')
+              : row.support_scene === 'frozen_funds_processing'
+                ? (row.support_note || '正在等待支付通道确认冻结资金处理结果')
+                : row.support_scene === 'deposit_dispute'
+                  ? (row.support_note || '卖家已举报买家违规，请核实证据后作出押金裁决')
+                  : row.support_scene === 'deposit_funds_processing'
+                    ? (row.support_note || '正在等待支付通道确认押金退款/赔付结果')
+                    : row.support_scene === 'fund_frozen'
+                      ? (row.support_freeze_reason || row.support_note || '')
+                      : (row.support_note || '')
         const supportRequestedAt = row.support_requested_at || row.cancel_requested_at || row.created_at
         const supportOriginStatus = String(row.support_origin_status || '').trim()
         return {
@@ -295,6 +313,7 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
           listing_cover_image: row.listing_cover_image || '',
           status: row.status || 'paid',
           status_text: normalizeOrderMoneyFields({ amount: 0, deposit_amount: 0, status: row.status || 'paid' }).status_text,
+          deposit_amount: normalizeOrderMoneyFields({ amount: 0, deposit_amount: row.deposit_amount || 0, status: 'paid' }).deposit_amount,
           buyer_id: Number(row.buyer_id || 0),
           seller_id: Number(row.seller_id || 0),
           buyer_name: row.buyer_phone || buyerDisplayName,
@@ -314,7 +333,9 @@ app.get('/api/support/orders', authRequired, supportOnly, authenticatedReadLimit
           support_requested_by: 0,
           support_requested_by_name: row.support_scene === 'fund_frozen'
             ? (row.support_assignee_phone || supportAssigneeDisplayName || '客服')
-            : (row.buyer_phone || buyerDisplayName || ''),
+            : (row.support_scene === 'deposit_dispute'
+                ? (row.seller_phone || sellerDisplayName || '卖家')
+                : (row.buyer_phone || buyerDisplayName || '')),
           support_assignee_id: Number(row.support_assignee_id || 0),
           support_assignee_name: row.support_assignee_phone || supportAssigneeDisplayName,
           support_assignee_username: supportAssigneeDisplayName,

@@ -60,6 +60,7 @@ export function startRecurringJobs({
   reconcileProcessingFundsOrders,
   arbitrateSettlementTimeouts,
   refreshListingHotStats,
+  releaseDueDepositHolds,
   intervalMs = 60_000,
   onlineSnapshotIntervalMs = 60_000,
   fundsReconcileIntervalMs = 120_000,
@@ -126,6 +127,20 @@ export function startRecurringJobs({
     }
   }
 
+  const runDepositHoldRelease = async () => {
+    if (typeof releaseDueDepositHolds !== 'function') return
+    try {
+      const summary = await releaseDueDepositHolds()
+      if (summary && summary.released + summary.pending + summary.errors > 0) {
+        console.log(
+          `[押金保管] 扫描 ${summary.scanned} 个到期押金：已退回 ${summary.released}，处理中 ${summary.pending}，跳过 ${summary.skipped}，失败 ${summary.errors}`
+        )
+      }
+    } catch (error) {
+      console.error('[押金保管] 到期释放执行失败:', error.message)
+    }
+  }
+
   // 锁在重入保护外层：本地上一轮未结束时直接跳过，不去碰 Redis；
   // 抢到锁后才进入实际执行，异常/正常结束都释放锁
   const guardedRunners = {
@@ -133,7 +148,8 @@ export function startRecurringJobs({
     onlineSnapshot: withSingleNodeLock('online-snapshot', withReentryGuard('在线快照', runOnlineSnapshotCapture)),
     fundsReconcile: withSingleNodeLock('funds-reconcile', withReentryGuard('资金对账', runProcessingFundsReconcile)),
     settlementArbitration: withSingleNodeLock('settlement-arbitration', withReentryGuard('结算仲裁', runSettlementArbitration)),
-    listingHotStats: withSingleNodeLock('listing-hot-stats', withReentryGuard('商品热度', runListingHotStatsRefresh))
+    listingHotStats: withSingleNodeLock('listing-hot-stats', withReentryGuard('商品热度', runListingHotStatsRefresh)),
+    depositHoldRelease: withSingleNodeLock('deposit-hold-release', withReentryGuard('押金保管', runDepositHoldRelease))
   }
 
   Object.values(guardedRunners).forEach((runner) => runner())
@@ -143,7 +159,8 @@ export function startRecurringJobs({
     setInterval(guardedRunners.onlineSnapshot, onlineSnapshotIntervalMs),
     setInterval(guardedRunners.fundsReconcile, fundsReconcileIntervalMs),
     setInterval(guardedRunners.settlementArbitration, intervalMs),
-    setInterval(guardedRunners.listingHotStats, listingHotStatsIntervalMs)
+    setInterval(guardedRunners.listingHotStats, listingHotStatsIntervalMs),
+    setInterval(guardedRunners.depositHoldRelease, intervalMs)
   ]
 
   return {

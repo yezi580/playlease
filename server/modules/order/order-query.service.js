@@ -17,7 +17,15 @@ function fail(status, body) {
   throw new OrderQueryError(status, body)
 }
 
-function buildOrderTimeline(order) {
+function formatTimelineDateTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (num) => String(num).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function buildOrderTimeline(order, depositHold = null) {
   const timeline = []
   if (order.created_at) {
     timeline.push({ event: 'created', label: '下单', time: order.created_at })
@@ -39,6 +47,18 @@ function buildOrderTimeline(order) {
   }
   if (order.settlement_executed_at) {
     timeline.push({ event: 'settlement_executed', label: '客服执行分账', time: order.settlement_executed_at })
+  }
+  if (depositHold && depositHold.release_at && ['holding', 'disputed', 'releasing'].includes(String(depositHold.status || ''))) {
+    timeline.push({ event: 'deposit_holding', label: `押金进入平台保管（预计 ${formatTimelineDateTime(depositHold.release_at)} 自动退回）`, time: order.settlement_executed_at || depositHold.release_at })
+  }
+  if (depositHold && depositHold.reported_at) {
+    timeline.push({ event: 'deposit_reported', label: '卖家发起押金违规举报', time: depositHold.reported_at })
+  }
+  if (depositHold && depositHold.verdict_at) {
+    timeline.push({ event: 'deposit_verdict', label: '客服完成押金裁决', time: depositHold.verdict_at })
+  }
+  if (depositHold && depositHold.released_at) {
+    timeline.push({ event: 'deposit_released', label: '押金已退回买家', time: depositHold.released_at })
   }
   if (order.finished_at) {
     timeline.push({ event: 'finished', label: '完成', time: order.finished_at })
@@ -366,6 +386,24 @@ export function createOrderQueryService({
       [orderId]
     )
 
+    // 押金冷静期保管信息：买卖双方均可见金额与时间；举报原因仅卖家可见，裁决说明仅平台内部
+    const [[depositHoldRow]] = await pool.execute(
+      `SELECT
+          hold_amount,
+          status,
+          hold_days,
+          release_at,
+          released_at,
+          reported_at,
+          report_reason,
+          verdict,
+          verdict_at
+       FROM order_deposit_holds
+       WHERE order_id = ?
+       LIMIT 1`,
+      [orderId]
+    )
+
     const [[supportRow]] = await pool.execute(
       `SELECT username
        FROM users
@@ -445,10 +483,28 @@ export function createOrderQueryService({
     } else {
       payload.settlement = null
     }
+    if (depositHoldRow) {
+      const holdAmount = Number(depositHoldRow.hold_amount || 0)
+      payload.deposit_hold = {
+        status: depositHoldRow.status || 'holding',
+        amount: holdAmount,
+        hold_days: Number(depositHoldRow.hold_days || 0),
+        release_at: depositHoldRow.release_at || null,
+        released_at: depositHoldRow.released_at || null,
+        reported_at: depositHoldRow.reported_at || null,
+        verdict: depositHoldRow.verdict || null,
+        verdict_at: depositHoldRow.verdict_at || null,
+        // 举报原因只给卖家看；买家仅感知「已被举报、客服核实中」
+        report_reason: isSeller ? (depositHoldRow.report_reason || '') : '',
+        can_report: isSeller && String(depositHoldRow.status || '') === 'holding' && String(order.status || '') === 'deposit_holding'
+      }
+    } else {
+      payload.deposit_hold = null
+    }
     payload.support_assignee_name = supportRow?.username || ''
     payload.buyer_name = buyerRow?.username || payload.buyer_name || `用户 #${order.buyer_id || 0}`
     payload.seller_name = sellerRow?.username || payload.seller_name || listing?.owner_name || '平台卖家'
-    payload.timeline = buildOrderTimeline(order)
+    payload.timeline = buildOrderTimeline(order, depositHoldRow)
     payload.listing_title = buildOrderDetailListingTitle(order, listing, buildOrderListingTitle)
 
     return payload

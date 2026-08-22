@@ -359,6 +359,10 @@ const DEFAULT_ADMIN_BUSINESS_SETTINGS = Object.freeze({
   inviteReward: {
     buyerServiceFeeRewardRatePercent: 30
   },
+  depositHold: {
+    holdDays: 3,
+    disputeTimeoutHours: 48
+  },
   discoveryThresholds: {
     smallAmountHafuCoinMax: 150,
     highRatioBaseRatioMin: 43,
@@ -478,6 +482,9 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
   const inviteRewardSource = source.inviteReward && typeof source.inviteReward === 'object'
     ? source.inviteReward
     : {}
+  const depositHoldSource = source.depositHold && typeof source.depositHold === 'object'
+    ? source.depositHold
+    : {}
   const discoverySource = source.discoveryThresholds && typeof source.discoveryThresholds === 'object'
     ? source.discoveryThresholds
     : {}
@@ -540,6 +547,10 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
         defaults.inviteReward.buyerServiceFeeRewardRatePercent,
         { min: 0, max: 100, precision: 2 }
       )
+    },
+    depositHold: {
+      holdDays: normalizeAdminInteger(depositHoldSource.holdDays, defaults.depositHold.holdDays, { min: 0, max: 30 }),
+      disputeTimeoutHours: normalizeAdminInteger(depositHoldSource.disputeTimeoutHours, defaults.depositHold.disputeTimeoutHours, { min: 1, max: 720 })
     },
     discoveryThresholds: {
       smallAmountHafuCoinMax: normalizeAdminInteger(discoverySource.smallAmountHafuCoinMax, defaults.discoveryThresholds.smallAmountHafuCoinMax, { min: 0, max: 999999 }),

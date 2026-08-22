@@ -9,6 +9,7 @@ import {
   calculateCompensationFeeAmount,
   calculateSellerIncomeRent,
   calculateServiceFeeFromSellerRent,
+  getDepositHoldSettings,
   getSaleItemConfig,
   loadBusinessSettings,
   resolveBuyerUnitPriceInCent
@@ -26,6 +27,11 @@ export class OrderLifecycleError extends Error {
 function fail(status, body) {
   throw new OrderLifecycleError(status, body)
 }
+
+// 押金冷静期资金流水的幂等键：reason/remark 与 payment_refunds/settlement_payouts 匹配
+const DEPOSIT_HOLD_RELEASE_REFUND_REASON = '押金保管到期-自动退回买家'
+const DEPOSIT_DISPUTE_REJECT_REFUND_REASON = '押金举报驳回-退回买家'
+const DEPOSIT_CONFISCATE_PAYOUT_REMARK = '押金裁决-赔付卖家'
 
 function buildDefaultOrderNo(date = new Date()) {
   const sourceDate = date instanceof Date ? date : new Date(date)
@@ -1546,6 +1552,12 @@ export function createOrderLifecycleService({
         let preview = null
         let isFrozenSettlement = false
         let isRegularSettlement = false
+        // 押金冷静期：结单时押金不再即时退款，先进入平台保管（订单转 deposit_holding），
+        // 到期自动原路退回买家；保管期内卖家可举报买家违规，由客服裁决没收赔付或驳回退款。
+        // holdDays=0 表示关闭冷静期，保持旧的即时退款行为。
+        let needsRefund = false
+        let depositHoldSettings = getDepositHoldSettings(null)
+        let shouldHoldDeposit = false
         let isManualPayout = String(payoutMode || '').trim() === 'manual'
         let manualPayoutNote = String(manualNote || '').trim().slice(0, 500)
         let frozenLiableParty = String(liableParty || '').trim() === 'buyer' ? 'buyer' : 'seller'
@@ -1605,6 +1617,10 @@ export function createOrderLifecycleService({
             ? await buildFrozenFundsSettlementPreview(conn, order, frozenLiableParty)
             : await buildSettlementPreview(conn, orderId)
 
+          needsRefund = Number(preview?.buyerRefundAmount || 0) > 0
+          depositHoldSettings = getDepositHoldSettings(await loadBusinessSettings(conn))
+          shouldHoldDeposit = needsRefund && depositHoldSettings.holdDays > 0
+
           // 需要给卖家打款时（普通结算应结款、冻结裁决物品款/买家责任租金）校验进件；
           // 线下手动收款不依赖汇付，跳过校验
           const needsSellerPayoutAccount = !isManualPayout
@@ -1653,7 +1669,9 @@ export function createOrderLifecycleService({
               isRegularSettlement ? 1 : 0,
               isFrozenSettlement ? 'frozen_funds_processing' : 'settlement_funds_processing',
               isManualPayout
-                ? '客服已发起手动结单：买家押金原路退回待支付通道确认，卖家结算款需客服线下联系卖家支付。'
+                ? (shouldHoldDeposit
+                  ? '客服已发起手动结单：卖家结算款需客服线下联系卖家支付，买家押金将进入平台保管，冷静期结束后自动退回。'
+                  : '客服已发起手动结单：买家押金原路退回待支付通道确认，卖家结算款需客服线下联系卖家支付。')
                 : '客服已发起资金处理，等待支付通道确认。',
               orderId
             ]
@@ -1672,14 +1690,13 @@ export function createOrderLifecycleService({
         const sellerPayoutRemark = isFrozenSettlement
           ? '客服执行冻结裁决-卖家余额支付'
           : '客服执行结算-卖家余额支付'
-        const needsRefund = Number(preview?.buyerRefundAmount || 0) > 0
         const needsPayout = !isManualPayout && Number(order?.seller_id || 0) > 0 && Number(preview?.sellerIncomeAmount || 0) > 0
 
-        let refundResult = needsRefund ? await fetchLatestRefundByReason(pool, orderId, buyerRefundReason) : null
+        let refundResult = (needsRefund && !shouldHoldDeposit) ? await fetchLatestRefundByReason(pool, orderId, buyerRefundReason) : null
         let payoutResult = needsPayout ? await fetchLatestPayoutByRemark(pool, orderId, sellerPayoutRemark) : null
 
         try {
-          if (needsRefund && !(isFundsSuccessStatus(refundResult?.status) || isFundsProcessingStatus(refundResult?.status))) {
+          if (needsRefund && !shouldHoldDeposit && !(isFundsSuccessStatus(refundResult?.status) || isFundsProcessingStatus(refundResult?.status))) {
             if (typeof createOrderRefund !== 'function') {
               fail(500, { message: '退款服务尚未就绪，请稍后重试' })
             }
@@ -1721,13 +1738,17 @@ export function createOrderLifecycleService({
           throw error
         }
 
-        const refundSuccess = !needsRefund || isFundsSuccessStatus(refundResult?.status)
+        // 押金进入保管时无需等待退款结果，仅以卖家打款到账为结单完成条件
+        const refundSuccess = !needsRefund || shouldHoldDeposit || isFundsSuccessStatus(refundResult?.status)
         const payoutSuccess = !needsPayout || isFundsSuccessStatus(payoutResult?.status)
 
         if (!refundSuccess || !payoutSuccess) {
           const processingNotes = []
-          if (needsRefund) {
+          if (needsRefund && !shouldHoldDeposit) {
             processingNotes.push(refundSuccess ? '买家退款已完成' : '买家退款处理中')
+          }
+          if (shouldHoldDeposit) {
+            processingNotes.push('买家押金将进入平台保管')
           }
           if (needsPayout) {
             processingNotes.push(payoutSuccess ? '卖家打款已完成' : '卖家打款处理中')
@@ -1747,10 +1768,16 @@ export function createOrderLifecycleService({
             content: isFrozenSettlement
               ? (frozenLiableParty === 'buyer'
                 ? '客服已按冻结裁决（买家责任）发起资金处理：买家押金归平台，租金将结算给卖家，等待支付通道确认结果。'
-                : '客服已按冻结裁决（卖家责任）发起资金处理：押金余额将原路退回买家，租金归平台，等待支付通道确认结果。')
+                : (shouldHoldDeposit
+                  ? '客服已按冻结裁决（卖家责任）发起资金处理：押金余额将进入平台保管，冷静期结束后自动退回买家，租金归平台，等待支付通道确认结果。'
+                  : '客服已按冻结裁决（卖家责任）发起资金处理：押金余额将原路退回买家，租金归平台，等待支付通道确认结果。'))
               : (isManualPayout
-                ? '客服已发起手动结单资金处理：买家将原路收到退款，卖家结算款将由客服线下联系支付，当前等待支付通道确认结果。'
-                : '客服已发起订单资金处理：买家将原路收到退款，卖家将收到平台余额支付打款，当前等待支付通道确认结果。')
+                ? (shouldHoldDeposit
+                  ? '客服已发起手动结单资金处理：买家押金将进入平台保管，冷静期结束后自动退回，卖家结算款将由客服线下联系支付。'
+                  : '客服已发起手动结单资金处理：买家将原路收到退款，卖家结算款将由客服线下联系支付，当前等待支付通道确认结果。')
+                : (shouldHoldDeposit
+                  ? '客服已发起订单资金处理：卖家将收到平台余额支付打款，买家押金将进入平台保管，冷静期结束后自动退回。'
+                  : '客服已发起订单资金处理：买家将原路收到退款，卖家将收到平台余额支付打款，当前等待支付通道确认结果。'))
           })
           return updated
         }
@@ -1767,9 +1794,27 @@ export function createOrderLifecycleService({
           if (!isFrozenSettlement) {
             pendingRewardInfo = await awardInviteRewardForSettlement(finalizeConn, order, preview)
           }
+          if (shouldHoldDeposit) {
+            // 写入押金保管记录（uk 幂等，对账重入不重复建），到期由定时任务自动原路退回
+            await finalizeConn.execute(
+              `INSERT INTO order_deposit_holds (
+                order_id, buyer_id, seller_id, hold_amount, status, hold_days, release_at, refund_reason
+              ) VALUES (?, ?, ?, ?, 'holding', ?, DATE_ADD(NOW(), INTERVAL ? DAY), ?)
+              ON DUPLICATE KEY UPDATE id = id`,
+              [
+                orderId,
+                Number(order?.buyer_id || 0),
+                Number(order?.seller_id || 0),
+                Number(preview?.buyerRefundAmount || 0),
+                depositHoldSettings.holdDays,
+                depositHoldSettings.holdDays,
+                DEPOSIT_HOLD_RELEASE_REFUND_REASON
+              ]
+            )
+          }
           await finalizeConn.execute(
             `UPDATE orders
-             SET status = 'completed',
+             SET status = ?,
                  settlement_status = 'executed',
                  support_scene = CASE
                    WHEN ? = 1 THEN 'fund_frozen'
@@ -1782,7 +1827,7 @@ export function createOrderLifecycleService({
                  settlement_executed_at = NOW(),
                  finished_at = NOW()
              WHERE id = ?`,
-            [isFrozenSettlement ? 1 : 0, orderId]
+            [shouldHoldDeposit ? 'deposit_holding' : 'completed', isFrozenSettlement ? 1 : 0, orderId]
           )
           if (Number(order.listing_id || 0) > 0) {
             await finalizeConn.execute(
@@ -1813,6 +1858,11 @@ export function createOrderLifecycleService({
         }
         const updated = await fetchOrderById(pool, orderId)
         const orderConversation = await getOrderConversationAccess(orderId, supportUserId, 'support')
+        const holdReleaseAt = new Date(Date.now() + depositHoldSettings.holdDays * 24 * 60 * 60 * 1000)
+        const padDateTime = (num) => String(num).padStart(2, '0')
+        const holdReleaseText = shouldHoldDeposit
+          ? `${holdReleaseAt.getFullYear()}-${padDateTime(holdReleaseAt.getMonth() + 1)}-${padDateTime(holdReleaseAt.getDate())} ${padDateTime(holdReleaseAt.getHours())}:${padDateTime(holdReleaseAt.getMinutes())}`
+          : ''
         await emitOrderSystemMessage({
           order: orderConversation,
           actorUserId: supportUserId,
@@ -1822,12 +1872,18 @@ export function createOrderLifecycleService({
               ? (isManualPayout
                 ? '客服已完成冻结裁决（买家责任）：买家押金归平台，卖家租金及物品款将由客服线下联系支付。'
                 : '客服已完成冻结裁决（买家责任）：买家押金归平台，租金及物品款已结算给卖家。')
+              : (shouldHoldDeposit
+                ? `客服已完成冻结裁决（卖家责任）：押金余额进入平台保管，预计 ${holdReleaseText} 前无举报将自动退回买家，租金计入平台收益。`
+                : (isManualPayout
+                  ? '客服已完成冻结裁决（卖家责任）：押金余额已原路退回买家，租金计入平台，卖家物品款将由客服线下联系支付。'
+                  : '客服已完成冻结裁决（卖家责任）：押金余额已原路退回买家，租金计入平台收益。')))
+            : (shouldHoldDeposit
+              ? (isManualPayout
+                ? `客服已完成手动结单：买家押金进入平台保管，预计 ${holdReleaseText} 自动退回，卖家结算款将由客服线下联系支付。`
+                : `客服已完成结算：卖家结算款已通过余额支付发起/到账，买家押金进入平台保管，预计 ${holdReleaseText} 自动退回。`)
               : (isManualPayout
-                ? '客服已完成冻结裁决（卖家责任）：押金余额已原路退回买家，租金计入平台，卖家物品款将由客服线下联系支付。'
-                : '客服已完成冻结裁决（卖家责任）：押金余额已原路退回买家，租金计入平台收益。'))
-            : (isManualPayout
-              ? '客服已完成手动结单：买家退款已原路退回，卖家结算款将由客服线下联系支付。'
-              : '客服已完成结算：买家退款已原路退回，卖家结算款已通过余额支付发起/到账。')
+                ? '客服已完成手动结单：买家退款已原路退回，卖家结算款将由客服线下联系支付。'
+                : '客服已完成结算：买家退款已原路退回，卖家结算款已通过余额支付发起/到账。'))
         })
         return updated
       }
@@ -2057,6 +2113,10 @@ export function createOrderLifecycleService({
           order = orders[0]
           if (['cancelled', 'completed', 'refunded'].includes(String(order.status || '').trim())) {
             fail(400, { message: '已完成、已退款或已关闭的订单不支持后台关闭' })
+          }
+          // 押金保管期订单结算款已付出，全额退款会造成重复退押金；请等待保管到期或走举报裁决
+          if (String(order.status || '').trim() === 'deposit_holding') {
+            fail(400, { message: '押金保管期订单不支持后台关闭，请等待保管到期自动退款或由客服按举报裁决处理' })
           }
 
           const [paidRows] = await conn.execute(
@@ -2380,6 +2440,467 @@ export function createOrderLifecycleService({
     )
   }
 
+  async function fetchDepositHoldByOrderId(executor, orderId) {
+    const [rows] = await executor.execute(
+      `SELECT * FROM order_deposit_holds WHERE order_id = ? LIMIT 1`,
+      [orderId]
+    )
+    return rows[0] || null
+  }
+
+  // 卖家举报：冷静期内举报买家违规（如开挂导致账号封禁），暂停押金自动退回，转客服裁决
+  async function reportDepositViolation({ orderId, sellerUserId, reason = '' }) {
+    return runWithDistributedLock(
+      typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
+      '当前订单押金正在处理，请稍后再试',
+      async () => {
+        const reportReason = String(reason || '').trim().slice(0, 500)
+        if (!reportReason) {
+          fail(400, { message: '请填写举报原因，说明买家违规情况（如账号被封禁的时间与证据）' })
+        }
+        const conn = await pool.getConnection()
+        try {
+          await conn.beginTransaction()
+          const [orders] = await conn.execute(
+            `SELECT id, status, buyer_id, seller_id
+             FROM orders
+             WHERE id = ?
+             LIMIT 1
+             FOR UPDATE`,
+            [orderId]
+          )
+          if (!orders.length) fail(404, { message: '订单不存在' })
+          const order = orders[0]
+          if (Number(order.seller_id || 0) !== Number(sellerUserId)) {
+            fail(403, { message: '只有卖家可以举报该订单的押金保管' })
+          }
+          if (String(order.status || '').trim() !== 'deposit_holding') {
+            fail(400, { message: '当前订单押金不在保管期，无法举报' })
+          }
+          const hold = await fetchDepositHoldByOrderId(conn, orderId)
+          if (!hold || String(hold.status || '').trim() !== 'holding') {
+            fail(400, { message: '押金退款已发起或已完成裁决，无法举报' })
+          }
+          const [holdUpdate] = await conn.execute(
+            `UPDATE order_deposit_holds
+             SET status = 'disputed',
+                 reported_at = NOW(),
+                 report_reason = ?
+             WHERE order_id = ? AND status = 'holding'`,
+            [reportReason, orderId]
+          )
+          if (!Number(holdUpdate?.affectedRows || 0)) {
+            fail(409, { message: '押金状态已变化，请刷新后重试' })
+          }
+          await conn.execute(
+            `UPDATE orders
+             SET status = 'support_handling',
+                 support_scene = 'deposit_dispute',
+                 support_origin_status = 'deposit_holding',
+                 support_requested_at = NOW(),
+                 support_status = 'handling',
+                 support_resolved_at = NULL,
+                 support_note = ?
+             WHERE id = ?`,
+            [`卖家举报：${reportReason}`, orderId]
+          )
+          await conn.commit()
+        } catch (error) {
+          await conn.rollback()
+          throw error
+        } finally {
+          conn.release()
+        }
+
+        const updated = await fetchOrderById(pool, orderId)
+        const orderConversation = await getOrderConversationAccess(orderId, sellerUserId, 'seller')
+        if (orderConversation) {
+          await emitOrderSystemMessage({
+            order: orderConversation,
+            actorUserId: sellerUserId,
+            actorRole: 'seller',
+            content: '卖家已举报买家租用期间违规（如账号被封禁），押金自动退回已暂停，等待客服核实处理。'
+          })
+        }
+        await emitSupportEvent({
+          orderId,
+          actorUserId: sellerUserId,
+          actorRole: 'seller',
+          actorName: orderConversation?.seller_name || '卖家',
+          eventType: 'deposit_dispute',
+          note: `卖家举报押金保管违规：${reportReason}`,
+          conversationOrder: orderConversation
+        })
+        return updated
+      }
+    )
+  }
+
+  // 客服裁决：confiscate=举报成立，没收押金全额赔付卖家；reject=举报不成立，押金原路退回买家
+  async function verdictDepositDispute({ orderId, supportUserId, verdict = '', payoutMode = 'huifu', note = '' }) {
+    return runWithDistributedLock(
+      typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
+      '当前订单押金正在处理，请稍后再试',
+      async () => {
+        const verdictAction = String(verdict || '').trim()
+        if (!['confiscate', 'reject'].includes(verdictAction)) {
+          fail(400, { message: '无效的押金裁决结果' })
+        }
+        const isManualPayout = String(payoutMode || '').trim() === 'manual'
+        const trimmedNote = String(note || '').trim().slice(0, 500)
+        if (isManualPayout && verdictAction === 'confiscate' && !trimmedNote) {
+          fail(400, { message: '请填写备注，说明线下赔付卖家的安排' })
+        }
+
+        const conn = await pool.getConnection()
+        let hold = null
+        try {
+          await conn.beginTransaction()
+          const [orders] = await conn.execute(
+            `SELECT id, status, support_scene, buyer_id, seller_id, support_assignee_id
+             FROM orders
+             WHERE id = ?
+             LIMIT 1
+             FOR UPDATE`,
+            [orderId]
+          )
+          if (!orders.length) fail(404, { message: '订单不存在' })
+          const order = orders[0]
+          if (String(order.status || '').trim() !== 'support_handling'
+            || String(order.support_scene || '').trim() !== 'deposit_dispute') {
+            fail(400, { message: '当前订单不在押金举报裁决状态' })
+          }
+          if (Number(order.support_assignee_id || 0) !== Number(supportUserId)) {
+            fail(403, { message: '只有当前负责客服可以裁决押金举报' })
+          }
+          hold = await fetchDepositHoldByOrderId(conn, orderId)
+          if (!hold || String(hold.status || '').trim() !== 'disputed') {
+            fail(400, { message: '押金保管记录不在待裁决状态' })
+          }
+          // 没收赔付走汇付余额支付时校验卖家进件；线下手动支付不依赖汇付
+          if (verdictAction === 'confiscate' && !isManualPayout) {
+            const [sellerAccounts] = await conn.execute(
+              `SELECT bind_status, huifu_id, acct_id
+               FROM user_settlement_accounts
+               WHERE user_id = ?
+               LIMIT 1`,
+              [Number(order.seller_id)]
+            )
+            const sellerAccount = sellerAccounts[0] || null
+            if (!sellerAccount
+              || String(sellerAccount.bind_status || '').trim() !== 'active'
+              || !String(sellerAccount.huifu_id || '').trim()
+              || !String(sellerAccount.acct_id || '').trim()) {
+              fail(400, {
+                message: '卖家尚未完成个人进件与绑卡，无法通过余额支付赔付押金。请改用线下手动支付，由客服联系卖家收款'
+              })
+            }
+          }
+          const [holdUpdate] = await conn.execute(
+            `UPDATE order_deposit_holds
+             SET status = ?,
+                 verdict = ?,
+                 verdict_note = ?,
+                 verdict_by_support_id = ?,
+                 verdict_at = NOW(),
+                 refund_reason = CASE WHEN ? = 'reject' THEN ? ELSE refund_reason END,
+                 payout_remark = CASE WHEN ? = 'confiscate' THEN ? ELSE payout_remark END,
+                 payout_mode = ?,
+                 manual_payout_note = CASE WHEN ? = 1 THEN ? ELSE manual_payout_note END
+             WHERE order_id = ? AND status = 'disputed'`,
+            [
+              verdictAction === 'confiscate' ? 'confiscating' : 'releasing',
+              verdictAction === 'confiscate' ? 'confiscate' : 'refund',
+              trimmedNote || null,
+              Number(supportUserId || 0),
+              verdictAction, DEPOSIT_DISPUTE_REJECT_REFUND_REASON,
+              verdictAction, DEPOSIT_CONFISCATE_PAYOUT_REMARK,
+              isManualPayout ? 'manual' : 'huifu',
+              isManualPayout ? 1 : 0, trimmedNote || null,
+              orderId
+            ]
+          )
+          if (!Number(holdUpdate?.affectedRows || 0)) {
+            fail(409, { message: '押金状态已变化，请刷新后重试' })
+          }
+          await conn.execute(
+            `UPDATE orders
+             SET support_scene = 'deposit_funds_processing',
+                 support_note = ?
+             WHERE id = ?`,
+            [
+              verdictAction === 'confiscate'
+                ? (isManualPayout
+                  ? '客服已裁决举报成立：押金没收，需客服线下联系卖家支付赔付款。'
+                  : '客服已裁决举报成立：押金没收，赔付卖家的余额支付处理中。')
+                : '客服已裁决举报不成立：押金将原路退回买家，等待支付通道确认。',
+              orderId
+            ]
+          )
+          await conn.commit()
+        } catch (error) {
+          await conn.rollback()
+          throw error
+        } finally {
+          conn.release()
+        }
+
+        const orderConversation = await getOrderConversationAccess(orderId, supportUserId, 'support')
+        await emitOrderSystemMessage({
+          order: orderConversation,
+          actorUserId: supportUserId,
+          actorRole: 'support',
+          content: verdictAction === 'confiscate'
+            ? (isManualPayout
+              ? '客服已核实举报成立：押金将没收用于赔偿卖家，赔付款由客服线下联系卖家支付。'
+              : '客服已核实举报成立：押金将没收并通过余额支付赔付卖家，以支付通道确认结果为准。')
+            : '客服已核实举报不成立：押金将按原路退回买家，以支付通道确认结果为准。'
+        })
+        await emitSupportEvent({
+          orderId,
+          actorUserId: supportUserId,
+          actorRole: 'support',
+          actorName: orderConversation?.support_assignee_name || '',
+          eventType: 'deposit_verdict',
+          note: verdictAction === 'confiscate'
+            ? `押金裁决：举报成立，没收押金赔付卖家。${trimmedNote}`
+            : `押金裁决：举报不成立，押金退回买家。${trimmedNote}`,
+          conversationOrder: orderConversation
+        })
+
+        const result = await processDepositHoldFunds(orderId)
+        return {
+          order: await fetchOrderById(pool, orderId),
+          finalized: Boolean(result?.finalized)
+        }
+      }
+    )
+  }
+
+  // 押金资金收口：releasing→退款买家 / confiscating→余额支付赔付卖家（manual 线下无需线上动作）。
+  // 缺流水时补发起（幂等），未到账停留中间态由对账任务推进，齐活后订单转 completed。
+  async function processDepositHoldFunds(orderId) {
+    const hold = await fetchDepositHoldByOrderId(pool, orderId)
+    if (!hold) fail(404, { message: '未找到押金保管记录' })
+    const holdStatus = String(hold.status || '').trim()
+    if (!['releasing', 'confiscating'].includes(holdStatus)) {
+      fail(400, { message: '押金保管记录不在资金处理中状态' })
+    }
+    const isConfiscating = holdStatus === 'confiscating'
+    const isManualPayout = isConfiscating && String(hold.payout_mode || '').trim() === 'manual'
+    const fundErrors = []
+    let refundResult = null
+    let payoutResult = null
+
+    if (!isConfiscating) {
+      refundResult = await fetchLatestRefundByReason(pool, orderId, hold.refund_reason)
+      if (!(isFundsSuccessStatus(refundResult?.status) || isFundsProcessingStatus(refundResult?.status))) {
+        if (typeof createOrderRefund !== 'function') {
+          fail(500, { message: '退款服务尚未就绪，请稍后重试' })
+        }
+        try {
+          refundResult = await createOrderRefund({
+            orderId,
+            userId: Number(hold.buyer_id || 0),
+            amount: Number(hold.hold_amount || 0),
+            refundType: 'partial',
+            reason: hold.refund_reason
+          })
+        } catch (error) {
+          fundErrors.push(`押金退款发起失败：${error?.body?.message || error?.message || '请稍后重试'}`)
+          console.error('[押金保管] 订单', orderId, '退款发起失败:', error?.body?.message || error?.message || String(error))
+        }
+      }
+    } else if (!isManualPayout) {
+      payoutResult = await fetchLatestPayoutByRemark(pool, orderId, hold.payout_remark)
+      if (!(isFundsSuccessStatus(payoutResult?.status) || isFundsProcessingStatus(payoutResult?.status))) {
+        if (typeof createSettlementPayout !== 'function') {
+          fail(500, { message: '余额支付服务尚未就绪，请稍后重试' })
+        }
+        try {
+          payoutResult = await createSettlementPayout({
+            orderId,
+            payeeUserId: Number(hold.seller_id || 0),
+            amount: Number(hold.hold_amount || 0),
+            remark: hold.payout_remark
+          })
+        } catch (error) {
+          fundErrors.push(`押金赔付打款发起失败：${error?.body?.message || error?.message || '请稍后重试'}`)
+          console.error('[押金保管] 订单', orderId, '赔付打款发起失败:', error?.body?.message || error?.message || String(error))
+        }
+      }
+    }
+
+    const refundSuccess = isConfiscating || isFundsSuccessStatus(refundResult?.status)
+    const payoutSuccess = !isConfiscating || isManualPayout || isFundsSuccessStatus(payoutResult?.status)
+
+    if (!refundSuccess || !payoutSuccess) {
+      if (fundErrors.length) {
+        await pool.execute(
+          `UPDATE orders SET support_note = ? WHERE id = ?`,
+          [fundErrors.join('；').slice(0, 255), orderId]
+        )
+      }
+      return {
+        finalized: false,
+        hold: await fetchDepositHoldByOrderId(pool, orderId),
+        refund: refundResult,
+        payout: payoutResult,
+        errors: fundErrors
+      }
+    }
+
+    const conn = await pool.getConnection()
+    let didComplete = false
+    try {
+      await conn.beginTransaction()
+      await conn.execute(
+        `UPDATE order_deposit_holds
+         SET status = ?,
+             released_at = CASE WHEN ? = 1 THEN NOW() ELSE released_at END
+         WHERE order_id = ? AND status IN ('releasing', 'confiscating')`,
+        [isConfiscating ? 'confiscated' : 'released', isConfiscating ? 0 : 1, orderId]
+      )
+      const [orderUpdate] = await conn.execute(
+        `UPDATE orders
+         SET status = 'completed',
+             settlement_status = 'executed',
+             support_scene = CASE
+               WHEN support_scene = 'deposit_funds_processing' THEN 'deposit_dispute'
+               ELSE support_scene
+             END,
+             support_status = 'resolved',
+             support_note = NULL,
+             support_resolved_at = NOW(),
+             finished_at = COALESCE(finished_at, NOW())
+         WHERE id = ? AND status IN ('deposit_holding', 'support_handling')`,
+        [orderId]
+      )
+      didComplete = Number(orderUpdate?.affectedRows || 0) > 0
+      await conn.commit()
+    } catch (error) {
+      await conn.rollback()
+      throw error
+    } finally {
+      conn.release()
+    }
+
+    if (didComplete) {
+      const order = await fetchOrderById(pool, orderId)
+      const supportActorId = Number(hold.verdict_by_support_id || 0)
+      const orderConversation = supportActorId
+        ? await getOrderConversationAccess(orderId, supportActorId, 'support')
+        : await getOrderConversationAccess(orderId, Number(order?.buyer_id || 0))
+      if (orderConversation) {
+        await emitOrderSystemMessage({
+          order: orderConversation,
+          actorUserId: supportActorId || Number(order?.buyer_id || 0),
+          actorRole: supportActorId ? 'support' : 'buyer',
+          content: isConfiscating
+            ? (isManualPayout
+              ? '押金裁决完成：押金已没收，赔付款需客服线下联系卖家支付，订单已完成。'
+              : '押金裁决完成：押金已没收并赔付卖家，订单已完成。')
+            : (String(hold.verdict || '').trim() === 'refund'
+              ? '押金裁决完成：举报不成立，押金已原路退回买家，订单已完成。'
+              : '押金保管期结束，押金已自动原路退回买家，订单已完成。')
+        })
+      }
+      if (supportActorId) {
+        await emitSupportEvent({
+          orderId,
+          actorUserId: supportActorId,
+          actorRole: 'support',
+          actorName: orderConversation?.support_assignee_name || '',
+          eventType: 'deposit_resolved',
+          note: isConfiscating ? '押金没收赔付卖家，资金处理完成。' : '押金已退回买家，资金处理完成。',
+          conversationOrder: orderConversation
+        })
+      }
+    }
+
+    return {
+      finalized: true,
+      hold: await fetchDepositHoldByOrderId(pool, orderId),
+      refund: refundResult,
+      payout: payoutResult
+    }
+  }
+
+  // 到期自动释放单笔：holding → releasing 并发起退款（订单锁内做状态防竞态，举报同锁互斥）
+  async function releaseDepositHold({ orderId }) {
+    return runWithDistributedLock(
+      typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
+      '当前订单押金正在处理，请稍后再试',
+      async () => {
+        const conn = await pool.getConnection()
+        try {
+          await conn.beginTransaction()
+          const [orders] = await conn.execute(
+            `SELECT id, status FROM orders WHERE id = ? LIMIT 1 FOR UPDATE`,
+            [orderId]
+          )
+          if (!orders.length || String(orders[0].status || '').trim() !== 'deposit_holding') {
+            await conn.commit()
+            return { finalized: false, skipped: true }
+          }
+          const [holdUpdate] = await conn.execute(
+            `UPDATE order_deposit_holds
+             SET status = 'releasing',
+                 refund_reason = COALESCE(refund_reason, ?)
+             WHERE order_id = ? AND status = 'holding' AND release_at <= NOW()`,
+            [DEPOSIT_HOLD_RELEASE_REFUND_REASON, orderId]
+          )
+          if (!Number(holdUpdate?.affectedRows || 0)) {
+            await conn.commit()
+            return { finalized: false, skipped: true }
+          }
+          await conn.commit()
+        } catch (error) {
+          await conn.rollback()
+          throw error
+        } finally {
+          conn.release()
+        }
+        return processDepositHoldFunds(orderId)
+      }
+    )
+  }
+
+  // 定时任务入口：扫描到期的保管押金，自动原路退回买家
+  async function releaseDueDepositHolds(options = {}) {
+    const limit = Math.min(100, Math.max(1, Number(options?.limit ?? 50) || 50))
+    // LIMIT 参数化用 query（客户端转义），execute 预处理对 LIMIT ? 会报 Incorrect arguments
+    const [rows] = await pool.query(
+      `SELECT h.order_id
+       FROM order_deposit_holds h
+       JOIN orders o ON o.id = h.order_id
+       WHERE h.status = 'holding'
+         AND h.release_at <= NOW()
+         AND o.status = 'deposit_holding'
+       ORDER BY h.release_at ASC
+       LIMIT ?`,
+      [limit]
+    )
+    const summary = { scanned: rows.length, released: 0, pending: 0, skipped: 0, errors: 0 }
+    for (const row of rows) {
+      const orderId = Number(row.order_id)
+      try {
+        const result = await releaseDepositHold({ orderId })
+        if (result?.finalized) {
+          summary.released += 1
+        } else if (result?.skipped) {
+          summary.skipped += 1
+        } else {
+          summary.pending += 1
+        }
+      } catch (error) {
+        summary.errors += 1
+        console.error('[押金保管] 订单', orderId, '到期释放失败:', error?.body?.message || error?.message || String(error))
+      }
+    }
+    return summary
+  }
+
   return {
     createOrder,
     payOrder,
@@ -2402,6 +2923,10 @@ export function createOrderLifecycleService({
     returnToSettlementBySupport,
     freezeFundsBySupport,
     releaseFrozenFundsBySupport,
+    reportDepositViolation,
+    verdictDepositDispute,
+    processDepositHoldFunds,
+    releaseDueDepositHolds,
     buildSettlementPreview: async (orderId) => buildSettlementPreview(pool, orderId),
     buildFrozenFundsSettlementPreview: async (orderId, liableParty = 'seller') => {
       const order = await fetchOrderById(pool, orderId)

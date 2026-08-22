@@ -1655,6 +1655,7 @@ async function ensureOrderWorkflowSchema() {
        'paid',
        'support_handling',
        'settlement_pending',
+       'deposit_holding',
        'completed',
        'cancelled'
      ) NOT NULL DEFAULT 'pending_payment' COMMENT '订单状态'`
@@ -1701,6 +1702,7 @@ async function ensureOrderWorkflowSchema() {
        'paid',
        'support_handling',
        'settlement_pending',
+       'deposit_holding',
        'completed',
        'cancelled'
      ) NOT NULL DEFAULT 'pending_payment' COMMENT '订单状态'`
@@ -1979,6 +1981,37 @@ async function ensureOrderWorkflowSchema() {
       await pool.execute(column.sql)
     }
   }
+
+  // 押金结算冷静期：结单后押金先进入平台保管（holding），到期自动原路退回买家；
+  // 保管期内卖家可举报买家违规（disputed），客服裁决后没收赔付卖家（confiscated）或驳回退买家（released）
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS order_deposit_holds (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '押金保管记录ID',
+      order_id INT NOT NULL COMMENT '关联订单ID',
+      buyer_id INT NOT NULL COMMENT '买家用户ID',
+      seller_id INT NOT NULL COMMENT '卖家用户ID',
+      hold_amount BIGINT NOT NULL DEFAULT 0 COMMENT '保管中的押金金额（分）',
+      status ENUM('holding', 'disputed', 'releasing', 'released', 'confiscating', 'confiscated') NOT NULL DEFAULT 'holding' COMMENT '保管状态：保管中/已举报待裁决/退款处理中/已退回买家/赔付处理中/已赔付卖家',
+      hold_days INT NOT NULL DEFAULT 3 COMMENT '保管天数（结算时点的冷静期配置快照）',
+      release_at DATETIME NOT NULL COMMENT '预计自动退回时间',
+      released_at DATETIME DEFAULT NULL COMMENT '实际退回买家时间',
+      reported_at DATETIME DEFAULT NULL COMMENT '卖家举报时间',
+      report_reason VARCHAR(500) DEFAULT NULL COMMENT '卖家举报原因',
+      verdict ENUM('refund', 'confiscate') DEFAULT NULL COMMENT '客服裁决结果：退回买家/没收赔付卖家',
+      verdict_note VARCHAR(500) DEFAULT NULL COMMENT '客服裁决说明',
+      verdict_by_support_id INT DEFAULT NULL COMMENT '裁决客服ID',
+      verdict_at DATETIME DEFAULT NULL COMMENT '裁决时间',
+      refund_reason VARCHAR(255) DEFAULT NULL COMMENT '退买家退款流水的幂等 reason',
+      payout_remark VARCHAR(255) DEFAULT NULL COMMENT '赔卖家打款流水的幂等 remark',
+      payout_mode ENUM('huifu', 'manual') NOT NULL DEFAULT 'huifu' COMMENT '赔付卖家支付方式（汇付余额支付/客服线下手动支付）',
+      manual_payout_note VARCHAR(500) DEFAULT NULL COMMENT '线下赔付备注',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+      UNIQUE INDEX uk_order_deposit_holds_order_id (order_id),
+      INDEX idx_order_deposit_holds_status_release (status, release_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  )
 }
 
 const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -2910,6 +2943,7 @@ export function createApp() {
     expirePendingPaymentOrders,
     reconcileProcessingFundsOrders: () => paymentService?.reconcileProcessingFundsOrders?.() ?? { scanned: 0 },
     captureOnlinePresenceSnapshot,
-    arbitrateSettlementTimeouts: () => orderLifecycleService?.arbitrateSettlementTimeouts?.() ?? { buyerTimeoutArbitrated: 0, sellerTimeoutConfirmed: 0 }
+    arbitrateSettlementTimeouts: () => orderLifecycleService?.arbitrateSettlementTimeouts?.() ?? { buyerTimeoutArbitrated: 0, sellerTimeoutConfirmed: 0 },
+    releaseDueDepositHolds: () => orderLifecycleService?.releaseDueDepositHolds?.() ?? { scanned: 0, released: 0 }
   }
 }

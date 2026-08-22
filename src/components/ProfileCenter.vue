@@ -2527,6 +2527,11 @@ export default {
   color: var(--info-text);
 }
 
+.status-deposit_holding {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
 .status-completed,
 .status-active {
   background: var(--success-bg);

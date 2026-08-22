@@ -361,6 +361,30 @@ function buildSupportEventContent(eventType, {
     }
   }
 
+  if (eventType === 'deposit_dispute') {
+    return {
+      title: '押金违规举报',
+      description: `${requesterRoleText}举报买家租用期间违规，押金自动退回已暂停，等待客服核实。${safeNote ? `举报说明：${safeNote}` : ''}`.trim(),
+      publicMessage: '卖家已举报买家租用期间违规，押金自动退回已暂停，等待客服核实处理。'
+    }
+  }
+
+  if (eventType === 'deposit_verdict') {
+    return {
+      title: '押金裁决',
+      description: `客服 ${supportNameText} 已作出押金举报裁决。${safeNote ? `裁决说明：${safeNote}` : ''}`.trim(),
+      publicMessage: '客服已完成押金举报裁决，资金处理结果以支付通道确认为准。'
+    }
+  }
+
+  if (eventType === 'deposit_resolved') {
+    return {
+      title: '押金资金完成',
+      description: `押金资金处理已完成。${safeNote ? `结果：${safeNote}` : ''}`.trim(),
+      publicMessage: '押金资金处理已完成，订单已完成。'
+    }
+  }
+
   return {
     title: '处理记录',
     description: safeNote || '客服已更新工单状态。',
@@ -1039,7 +1063,7 @@ async function ensureSupportEventSchema() {
     `CREATE TABLE IF NOT EXISTS support_order_events (
       id INT AUTO_INCREMENT PRIMARY KEY COMMENT '客服工单事件ID',
       order_id INT NOT NULL COMMENT '关联订单ID',
-      event_type ENUM('requested', 'claimed', 'note_updated', 'resolved', 'abnormal_reported', 'cancelled', 'funds_frozen', 'funds_released') NOT NULL COMMENT '事件类型',
+      event_type ENUM('requested', 'claimed', 'note_updated', 'resolved', 'abnormal_reported', 'cancelled', 'funds_frozen', 'funds_released', 'deposit_dispute', 'deposit_verdict', 'deposit_resolved') NOT NULL COMMENT '事件类型',
       operator_user_id INT DEFAULT NULL COMMENT '操作人用户ID',
       operator_role ENUM('buyer', 'seller', 'support', 'system') NOT NULL DEFAULT 'system' COMMENT '操作人角色',
       operator_name VARCHAR(100) NOT NULL DEFAULT '' COMMENT '操作人展示名',
@@ -1063,11 +1087,14 @@ async function ensureSupportEventSchema() {
       || !currentColumnType.includes("'cancelled'")
       || !currentColumnType.includes("'funds_frozen'")
       || !currentColumnType.includes("'funds_released'")
+      || !currentColumnType.includes("'deposit_dispute'")
+      || !currentColumnType.includes("'deposit_verdict'")
+      || !currentColumnType.includes("'deposit_resolved'")
     )
   ) {
     await pool.execute(
       `ALTER TABLE support_order_events
-       MODIFY COLUMN event_type ENUM('requested', 'claimed', 'note_updated', 'resolved', 'abnormal_reported', 'cancelled', 'funds_frozen', 'funds_released') NOT NULL COMMENT '事件类型'`
+       MODIFY COLUMN event_type ENUM('requested', 'claimed', 'note_updated', 'resolved', 'abnormal_reported', 'cancelled', 'funds_frozen', 'funds_released', 'deposit_dispute', 'deposit_verdict', 'deposit_resolved') NOT NULL COMMENT '事件类型'`
     )
   }
 }

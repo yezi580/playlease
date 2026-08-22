@@ -254,6 +254,24 @@
 
           <article class="panel">
             <div class="panel-head">
+              <strong>押金保管冷静期</strong>
+              <span>结单后押金先保管再退回，保管期内卖家可举报买家违规</span>
+            </div>
+            <div class="field-grid field-grid--double">
+              <label class="field">
+                <span>押金保管天数（0=结单立即退）</span>
+                <input v-model.number="form.depositHold.holdDays" type="number" min="0" max="30">
+              </label>
+              <label class="field">
+                <span>举报裁决超时告警（小时）</span>
+                <input v-model.number="form.depositHold.disputeTimeoutHours" type="number" min="1" max="720">
+              </label>
+            </div>
+            <p class="panel-tip">结单后买家押金进入平台保管，到期无举报自动原路退回；保管期内卖家可举报买家开挂等违规，客服裁决成立后押金全额赔付卖家。</p>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
               <strong>运营阈值建议</strong>
               <span>这里是我帮你补充的高频参数，适合后续继续接业务逻辑</span>
             </div>

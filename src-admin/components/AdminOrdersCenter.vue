@@ -104,6 +104,7 @@ const ORDER_STATUS_LABELS = Object.freeze({
   after_sale: '售后中',
   support_handling: '客服处理中',
   settlement_pending: '待结算',
+  deposit_holding: '押金保管中',
   cancelled: '已取消',
   refund_pending: '退款中',
   refunded: '已退款'

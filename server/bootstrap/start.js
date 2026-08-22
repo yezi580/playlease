@@ -16,7 +16,8 @@ export async function startServer(options) {
     captureOnlinePresenceSnapshot,
     reconcileProcessingFundsOrders,
     arbitrateSettlementTimeouts,
-    refreshListingHotStats
+    refreshListingHotStats,
+    releaseDueDepositHolds
   } = options
 
   await runBootstrapSchemaTasks(options)
@@ -28,7 +29,8 @@ export async function startServer(options) {
       captureOnlinePresenceSnapshot,
       reconcileProcessingFundsOrders,
       arbitrateSettlementTimeouts,
-      refreshListingHotStats
+      refreshListingHotStats,
+      releaseDueDepositHolds
     })
     registerGracefulShutdown({
       httpServer,

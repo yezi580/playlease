@@ -90,3 +90,47 @@
 - 订单分账（含延迟户 / `delay_acct_flag` 说明）：`https://paas.huifu.com/partners/bzb/zhzjfw/ddfz/ddfz.md`
 - 托管预下单 API（`delay_acct_flag` 默认 N）：`https://paas.huifu.com/partners/api/doc/cpjs/api_cpjs_hosting.md`
 - 托管交易退款 API：`https://paas.huifu.com/partners/api/doc/cpjs/api_cpjs_hostingtk.md`
+
+## 九、押金结算冷静期（2026-08 新增）
+
+**业务背景：** 防止买家开挂等违规导致卖家账号被封后押金已退、无法追偿。所有结单路径（普通结算 / 手动结单 / 冻结裁决卖家责任）执行后，买家押金不再即时退款，先进入平台保管，冷静期（默认 3 天，后台可配）到期无举报则自动原路退回。
+
+### 配置（admin_business_settings 四副本同步）
+
+`depositHold.holdDays`（0-30，默认 3；**0=关闭冷静期，恢复即时退款**）、`depositHold.disputeTimeoutHours`（默认 48，举报待裁决超时告警）。同步位置：`server/modules/business-settings/runtime.js`、`server/routes/admin.routes.js`、`src-admin/components/AdminBusinessSettingsCenter.vue`。
+
+### 状态机
+
+```
+executeSettlement(有 buyerRefundAmount 且 holdDays>0)
+  → order_deposit_holds(status=holding, release_at=NOW()+N天) + orders.status=deposit_holding（结算款照常付出）
+      ├─ 到期无举报：定时任务 deposit-hold-release(60s) → releasing → createOrderRefund('押金保管到期-自动退回买家')
+      │     └─ 退款 success → hold=released + order=completed（订单不经过 support_handling，买家无感）
+      └─ 卖家举报：POST /api/orders/:id/deposit-hold/report → hold=disputed + order=support_handling + scene=deposit_dispute
+            └─ 客服裁决 PUT /api/support/orders/:id/deposit-verdict（step-up）
+                  ├─ verdict=confiscate（举报成立）：hold=confiscating → createSettlementPayout('押金裁决-赔付卖家')
+                  │     或 payout_mode=manual 线下赔 → hold=confiscated + order=completed
+                  └─ verdict=reject（举报不成立）：hold=releasing → createOrderRefund('押金举报驳回-退回买家')
+                        → hold=released + order=completed
+```
+
+### 关键设计
+
+- **中间态推进：** releasing/confiscating 状态由 `reconcileProcessingFundsOrders` 的押金扫描分支 + `reconcileDepositHoldFunds` 同步汇付查单后收口（`processDepositHoldFunds` 缺流水会幂等补发起）；客服「同步资金结果」同样支持 `deposit_funds_processing` 场景。
+- **幂等：** 退款按 `payment_refunds.reason`、打款按 `settlement_payouts.remark` 匹配防重；hold 表 `uk_order_id` 唯一；订单状态流转全部带 WHERE 条件防并发。
+- **防双退：** `closeOrderAsAdmin` 拒绝 deposit_holding 订单（结算款已付出，全额退款会重复退押金）；冻结资金仅限 paid/settlement_pending，天然不冲突。
+- **不改变的旧路径：** 押金=0、冻结裁决买家责任（buyerRefundAmount=0）依旧直接 completed；客服取消 / 管理员关单的全额退款不受冷静期影响（非结单路径）。
+- **角色可见性：** 举报原因仅卖家可见（买家只见「已被举报、核实中」）；裁决说明留平台内部（hold 表 + 客服时间线 deposit_dispute/deposit_verdict/deposit_resolved 事件）。
+- **缓存失效注意：** 结算时点的 holdDays 会快照到 hold 表（`hold_days` 列），中途改配置不影响已保管的订单。
+
+### 代码位置
+
+| 职责 | 位置 |
+| --- | --- |
+| 冷静期接入结单 | `order-lifecycle.service.js` `executeSettlement`（shouldHoldDeposit 分支） |
+| 举报 / 裁决 / 收口 / 到期释放 | `order-lifecycle.service.js` `reportDepositViolation` / `verdictDepositDispute` / `processDepositHoldFunds` / `releaseDueDepositHolds` |
+| 押金对账 | `payment.service.js` `reconcileDepositHoldFunds`（reconcileProcessingFundsOrders 内调用） |
+| 定时任务 | `bootstrap/jobs.js` `deposit-hold-release`（60s，Redis 单例锁） |
+| 表结构 | `order_deposit_holds`（app.js ensureOrderWorkflowSchema 内幂等建表） |
+| 用户端 | `OrderDetail.vue` 押金保管卡片 + 卖家举报入口；`ProfileCenter` 押金保管中 tab |
+| 客服端 | `SupportConsole.vue` 押金裁决弹窗 + deposit_dispute 超时告警 |

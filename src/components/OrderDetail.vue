@@ -108,6 +108,35 @@
           </div>
         </article>
 
+        <article v-if="order.deposit_hold" class="card deposit-hold-card">
+          <div class="card-head">
+            <h3>押金保管（冷静期）</h3>
+          </div>
+          <div class="info-list">
+            <div><span>保管金额</span><strong>￥{{ formatMoney(order.deposit_hold.amount) }}</strong></div>
+            <div v-if="order.deposit_hold.release_at">
+              <span>预计退回时间</span>
+              <strong>{{ formatDateTime(order.deposit_hold.release_at) }}</strong>
+            </div>
+            <div v-if="order.deposit_hold.reported_at">
+              <span>卖家举报时间</span>
+              <strong>{{ formatDateTime(order.deposit_hold.reported_at) }}</strong>
+            </div>
+            <div v-if="order.deposit_hold.verdict_at">
+              <span>客服裁决时间</span>
+              <strong>{{ formatDateTime(order.deposit_hold.verdict_at) }}</strong>
+            </div>
+            <div v-if="order.deposit_hold.released_at">
+              <span>押金退回时间</span>
+              <strong>{{ formatDateTime(order.deposit_hold.released_at) }}</strong>
+            </div>
+          </div>
+          <p v-if="depositHoldTipText" class="deposit-hold-tip">{{ depositHoldTipText }}</p>
+          <p v-if="userRole === 'seller' && order.deposit_hold.report_reason" class="deposit-hold-report">
+            我的举报原因：{{ order.deposit_hold.report_reason }}
+          </p>
+        </article>
+
         <article v-if="showUsageForm" class="card card--wide">
           <div class="card-head">
             <h3>额外物品使用表单</h3>
@@ -248,6 +277,7 @@ const STATUS_DESCRIPTION_MAP = {
   paid: '',
   support_handling: '当前订单由客服处理中，请在聊天室配合沟通，等待客服给出下一步结论。',
   settlement_pending: '订单已进入结算中，买家提交额外物品表单后由卖家确认，客服执行分账。',
+  deposit_holding: '订单结算已完成，买家押金由平台保管（冷静期），到期无举报将自动原路退回。',
   completed: '订单已完成，平台已按规则结算。',
   cancelled: '订单已取消。'
 }
@@ -314,8 +344,49 @@ export default {
       if (this.order?.status === 'pending_payment') {
         return `请在 ${getPendingPaymentTimeoutMinutes(this.businessSettings)} 分钟内完成支付，支付成功后系统会自动分配客服并建立三方聊天室。`
       }
+      if (this.order?.status === 'deposit_holding' && this.order?.deposit_hold?.release_at) {
+        const releaseText = this.formatDateTime(this.order.deposit_hold.release_at)
+        return this.userRole === 'seller'
+          ? `订单结算已完成，买家押金由平台保管，预计 ${releaseText} 自动退回；若买家租用期间违规（如开挂导致账号被封），请在退回前举报。`
+          : `订单结算已完成，押金 ￥${this.formatMoney(this.order.deposit_hold.amount)} 由平台保管，预计 ${releaseText} 自动原路退回；期间如卖家举报违规，将转客服核实。`
+      }
       const desc = STATUS_DESCRIPTION_MAP[this.order?.status]
       return desc !== undefined ? desc : '请按当前流程完成订单。'
+    },
+    depositHoldTipText() {
+      const hold = this.order?.deposit_hold
+      if (!hold) return ''
+      const holdStatus = String(hold.status || '')
+      const isBuyer = this.userRole === 'buyer'
+      if (holdStatus === 'holding') {
+        return isBuyer
+          ? '冷静期内如无卖家举报，押金将在到期后自动原路退回您的支付账户。'
+          : '买家押金由平台保管中。若买家租用期间出现开挂等违规导致账号受损，请在预计退回时间前提交举报，暂停退回并申请扣押押金赔付。'
+      }
+      if (holdStatus === 'disputed') {
+        return isBuyer
+          ? '卖家已举报租用期间存在违规，押金退回已暂停，客服核实后将通知您处理结果。'
+          : '您已提交违规举报，押金退回已暂停，等待客服核实裁决。'
+      }
+      if (holdStatus === 'releasing') {
+        return hold.verdict === 'refund'
+          ? '客服已驳回举报，押金正在原路退回买家，到账以支付通道为准。'
+          : '押金保管期已结束，正在原路退回买家，到账以支付通道为准。'
+      }
+      if (holdStatus === 'released') {
+        return '押金已原路退回买家。'
+      }
+      if (holdStatus === 'confiscating') {
+        return isBuyer
+          ? '经客服核实租用期间存在违规，押金将赔付给卖家，处理结果以支付通道为准。'
+          : '客服已裁决举报成立，押金赔付款处理中，到账以支付通道为准。'
+      }
+      if (holdStatus === 'confiscated') {
+        return isBuyer
+          ? '经客服核实租用期间存在违规，押金已按裁决赔付给卖家。'
+          : '客服已裁决举报成立，押金已赔付给您。'
+      }
+      return ''
     },
     pendingCountdownText() {
       if (this.order?.status !== 'pending_payment') return ''
@@ -451,6 +522,9 @@ export default {
           actions.push({ key: 'reject_usage', label: '不同意当前表单', tone: 'ghost' })
         }
       }
+      if (status === 'deposit_holding' && this.userRole === 'seller' && this.order.deposit_hold?.can_report) {
+        actions.push({ key: 'report_deposit', label: '举报买家违规（扣押押金）', tone: 'danger' })
+      }
       return actions
     }
   },
@@ -577,6 +651,9 @@ export default {
           case 'request_cancel':
             await this.requestCancel()
             return
+          case 'report_deposit':
+            await this.reportDepositViolation()
+            return
           default:
             return
         }
@@ -596,6 +673,36 @@ export default {
         showSuccessToast(successMessage)
       } catch (error) {
         showErrorToast(error.message || '操作失败')
+      } finally {
+        this.submitting = false
+      }
+    },
+    async reportDepositViolation() {
+      const reason = await showPrompt({
+        title: '举报买家违规',
+        message: '提交后押金自动退回将暂停并转客服核实，核实成立后押金将赔付给您。\n请描述违规情况（如开挂导致账号被封禁的时间），并保留封号截图等证据以便客服核实时提供：',
+        inputPlaceholder: '必填：请输入举报原因',
+        defaultValue: '',
+        confirmText: '提交举报',
+        cancelText: '取消',
+        tone: 'danger'
+      })
+      if (reason === null) return
+      const trimmedReason = String(reason).trim()
+      if (!trimmedReason) {
+        showErrorToast('请填写举报原因')
+        return
+      }
+      this.submitting = true
+      try {
+        await apiFetch(`/api/orders/${this.order.id}/deposit-hold/report`, {
+          method: 'POST',
+          body: JSON.stringify({ reason: trimmedReason })
+        })
+        await this.fetchOrderDetail()
+        showSuccessToast('举报已提交，客服核实后会尽快处理')
+      } catch (error) {
+        showErrorToast(error.message || '举报失败')
       } finally {
         this.submitting = false
       }
@@ -723,6 +830,7 @@ export default {
 .hero--cancelled { background: linear-gradient(135deg, var(--bg-subtle), var(--bg-page)); }
 .hero--support_handling { background: linear-gradient(135deg, var(--danger-bg), var(--danger-bg-strong)); }
 .hero--settlement_pending { background: linear-gradient(135deg, var(--info-bg), var(--info-bg-strong)); }
+.hero--deposit_holding { background: linear-gradient(135deg, var(--warning-bg), var(--info-bg)); }
 
 .hero-kicker {
   margin: 0 0 6px;
@@ -893,6 +1001,24 @@ export default {
 .money-list strong,
 .info-list strong {
   color: var(--text-main);
+}
+
+.deposit-hold-tip {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-subtle, #f7f8fa);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.deposit-hold-report {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .table {

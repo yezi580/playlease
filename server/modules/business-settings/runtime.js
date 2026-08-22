@@ -60,6 +60,13 @@ const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   inviteReward: {
     buyerServiceFeeRewardRatePercent: 30
   },
+  depositHold: {
+    // 押金结算冷静期：结单后押金保管 N 天再自动退回买家，期间卖家可举报买家违规；
+    // holdDays=0 表示关闭冷静期（结单即原路退押金）
+    holdDays: 3,
+    // 冷静期举报待客服裁决的超时告警阈值（小时）
+    disputeTimeoutHours: 48
+  },
   discoveryThresholds: {
     smallAmountHafuCoinMax: 150,
     highRatioBaseRatioMin: 43,
@@ -169,6 +176,9 @@ export function normalizeBusinessSettings(rawValue = {}) {
   const inviteRewardSource = source.inviteReward && typeof source.inviteReward === 'object'
     ? source.inviteReward
     : {}
+  const depositHoldSource = source.depositHold && typeof source.depositHold === 'object'
+    ? source.depositHold
+    : {}
   const discoverySource = source.discoveryThresholds && typeof source.discoveryThresholds === 'object'
     ? source.discoveryThresholds
     : {}
@@ -219,6 +229,10 @@ export function normalizeBusinessSettings(rawValue = {}) {
         defaults.inviteReward.buyerServiceFeeRewardRatePercent,
         { min: 0, max: 100 }
       )
+    },
+    depositHold: {
+      holdDays: normalizeNumber(depositHoldSource.holdDays, defaults.depositHold.holdDays, { min: 0, max: 30, integer: true }),
+      disputeTimeoutHours: normalizeNumber(depositHoldSource.disputeTimeoutHours, defaults.depositHold.disputeTimeoutHours, { min: 1, max: 720, integer: true })
     },
     discoveryThresholds: {
       smallAmountHafuCoinMax: normalizeNumber(discoverySource.smallAmountHafuCoinMax, defaults.discoveryThresholds.smallAmountHafuCoinMax, { min: 0, max: 999999, integer: true }),
@@ -394,8 +408,17 @@ export function getBaseRatioRange(settings) {
 export function getPendingPaymentTimeoutMinutes(settings) {
   return Number(
     normalizeBusinessSettings(settings).discoveryThresholds.pendingPaymentTimeoutMinutes
-    || DEFAULT_BUSINESS_SETTINGS.discoveryThresholds.pendingPaymentTimeoutMinutes
+      || DEFAULT_BUSINESS_SETTINGS.discoveryThresholds.pendingPaymentTimeoutMinutes
   )
+}
+
+// 押金结算冷静期参数：holdDays=0 表示关闭冷静期（结单即原路退押金）
+export function getDepositHoldSettings(settings) {
+  const normalized = normalizeBusinessSettings(settings)
+  return {
+    holdDays: Math.max(0, Math.round(Number(normalized.depositHold?.holdDays ?? DEFAULT_BUSINESS_SETTINGS.depositHold.holdDays))),
+    disputeTimeoutHours: Math.max(1, Math.round(Number(normalized.depositHold?.disputeTimeoutHours ?? DEFAULT_BUSINESS_SETTINGS.depositHold.disputeTimeoutHours)))
+  }
 }
 
 export function getFeedbackDailyLimitPerUser(settings) {

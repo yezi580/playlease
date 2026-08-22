@@ -203,7 +203,8 @@ CREATE TABLE IF NOT EXISTS orders (
     'after_sale',
     'cancelled',
     'refund_pending',
-    'refunded'
+    'refunded',
+    'deposit_holding'
   ) NOT NULL DEFAULT 'pending_payment' COMMENT '订单状态',
   after_sale_reason VARCHAR(500) DEFAULT NULL COMMENT '售后原因展示文案',
   after_sale_reason_code VARCHAR(50) DEFAULT NULL COMMENT '售后原因代码',
@@ -225,6 +226,34 @@ CREATE TABLE IF NOT EXISTS orders (
   INDEX idx_orders_buyer_status (buyer_id, status),
   INDEX idx_orders_seller_status (seller_id, status),
   INDEX idx_orders_listing_id (listing_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 押金保管表：结单后押金进入冷静期保管，到期自动退回买家；期间卖家可举报买家违规，客服裁决没收赔付卖家或驳回退买家
+CREATE TABLE IF NOT EXISTS order_deposit_holds (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '押金保管记录ID',
+  order_id INT NOT NULL COMMENT '关联订单ID',
+  buyer_id INT NOT NULL COMMENT '买家用户ID',
+  seller_id INT NOT NULL COMMENT '卖家用户ID',
+  hold_amount BIGINT NOT NULL DEFAULT 0 COMMENT '保管中的押金金额（分）',
+  status ENUM('holding', 'disputed', 'releasing', 'released', 'confiscating', 'confiscated') NOT NULL DEFAULT 'holding' COMMENT '保管状态',
+  hold_days INT NOT NULL DEFAULT 3 COMMENT '保管天数（结算时点的冷静期配置快照）',
+  release_at DATETIME NOT NULL COMMENT '预计自动退回时间',
+  released_at DATETIME DEFAULT NULL COMMENT '实际退回买家时间',
+  reported_at DATETIME DEFAULT NULL COMMENT '卖家举报时间',
+  report_reason VARCHAR(500) DEFAULT NULL COMMENT '卖家举报原因',
+  verdict ENUM('refund', 'confiscate') DEFAULT NULL COMMENT '客服裁决结果',
+  verdict_note VARCHAR(500) DEFAULT NULL COMMENT '客服裁决说明',
+  verdict_by_support_id INT DEFAULT NULL COMMENT '裁决客服ID',
+  verdict_at DATETIME DEFAULT NULL COMMENT '裁决时间',
+  refund_reason VARCHAR(255) DEFAULT NULL COMMENT '退买家退款流水幂等 reason',
+  payout_remark VARCHAR(255) DEFAULT NULL COMMENT '赔卖家打款流水幂等 remark',
+  payout_mode ENUM('huifu', 'manual') NOT NULL DEFAULT 'huifu' COMMENT '赔付卖家支付方式',
+  manual_payout_note VARCHAR(500) DEFAULT NULL COMMENT '线下赔付备注',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  UNIQUE INDEX uk_order_deposit_holds_order_id (order_id),
+  INDEX idx_order_deposit_holds_status_release (status, release_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 会话表：存储订单沟通会话

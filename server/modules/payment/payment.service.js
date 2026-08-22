@@ -1327,7 +1327,7 @@ export function createPaymentService(config = {}) {
       fail(403, { message: '只有当前负责客服可以同步资金状态' })
     }
 
-    if (!['cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing', 'admin_close_refund_processing'].includes(supportScene)) {
+    if (!['cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing', 'admin_close_refund_processing', 'deposit_funds_processing'].includes(supportScene)) {
       fail(400, { message: '当前订单不在资金处理中状态' })
     }
 
@@ -1368,7 +1368,7 @@ export function createPaymentService(config = {}) {
     }
 
     const refundDone = !refund || String(refund.status || '').trim() === 'success'
-    const payoutDone = !['settlement_funds_processing', 'frozen_funds_processing'].includes(supportScene)
+    const payoutDone = !['settlement_funds_processing', 'frozen_funds_processing', 'deposit_funds_processing'].includes(supportScene)
       || !payout
       || String(payout.status || '').trim() === 'success'
 
@@ -1382,6 +1382,9 @@ export function createPaymentService(config = {}) {
         })
       } else if (supportScene === 'admin_close_refund_processing') {
         finalizedOrder = await orderLifecycleService.finalizeAdminCloseRefund({ orderId })
+      } else if (supportScene === 'deposit_funds_processing') {
+        await orderLifecycleService.processDepositHoldFunds(orderId)
+        finalizedOrder = await fetchOrderById(pool, orderId)
       } else {
         finalizedOrder = await orderLifecycleService.executeSettlement({
           orderId,
@@ -1400,7 +1403,7 @@ export function createPaymentService(config = {}) {
     if (refund && !refundDone) {
       processingNotes.push('退款处理中')
     }
-    if (['settlement_funds_processing', 'frozen_funds_processing'].includes(supportScene) && payout && !payoutDone) {
+    if (['settlement_funds_processing', 'frozen_funds_processing', 'deposit_funds_processing'].includes(supportScene) && payout && !payoutDone) {
       processingNotes.push('打款处理中')
     }
     if (processingNotes.length) {
@@ -1457,7 +1460,67 @@ export function createPaymentService(config = {}) {
         console.error('[资金对账] 订单', orderId, '对账失败:', error?.body?.message || error?.message || String(error))
       }
     }
+
+    // 押金保管中间态（releasing 退款中 / confiscating 赔付打款中）：同步通道状态后收口
+    // —— 含未进入 support_handling 的到期自动退回路径（订单停留在 deposit_holding）
+    const [holdRows] = await pool.query(
+      `SELECT h.order_id
+       FROM order_deposit_holds h
+       WHERE h.status IN ('releasing', 'confiscating')
+         AND h.updated_at > DATE_SUB(NOW(), INTERVAL ? HOUR)
+       ORDER BY h.updated_at ASC
+       LIMIT ?`,
+      [lookbackHours, limit]
+    )
+    for (const row of holdRows) {
+      const orderId = Number(row.order_id)
+      if (!orderId) continue
+      summary.scanned += 1
+      try {
+        const result = await reconcileDepositHoldFunds({ orderId })
+        if (result?.finalized) {
+          summary.finalized += 1
+        } else {
+          summary.pending += 1
+        }
+      } catch (error) {
+        summary.errors += 1
+        console.error('[资金对账] 订单', orderId, '押金保管对账失败:', error?.body?.message || error?.message || String(error))
+      }
+    }
     return summary
+  }
+
+  // 押金保管资金对账：按 hold 记录的 reason/remark 定位流水，同步通道状态后交由生命周期服务收口
+  async function reconcileDepositHoldFunds({ orderId }) {
+    const [[hold]] = await pool.execute(
+      `SELECT * FROM order_deposit_holds WHERE order_id = ? LIMIT 1`,
+      [orderId]
+    )
+    if (!hold) return { finalized: false }
+    if (String(hold.refund_reason || '').trim()) {
+      const [refundRows] = await pool.execute(
+        `SELECT refund_no FROM payment_refunds
+         WHERE order_id = ? AND reason = ?
+         ORDER BY id DESC LIMIT 1`,
+        [orderId, String(hold.refund_reason).trim()]
+      )
+      if (refundRows[0]) {
+        await syncRefundWithProvider(await fetchRefundByNo(pool, refundRows[0].refund_no))
+      }
+    }
+    if (String(hold.payout_remark || '').trim()) {
+      const [payoutRows] = await pool.execute(
+        `SELECT payout_no FROM settlement_payouts
+         WHERE order_id = ? AND remark = ?
+         ORDER BY id DESC LIMIT 1`,
+        [orderId, String(hold.payout_remark).trim()]
+      )
+      if (payoutRows[0]) {
+        await syncSettlementPayoutWithProvider(await fetchSettlementPayoutByNo(pool, payoutRows[0].payout_no))
+      }
+    }
+    return orderLifecycleService.processDepositHoldFunds(orderId)
   }
 
   async function requestEncashment(payload = {}) {

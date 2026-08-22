@@ -20,6 +20,7 @@ export const ORDER_STATUS_TABS = Object.freeze([
   { key: 'pending_payment', label: '待付款' },
   { key: 'paid', label: '已支付' },
   { key: 'settlement_pending', label: '结算中' },
+  { key: 'deposit_holding', label: '押金保管中' },
   { key: 'completed', label: '已完成' },
   { key: 'cancelled', label: '已取消' },
   { key: 'support_handling', label: '客服处理中' }
@@ -32,6 +33,7 @@ export const MY_LISTING_STATUS_TABS = Object.freeze([
   { key: 'pending_payment', label: '待付款' },
   { key: 'paid', label: '已支付' },
   { key: 'settlement_pending', label: '结算中' },
+  { key: 'deposit_holding', label: '押金保管中' },
   { key: 'completed', label: '已完成' },
   { key: 'cancelled', label: '已取消' },
   { key: 'support_handling', label: '客服处理中' }

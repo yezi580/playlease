@@ -50,6 +50,7 @@ app.get('/api/orders/stats', authRequired, authenticatedReadLimiter, async (req,
         SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS paid,
         SUM(CASE WHEN status = 'support_handling' THEN 1 ELSE 0 END) AS support_handling,
         SUM(CASE WHEN status = 'settlement_pending' THEN 1 ELSE 0 END) AS settlement_pending,
+        SUM(CASE WHEN status = 'deposit_holding' THEN 1 ELSE 0 END) AS deposit_holding,
         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
       FROM orders
       WHERE buyer_id = ?`,
@@ -104,6 +105,7 @@ app.get('/api/seller/orders/stats', authRequired, authenticatedReadLimiter, asyn
         SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS paid,
         SUM(CASE WHEN status = 'support_handling' THEN 1 ELSE 0 END) AS support_handling,
         SUM(CASE WHEN status = 'settlement_pending' THEN 1 ELSE 0 END) AS settlement_pending,
+        SUM(CASE WHEN status = 'deposit_holding' THEN 1 ELSE 0 END) AS deposit_holding,
         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
       FROM orders
       WHERE seller_id = ? OR (seller_id IS NULL AND seller_name = ?)`,
@@ -497,6 +499,79 @@ app.put('/api/support/orders/:id/execute-settlement', authRequired, supportOnly,
     handleOrderLifecycleError(error, res, '执行分账失败')
   }
 })
+
+// 押金保管冷静期：卖家举报买家违规（如开挂导致账号封禁），暂停押金自动退回并转客服裁决
+app.post('/api/orders/:id/deposit-hold/report', authRequired, orderWriteLimiter, async (req, res) => {
+  const orderId = Number(req.params?.id)
+
+  if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
+    return res.status(400).json({ message: '订单ID无效' })
+  }
+
+  const reason = String(req.body?.reason || '').trim()
+  if (!reason) {
+    return res.status(400).json({ message: '请填写举报原因' })
+  }
+  if (reason.length > 500) {
+    return res.status(400).json({ message: '举报原因不能超过 500 字' })
+  }
+
+  try {
+    const order = await orderLifecycleService.reportDepositViolation({
+      orderId,
+      sellerUserId: req.auth.userId,
+      reason
+    })
+    res.json(normalizeOrderMoneyFields(order))
+  } catch (error) {
+    handleOrderLifecycleError(error, res, '举报失败')
+  }
+})
+
+// 客服押金裁决：verdict=confiscate 没收押金全额赔付卖家 / verdict=reject 驳回举报退回买家
+app.put(
+  '/api/support/orders/:id/deposit-verdict',
+  authRequired,
+  supportOnly,
+  requireStepUpAuth(ADMIN_STEP_UP_POLICIES.supportExecuteSettlement),
+  orderWriteLimiter,
+  async (req, res) => {
+    const orderId = Number(req.params?.id)
+
+    if (!orderId || !Number.isFinite(orderId) || orderId < 1) {
+      return res.status(400).json({ message: '订单ID无效' })
+    }
+
+    const verdict = String(req.body?.verdict || '').trim()
+    if (!['confiscate', 'reject'].includes(verdict)) {
+      return res.status(400).json({ message: '无效的押金裁决结果' })
+    }
+    const payoutMode = String(req.body?.payoutMode || 'huifu').trim()
+    if (!['huifu', 'manual'].includes(payoutMode)) {
+      return res.status(400).json({ message: '无效的赔付支付方式' })
+    }
+    const note = String(req.body?.note || '').trim()
+    if (note.length > 500) {
+      return res.status(400).json({ message: '裁决备注不能超过 500 字' })
+    }
+
+    try {
+      const result = await orderLifecycleService.verdictDepositDispute({
+        orderId,
+        supportUserId: req.auth.userId,
+        verdict,
+        payoutMode,
+        note
+      })
+      res.json({
+        message: result?.finalized ? '押金裁决已完成' : '押金裁决已发起，资金处理结果以支付通道确认为准',
+        order: normalizeOrderMoneyFields(result?.order || {})
+      })
+    } catch (error) {
+      handleOrderLifecycleError(error, res, '押金裁决失败')
+    }
+  }
+)
 
 app.get('/api/orders/:id', authRequired, authenticatedReadLimiter, async (req, res) => {
   const orderId = Number(req.params?.id)

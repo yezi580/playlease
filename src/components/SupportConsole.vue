@@ -155,6 +155,10 @@
         <span>冻结超时（≥{{ alerts.frozen_timeout_hours }}小时）</span>
         <strong>{{ alerts.frozen_timeout_total }}</strong>
       </article>
+      <article v-if="isAfterSaleDesk" class="summary-card summary-card--frozen-timeout">
+        <span>押金举报超时（≥{{ alerts.deposit_dispute_timeout_hours }}小时）</span>
+        <strong>{{ alerts.deposit_dispute_timeout_total }}</strong>
+      </article>
     </div>
 
     <div class="shell">
@@ -400,6 +404,18 @@
                 <p>押金退买家、租金归平台、卖家无收益。</p>
               </article>
 
+              <article
+                v-if="activeOrder.support_scene === 'deposit_dispute'"
+                class="info-block freeze-resolution-card"
+              >
+                <div class="freeze-resolution-head">
+                  <h4>押金违规举报</h4>
+                  <span>冷静期扣押裁决</span>
+                </div>
+                <p>保管押金：￥{{ formatMoneyFixed(Number(activeOrder.deposit_amount || 0)) }}。请先核实卖家提供的违规证据（如封号截图、封禁时间），再作出裁决。</p>
+                <p class="info-block-text">举报说明：{{ activeOrder.support_note || activeOrder.issue_note || '暂无说明。' }}</p>
+              </article>
+
               <div class="detail-actions">
                 <button type="button" class="primary-btn" @click="openConversation(activeOrder.id)">
                   进入订单会话
@@ -469,6 +485,15 @@
                   @click="executeSettlement"
                 >
                   {{ settlementSubmitting ? '执行中...' : '执行分账' }}
+                </button>
+                <button
+                  v-if="canDepositVerdict"
+                  type="button"
+                  class="danger-btn"
+                  :disabled="settlementSubmitting"
+                  @click="openDepositVerdictDialog"
+                >
+                  {{ settlementSubmitting ? '处理中...' : '押金裁决' }}
                 </button>
                 <button
                   v-if="canManualSettle"
@@ -602,7 +627,7 @@
               <span>{{ manualSettleNoteDraft.length }}/500</span>
             </div>
             <p class="manual-settle-tips">
-              适用于卖家无法完成汇付进件的订单：买家押金仍将原路退回，{{ manualSellerIncomeText
+              适用于卖家无法完成汇付进件的订单：买家押金将进入平台保管（冷静期），到期无举报自动原路退回，{{ manualSellerIncomeText
               }}不走汇付打款，需由客服线下联系卖家完成收款。
             </p>
             <textarea
@@ -706,6 +731,80 @@
         </section>
       </div>
     </Transition>
+
+    <Transition name="freeze-dialog-fade">
+      <div
+        v-if="depositVerdictDialogVisible"
+        class="freeze-dialog-overlay"
+        @click.self="closeDepositVerdictDialog"
+      >
+        <section class="freeze-dialog" role="dialog" aria-modal="true" aria-label="押金举报裁决">
+          <div class="freeze-dialog__body">
+            <div class="note-head">
+              <h4>押金举报裁决</h4>
+              <span v-if="depositVerdictAction === 'confiscate' && depositVerdictPayoutMode === 'manual'">{{ depositVerdictNoteDraft.length }}/500</span>
+            </div>
+
+            <div class="verdict-party">
+              <button
+                type="button"
+                class="verdict-party__option"
+                :class="{ 'verdict-party__option--active': depositVerdictAction === 'confiscate' }"
+                :disabled="settlementSubmitting"
+                @click="setDepositVerdictAction('confiscate')"
+              >
+                <strong>举报成立</strong>
+                <span>没收押金 · 全额赔付卖家</span>
+              </button>
+              <button
+                type="button"
+                class="verdict-party__option"
+                :class="{ 'verdict-party__option--active': depositVerdictAction === 'reject' }"
+                :disabled="settlementSubmitting"
+                @click="setDepositVerdictAction('reject')"
+              >
+                <strong>举报不成立</strong>
+                <span>驳回举报 · 押金原路退买家</span>
+              </button>
+            </div>
+
+            <p class="manual-settle-tips">
+              保管押金 ￥{{ formatMoneyFixed(Number(activeOrder?.deposit_amount || 0)) }}。{{ depositVerdictAction === 'confiscate' ? '举报成立：没收押金全额赔付卖家，作为买家违规（如开挂导致封号）对账号损失的赔偿。' : '举报不成立：押金将原路退回买家，退款完成后订单结束。' }}
+            </p>
+
+            <div v-if="depositVerdictAction === 'confiscate'" class="verdict-payout-mode">
+              <span class="verdict-payout-mode__label">赔付卖家支付方式</span>
+              <label class="verdict-payout-mode__option">
+                <input v-model="depositVerdictPayoutMode" type="radio" value="huifu" :disabled="settlementSubmitting" />
+                <span>汇付自动打款（需卖家已进件）</span>
+              </label>
+              <label class="verdict-payout-mode__option">
+                <input v-model="depositVerdictPayoutMode" type="radio" value="manual" :disabled="settlementSubmitting" />
+                <span>线下手动支付</span>
+              </label>
+            </div>
+
+            <textarea
+              v-if="depositVerdictAction === 'confiscate' && depositVerdictPayoutMode === 'manual'"
+              v-model.trim="depositVerdictNoteDraft"
+              class="note-textarea freeze-dialog__textarea"
+              rows="3"
+              maxlength="500"
+              placeholder="必填：说明线下赔付卖家的安排，例如「卖家无法汇付进件，已约定微信转账支付扣押的押金」。"
+            ></textarea>
+          </div>
+
+          <div class="freeze-dialog__footer">
+            <button type="button" class="ghost-btn" :disabled="settlementSubmitting" @click="closeDepositVerdictDialog">
+              取消
+            </button>
+            <button type="button" class="danger-btn" :disabled="settlementSubmitting" @click="executeDepositVerdict">
+              {{ settlementSubmitting ? '提交中...' : '确认裁决' }}
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
     </div>
     <ListingReviewDesk v-if="deskMode === 'review'" @reviewed="fetchReviewPendingCount" />
     </template>
@@ -761,7 +860,7 @@ export default {
       keywordDraft: '',
       activeStatus: 'handling',
       counts: { pending: 0, handling: 0, resolved: 0 },
-      alerts: { pending_timeout_total: 0, frozen_timeout_total: 0, frozen_timeout_hours: 48 },
+      alerts: { pending_timeout_total: 0, frozen_timeout_total: 0, frozen_timeout_hours: 48, deposit_dispute_timeout_total: 0, deposit_dispute_timeout_hours: 48 },
       workload: { my_handling_count: 0, my_resolved_total: 0, my_resolved_today: 0 },
       orders: [],
       activeOrderId: 0,
@@ -776,6 +875,10 @@ export default {
       manualSettlePreview: null,
       manualSettlePreviewLoading: false,
       frozenVerdictDialogVisible: false,
+      depositVerdictDialogVisible: false,
+      depositVerdictAction: 'confiscate',
+      depositVerdictPayoutMode: 'huifu',
+      depositVerdictNoteDraft: '',
       frozenVerdictLiable: 'seller',
       frozenVerdictPayoutMode: 'huifu',
       frozenVerdictNoteDraft: '',
@@ -947,9 +1050,14 @@ export default {
         && this.activeOrder?.support_scene === 'fund_frozen'
         && this.activeOrder?.support_status !== 'resolved'
     },
+    canDepositVerdict() {
+      return this.activeOrder?.status === 'support_handling'
+        && this.activeOrder?.support_scene === 'deposit_dispute'
+        && this.activeOrder?.support_status !== 'resolved'
+    },
     canReconcileFunds() {
       return this.activeOrder?.status === 'support_handling'
-        && ['cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing'].includes(
+        && ['cancel_refund_processing', 'settlement_funds_processing', 'frozen_funds_processing', 'deposit_funds_processing'].includes(
           String(this.activeOrder?.support_scene || '').trim()
         )
         && this.activeOrder?.support_status !== 'resolved'
@@ -968,6 +1076,10 @@ export default {
         this.frozenVerdictDialogVisible = false
         this.frozenVerdictNoteDraft = ''
         this.frozenVerdictPreview = null
+        this.depositVerdictDialogVisible = false
+        this.depositVerdictAction = 'confiscate'
+        this.depositVerdictPayoutMode = 'huifu'
+        this.depositVerdictNoteDraft = ''
         this.$nextTick(() => {
           this.updateScrollbar('detail')
         })
@@ -1218,7 +1330,9 @@ export default {
         this.alerts = {
           pending_timeout_total: Number(data.alerts?.pending_timeout_total || 0),
           frozen_timeout_total: Number(data.alerts?.frozen_timeout_total || 0),
-          frozen_timeout_hours: Number(data.alerts?.frozen_timeout_hours || 48)
+          frozen_timeout_hours: Number(data.alerts?.frozen_timeout_hours || 48),
+          deposit_dispute_timeout_total: Number(data.alerts?.deposit_dispute_timeout_total || 0),
+          deposit_dispute_timeout_hours: Number(data.alerts?.deposit_dispute_timeout_hours || 48)
         }
         this.workload = {
           my_handling_count: Number(data.workload?.my_handling_count || 0),
@@ -1526,7 +1640,7 @@ export default {
         title: '执行分账',
         message: isFrozenSettlement
           ? '是否确认按冻结资金规则执行分账？执行后将全额退还买家押金，买家支付租金全部计入平台收益，卖家无收益，且无需提交额外物品使用表单。'
-          : '是否确认执行分账？执行后将发起买家原路退款与卖家余额支付，订单会在支付通道确认后自动完成。',
+          : '是否确认执行分账？执行后将发起卖家余额支付；买家押金将进入平台保管（冷静期），到期无卖家举报将自动原路退回。',
         confirmText: '确认执行',
         cancelText: '返回',
         tone: 'primary'
@@ -1592,7 +1706,7 @@ export default {
           'support_execute_settlement'
         )
         this.manualSettleDialogVisible = false
-        showSuccessToast('手动结单已发起：买家押金将原路退回，请线下联系卖家收款')
+        showSuccessToast('手动结单已发起：买家押金进入平台保管，到期无举报自动退回，请线下联系卖家收款')
         await this.fetchOrders(this.activeStatus)
         if (this.activeOrderId) {
           await this.fetchTimeline(this.activeOrderId)
@@ -1669,6 +1783,55 @@ export default {
         }
       } catch (error) {
         showErrorToast(error.message || '冻结裁决失败')
+      } finally {
+        this.settlementSubmitting = false
+      }
+    },
+    openDepositVerdictDialog() {
+      if (!this.activeOrder || this.settlementSubmitting) return
+      this.depositVerdictAction = 'confiscate'
+      this.depositVerdictPayoutMode = 'huifu'
+      this.depositVerdictNoteDraft = ''
+      this.depositVerdictDialogVisible = true
+    },
+    setDepositVerdictAction(action) {
+      if (this.settlementSubmitting || action === this.depositVerdictAction) return
+      this.depositVerdictAction = action
+      this.depositVerdictPayoutMode = 'huifu'
+    },
+    closeDepositVerdictDialog() {
+      if (this.settlementSubmitting) return
+      this.depositVerdictDialogVisible = false
+    },
+    async executeDepositVerdict() {
+      if (!this.activeOrder || this.settlementSubmitting) return
+      const manualMode = this.depositVerdictAction === 'confiscate' && this.depositVerdictPayoutMode === 'manual'
+      if (manualMode && !this.depositVerdictNoteDraft) {
+        showErrorToast('请填写备注，说明线下赔付卖家的安排')
+        return
+      }
+      this.settlementSubmitting = true
+      try {
+        await stepUpFetch(
+          `/api/support/orders/${this.activeOrder.id}/deposit-verdict`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              verdict: this.depositVerdictAction,
+              payoutMode: manualMode ? 'manual' : 'huifu',
+              note: this.depositVerdictNoteDraft
+            })
+          },
+          'support_execute_settlement'
+        )
+        this.depositVerdictDialogVisible = false
+        showSuccessToast('押金裁决已发起，资金处理结果以支付通道确认为准')
+        await this.fetchOrders(this.activeStatus)
+        if (this.activeOrderId) {
+          await this.fetchTimeline(this.activeOrderId)
+        }
+      } catch (error) {
+        showErrorToast(error.message || '押金裁决失败')
       } finally {
         this.settlementSubmitting = false
       }

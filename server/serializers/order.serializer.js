@@ -9,6 +9,7 @@ const orderStatusLabelMap = {
   paid: '已支付',
   support_handling: '客服处理中',
   settlement_pending: '结算中',
+  deposit_holding: '押金保管中',
   in_progress: '进行中',
   completed: '已完成',
   cancelled: '已取消'
@@ -51,6 +52,7 @@ export function buildOrderStatsPayload(row) {
     paid: Number(row?.paid || 0),
     support_handling: Number(row?.support_handling || 0),
     settlement_pending: Number(row?.settlement_pending || 0),
+    deposit_holding: Number(row?.deposit_holding || 0),
     cancelled: Number(row?.cancelled || 0)
   }
 }
