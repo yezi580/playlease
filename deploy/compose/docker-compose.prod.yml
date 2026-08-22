@@ -2,6 +2,12 @@ services:
   mysql:
     image: mysql:8.0
     restart: unless-stopped
+    # 容器日志轮转：json-file 默认无限增长，封顶防慢速膨胀（周期任务每分钟打日志）
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       # root 密码独立于应用密码：应用连接用 DB_USER/DB_PASSWORD（最小权限业务账号），
       # root 仅用于容器初始化与健康检查。未设置 DB_ROOT_PASSWORD 时向后兼容旧行为。
@@ -24,6 +30,12 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # 容器日志轮转：json-file 默认无限增长，封顶防慢速膨胀（周期任务每分钟打日志）
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data_prod:/data
@@ -47,6 +59,12 @@ services:
       context: ../../server
     image: my-app-api:current
     restart: unless-stopped
+    # 容器日志轮转：json-file 默认无限增长，封顶防慢速膨胀（周期任务每分钟打日志）
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - ../env/prod.env
     environment:
@@ -75,6 +93,12 @@ services:
   api-green:
     image: my-app-api:current
     restart: unless-stopped
+    # 容器日志轮转：json-file 默认无限增长，封顶防慢速膨胀（周期任务每分钟打日志）
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - ../env/prod.env
     environment:
@@ -101,6 +125,12 @@ services:
   nginx:
     image: nginx:alpine
     restart: unless-stopped
+    # 容器日志轮转：json-file 默认无限增长，封顶防慢速膨胀（周期任务每分钟打日志）
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "${PUBLIC_HTTP_PORT}:80"
       - "${PUBLIC_HTTPS_PORT}:443"

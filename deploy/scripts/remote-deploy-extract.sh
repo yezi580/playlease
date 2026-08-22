@@ -13,6 +13,9 @@ cp /opt/my-app/deploy/nginx/admin-allowlist.own.conf /tmp/my-app-admin-allowlist
 cp /opt/my-app/deploy/nginx/upstream-backend.conf /tmp/my-app-upstream.bak 2>/dev/null || true
 
 echo "=== 解压部署包 ==="
+# dist 先清空再解压：部署包内是完整自洽的构建产物，不清空会累积历史 hash chunk
+# （旧 chunk 只有长时间未刷新的旧页面懒加载才会用到，index.html 本身不缓存，刷新即恢复）
+rm -rf /opt/my-app/dist
 tar -xzf /opt/my-app-prod-deploy.tar.gz -C /opt/my-app
 
 echo "=== 恢复原有配置 ==="
