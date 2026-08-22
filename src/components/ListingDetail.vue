@@ -221,7 +221,7 @@
           </template>
 
           <div class="items-total-row">
-            <div class="item-name total-label">额外物品总价</div>
+            <div class="item-name total-label">额外物品总价（结算时从押金按使用量扣除）</div>
             <div class="item-col"></div>
             <div class="item-col"></div>
             <div class="item-col">
@@ -249,7 +249,7 @@
             </div>
           </div>
           <div class="item-card-mobile items-total-mobile">
-            <span class="item-name-mobile total-label">额外物品总价</span>
+            <span class="item-name-mobile total-label">额外物品总价（结算时从押金按使用量扣除）</span>
             <span class="item-price-mobile total-price-display">{{ formatMoney(totalItemsPrice) }} 元</span>
           </div>
         </div>
@@ -302,7 +302,7 @@
             <div class="price-summary">
               <div class="price-summary-row">
                 <div class="summary-row"><span>{{ rentLabelText }}</span><em>{{ formatMoney(displayRentPrice) }} 元</em></div>
-                <div class="summary-row"><span>额外物品总价</span><em>{{ formatMoney(totalItemsPrice) }} 元</em></div>
+                <div class="summary-row"><span>额外物品总价（结算时从押金按使用量扣除）</span><em>{{ formatMoney(totalItemsPrice) }} 元</em></div>
               </div>
               <div class="price-summary-row">
                 <div class="summary-row"><span>押金</span><em>{{ formatMoney(detail.deposit) }} 元</em></div>
@@ -1686,6 +1686,11 @@ export default {
 
   .summary-row {
     justify-content: space-between;
+  }
+
+  .summary-row span {
+    /* 标签带说明文案后较长，窄屏允许换行避免与金额挤压溢出 */
+    white-space: normal;
   }
 
   .agreements-row {
