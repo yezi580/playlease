@@ -48,6 +48,8 @@ const ALLOWED_DECONTAMINATION_CHAMBER_LEVELS = new Set(['0', '1', '2', '3'])
 const LOGIN_TIME_RANGE_REGEX = /^([01]\d|2[0-3]):00-([01]\d|2[0-3]):00$/
 const WECHAT_ID_REGEX = /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/
 const PHONE_REGEX = /^1[3-9]\d{9}$/
+// 50M 起租：出租账号哈夫币余额下限（发布与编辑共用校验）
+const MIN_RENT_HAFU_COIN = 50
 function isValidContactValue(value = '') {
   const v = String(value || '').trim()
   return WECHAT_ID_REGEX.test(v) || PHONE_REGEX.test(v)
@@ -356,6 +358,10 @@ export function validateListingPayload(payload, options = {}) {
 
   if (!isNonNegativeIntegerValue(payload.hafuCoin)) {
     return '哈夫币余额必须为非负整数'
+  }
+
+  if (Number(payload.hafuCoin) < MIN_RENT_HAFU_COIN) {
+    return `出租账号哈夫币余额 ${MIN_RENT_HAFU_COIN}M 起租，请填写不小于 ${MIN_RENT_HAFU_COIN}M 的账号`
   }
 
   if (!isNonNegativeIntegerValue(payload.characterLevel)) {

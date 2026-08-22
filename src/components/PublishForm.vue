@@ -790,7 +790,7 @@ export default {
     window.addEventListener('resize', this.handleViewportResize)
     window.addEventListener('keydown', this.handlePreviewKeydown)
     this.$el?.addEventListener('wheel', this.handleNumberInputWheel, { passive: false })
-    // 暂不做 50M 起租的前后端校验（开发测试阶段需小额账号），仅进入发布页时提示
+    // 50M 起租：前端字段校验 + 后端 listing-validator 强制校验（发布/编辑共用）
     if (!this.isEditMode) {
       showWarningToast('出租哈夫币余额要求 50M 起', { duration: 3200 })
     }
@@ -1083,7 +1083,8 @@ export default {
         case 'hafuCoin': {
           if (value === '' || value === null || value === undefined) return '哈夫币余额为必填'
           const hafuCoin = Number(value)
-          return Number.isInteger(hafuCoin) && hafuCoin >= 0 ? '' : '哈夫币余额请输入有效的非负整数'
+          if (!Number.isInteger(hafuCoin) || hafuCoin < 0) return '哈夫币余额请输入有效的非负整数'
+          return hafuCoin < 50 ? '出租账号哈夫币余额 50M 起租' : ''
         }
         case 'deposit': {
           if (value === '' || value === null || value === undefined) return '押金为必填'
