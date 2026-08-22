@@ -298,45 +298,43 @@
 
       <div class="submit-row">
         <div class="submit-container">
-          <div class="submit-info-block">
-            <div v-if="!readOnly" class="agreement-box">
-              <div class="agreement-content">
-                <div class="price-summary">
-                  <div class="summary-row"><span>{{ rentLabelText }}</span><em>{{ formatMoney(displayRentPrice) }} 元</em></div>
-                  <div class="summary-row"><span>押金</span><em>{{ formatMoney(detail.deposit) }} 元</em></div>
-                  <div class="summary-row"><span>额外物品总价</span><em>{{ formatMoney(totalItemsPrice) }} 元</em></div>
-                  <div class="summary-total"><span>应付合计</span><strong>{{ formatMoney(sumPrice) }} 元</strong></div>
-                </div>
-                <div class="agreement-checks-wrap">
-                  <div class="agreement-title">下单前请先确认以下协议</div>
-                  <div class="agreement-checks">
-                    <label class="agreement-check">
-                      <input v-model="agreementState.acceptPaymentAgreement" type="checkbox" />
-                      <span>我已阅读并同意《{{ paymentAgreement.title }}》</span>
-                      <button type="button" class="agreement-link" @click.prevent="openAgreementModal(paymentAgreement)">
-                        查看协议
-                      </button>
-                    </label>
-                    <label class="agreement-check">
-                      <input v-model="agreementState.acceptBuyerAgreement" type="checkbox" />
-                      <span>我已阅读并同意《{{ buyerAgreement.title }}》</span>
-                      <button type="button" class="agreement-link" @click.prevent="openAgreementModal(buyerAgreement)">
-                        查看协议
-                      </button>
-                    </label>
-                  </div>
-                </div>
+          <div class="submit-left" v-if="!readOnly">
+            <div class="price-summary">
+              <div class="price-summary-row">
+                <div class="summary-row"><span>{{ rentLabelText }}</span><em>{{ formatMoney(displayRentPrice) }} 元</em></div>
+                <div class="summary-row"><span>额外物品总价</span><em>{{ formatMoney(totalItemsPrice) }} 元</em></div>
               </div>
-              <button
-                class="rent-now-btn agreement-submit-btn"
-                :class="{ disabled: !canSubmitOrder }"
-                :disabled="!canSubmitOrder"
-                @click="handleRentNow"
-              >
-                立即租用
-              </button>
+              <div class="price-summary-row">
+                <div class="summary-row"><span>押金</span><em>{{ formatMoney(detail.deposit) }} 元</em></div>
+                <div class="summary-row summary-row--highlight"><span>应付合计</span><em>{{ formatMoney(sumPrice) }} 元</em></div>
+              </div>
+            </div>
+            <div class="agreements-row">
+              <label class="agreement-label">
+                <input v-model="agreementState.acceptPaymentAgreement" type="checkbox" />
+                <span>我已阅读并同意《{{ paymentAgreement.title }}》</span>
+                <button type="button" class="agreement-link" @click.prevent="openAgreementModal(paymentAgreement)">
+                  查看协议
+                </button>
+              </label>
+              <label class="agreement-label">
+                <input v-model="agreementState.acceptBuyerAgreement" type="checkbox" />
+                <span>我已阅读并同意《{{ buyerAgreement.title }}》</span>
+                <button type="button" class="agreement-link" @click.prevent="openAgreementModal(buyerAgreement)">
+                  查看协议
+                </button>
+              </label>
             </div>
           </div>
+          <button
+            v-if="!readOnly"
+            class="rent-now-btn"
+            :class="{ disabled: !canSubmitOrder }"
+            :disabled="!canSubmitOrder"
+            @click="handleRentNow"
+          >
+            立即租用
+          </button>
         </div>
       </div>
 
@@ -1322,12 +1320,14 @@ export default {
 .submit-row {
   position: fixed;
   bottom: 0;
-  left: 0;
+  /* 桌面端左侧为 240px 固定侧边栏（AppShell .page padding-left），
+     底栏需让出侧边栏宽度，与内容区同轴居中且不被遮挡（与发布页一致） */
+  left: 240px;
   right: 0;
   z-index: 1000;
   display: flex;
   justify-content: center;
-  padding: 8px 16px;
+  padding: 12px 20px;
   background: var(--bg-card);
   border-top: 1px solid var(--border-color);
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
@@ -1337,110 +1337,78 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 24px;
   width: 100%;
-  max-width: 900px;
+  /* 底栏信息区比 900px 表单更宽，左右对称扩展（与发布页一致） */
+  max-width: 1200px;
+  padding: 0 24px;
 }
 
-.submit-info-block {
+.submit-left {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
   flex: 1;
+  overflow: hidden;
+}
+
+.price-summary {
+  display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.price-summary {
-  display: grid;
-  grid-template-columns: repeat(4, max-content);
-  justify-content: space-between;
+.price-summary-row {
+  display: flex;
   align-items: center;
-  gap: 6px 14px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--info-border);
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
-.summary-row,
-.summary-total {
+.summary-row {
   display: flex;
   align-items: baseline;
-  flex-wrap: nowrap;
-  gap: 6px;
-  font-size: 15px;
+  gap: 5px;
+  font-size: 14px;
   white-space: nowrap;
 }
 
 .summary-row span {
   color: var(--text-muted);
-  font-weight: 500;
 }
 
 .summary-row em {
   font-style: normal;
   color: var(--text-main);
-  font-size: 16px;
   font-weight: 700;
+  font-size: 14px;
 }
 
-.summary-total {
+.summary-row--highlight em {
   color: var(--danger-text);
-  font-weight: 700;
-  justify-self: end;
 }
 
-.summary-total strong {
-  font-size: 22px;
-}
-
-.agreement-box {
+.agreements-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--info-border);
-  border-radius: 12px;
-  background: var(--bg-subtle);
-}
-
-.agreement-content {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.agreement-checks-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.agreement-checks {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.agreement-title {
-  color: var(--info-text);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.agreement-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   flex-wrap: wrap;
-  color: var(--text-regular);
+  gap: 4px 20px;
   font-size: 14px;
-  line-height: 1.4;
 }
 
-.agreement-check input[type='checkbox'] {
+.agreement-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-regular);
+}
+
+.agreement-label input {
+  margin: 0;
   width: 16px;
   height: 16px;
+  cursor: pointer;
   accent-color: var(--info-strong);
 }
 
@@ -1449,9 +1417,14 @@ export default {
   padding: 0;
   background: transparent;
   color: var(--info-strong);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 400;
   cursor: pointer;
+  text-decoration: none;
+}
+
+.agreement-link:hover {
+  text-decoration: underline;
 }
 
 .rent-now-btn {
@@ -1459,24 +1432,16 @@ export default {
   border-radius: 10px;
   background: #111827;
   color: #fff;
-  min-width: 112px;
-  padding: 10px 18px;
-  font-size: 14px;
+  padding: 12px 24px;
+  font-size: 16px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
 }
 
-.agreement-submit-btn {
-  align-self: center;
-  min-width: 116px;
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-
 .rent-now-btn.disabled,
 .rent-now-btn:disabled {
-  background: #94a3b8;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
@@ -1692,65 +1657,43 @@ export default {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+    /* 此时 submit-row 在 .detail-wrap 内且为 static，内边距由外层提供 */
+    padding: 0;
+  }
+
+  .submit-left {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
   .price-summary {
     flex-direction: column;
     align-items: stretch;
-    gap: 4px;
-    padding-bottom: 4px;
-    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
   }
 
-  .summary-row,
-  .summary-total {
+  .price-summary-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .summary-row {
     justify-content: space-between;
   }
 
-  .summary-row,
-  .summary-total,
-  .summary-row span,
-  .summary-row em,
-  .summary-total span,
-  .summary-total strong {
-    line-height: 1.2;
+  .agreements-row {
+    gap: 4px;
   }
 
   .rent-now-btn {
     width: 100%;
-  }
-
-  .agreement-box {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-    padding: 5px 6px;
-  }
-
-  .agreement-content {
-    gap: 4px;
-  }
-
-  .agreement-checks-wrap,
-  .agreement-checks {
-    gap: 3px;
-  }
-
-  .agreement-title {
-    font-size: 13px;
-  }
-
-  .agreement-check {
-    gap: 4px;
-    font-size: 13px;
-    line-height: 1.25;
-  }
-
-  .agreement-submit-btn {
-    align-self: auto;
-    min-width: 0;
-    padding-top: 10px;
-    padding-bottom: 10px;
   }
 
   .agreement-modal {
