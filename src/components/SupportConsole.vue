@@ -134,7 +134,7 @@
       </div>
     </div>
 
-    <div class="summary-grid">
+    <div class="summary-grid" :class="{ 'summary-grid--six': isAfterSaleDesk }">
       <article class="summary-card">
         <span>{{ isAfterSaleDesk ? '待售后跟进' : '待售前跟进' }}</span>
         <strong>{{ currentWorkload.my_handling_count }}</strong>
@@ -2314,6 +2314,20 @@ export default {
 
 .summary-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* 售后台 6 张汇总卡一行铺满（售前台 4 张仍保持 4 列） */
+.summary-grid--six {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.summary-grid--six .summary-card {
+  padding: 14px 16px;
+}
+
+.summary-grid--six .summary-card strong {
+  margin-top: 6px;
+  font-size: 24px;
 }
 
 .summary-card span {
