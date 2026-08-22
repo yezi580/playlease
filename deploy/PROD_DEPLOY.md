@@ -140,11 +140,20 @@ cp /opt/my-app/deploy/env/prod.env /tmp/my-app-prod.env.bak
 cp -a /opt/my-app/deploy/nginx/certs /tmp/my-app-certs.bak
 cp -a /opt/my-app/server/uploads /tmp/my-app-uploads.bak
 
+# ⚠️ dist / certs / uploads 目录本身都挂载进了容器（nginx / api），
+# 只清空内容、保留目录 inode：rm 掉目录再重建会换 inode，
+# 运行中的容器会继续看到已脱离的旧目录（主站 403 / 上传丢失），必须重建容器才能恢复
+mkdir -p /opt/my-app/dist
+rm -rf /opt/my-app/dist/* /opt/my-app/dist/.[!.]* 2>/dev/null || true
 tar -xzf /opt/my-app-prod-deploy.tar.gz -C /opt/my-app
 
 cp /tmp/my-app-prod.env.bak /opt/my-app/deploy/env/prod.env
-rm -rf /opt/my-app/deploy/nginx/certs && cp -a /tmp/my-app-certs.bak /opt/my-app/deploy/nginx/certs
-rm -rf /opt/my-app/server/uploads && cp -a /tmp/my-app-uploads.bak /opt/my-app/server/uploads
+mkdir -p /opt/my-app/deploy/nginx/certs
+rm -rf /opt/my-app/deploy/nginx/certs/* /opt/my-app/deploy/nginx/certs/.[!.]* 2>/dev/null || true
+cp -a /tmp/my-app-certs.bak/. /opt/my-app/deploy/nginx/certs/
+mkdir -p /opt/my-app/server/uploads
+rm -rf /opt/my-app/server/uploads/* /opt/my-app/server/uploads/.[!.]* 2>/dev/null || true
+cp -a /tmp/my-app-uploads.bak/. /opt/my-app/server/uploads/
 
 # 确认服务正常后删除临时备份，回收磁盘（uploads 备份有 8G+）
 # rm -rf /tmp/my-app-certs.bak /tmp/my-app-uploads.bak
