@@ -1931,6 +1931,8 @@ async function ensureOrderWorkflowSchema() {
       platform_fee_amount BIGINT NOT NULL DEFAULT 0 COMMENT '平台抽成（分）',
       seller_income_amount BIGINT NOT NULL DEFAULT 0 COMMENT '卖家入账金额（分）',
       buyer_refund_amount BIGINT NOT NULL DEFAULT 0 COMMENT '买家退款金额（分）',
+      payout_mode ENUM('huifu', 'manual') NOT NULL DEFAULT 'huifu' COMMENT '卖家结算款支付方式（汇付余额支付/客服线下手动支付）',
+      manual_payout_note VARCHAR(500) DEFAULT NULL COMMENT '手动结单备注（客服填写的原因与线下收款安排）',
       status ENUM('draft', 'executed') NOT NULL DEFAULT 'draft' COMMENT '结算状态',
       executed_by_support_id INT DEFAULT NULL COMMENT '执行分账的客服ID',
       executed_at DATETIME DEFAULT NULL COMMENT '执行时间',
@@ -1940,6 +1942,35 @@ async function ensureOrderWorkflowSchema() {
       UNIQUE INDEX uk_order_settlements_order_id (order_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   )
+
+  // 手动结单：卖家无法汇付进件时，客服线下联系卖家收款，结算款不走汇付余额支付
+  const orderSettlementColumns = [
+    {
+      name: 'payout_mode',
+      sql: `ALTER TABLE order_settlements
+            ADD COLUMN payout_mode ENUM('huifu', 'manual') NOT NULL DEFAULT 'huifu' COMMENT '卖家结算款支付方式（汇付余额支付/客服线下手动支付）' AFTER buyer_refund_amount`
+    },
+    {
+      name: 'manual_payout_note',
+      sql: `ALTER TABLE order_settlements
+            ADD COLUMN manual_payout_note VARCHAR(500) DEFAULT NULL COMMENT '手动结单备注（客服填写的原因与线下收款安排）' AFTER payout_mode`
+    }
+  ]
+
+  for (const column of orderSettlementColumns) {
+    const [rows] = await pool.execute(
+      `SELECT COLUMN_NAME
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'order_settlements'
+         AND COLUMN_NAME = ?
+       LIMIT 1`,
+      [databaseName, column.name]
+    )
+    if (!rows.length) {
+      await pool.execute(column.sql)
+    }
+  }
 }
 
 const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'

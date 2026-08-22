@@ -452,9 +452,27 @@ app.put('/api/support/orders/:id/execute-settlement', authRequired, supportOnly,
   }
 
   try {
+    // payoutMode='manual' 为手动结单：押金仍原路退回买家，卖家结算款由客服线下联系支付，
+    // 用于卖家无法完成汇付进件的场景
+    const payoutMode = String(req.body?.payoutMode || 'huifu').trim()
+    if (!['huifu', 'manual'].includes(payoutMode)) {
+      return res.status(400).json({ message: '无效的分账方式' })
+    }
+    let manualNote = ''
+    if (payoutMode === 'manual') {
+      manualNote = String(req.body?.manualNote || '').trim()
+      if (!manualNote) {
+        return res.status(400).json({ message: '请填写手动结单备注，说明线下收款安排' })
+      }
+      if (manualNote.length > 500) {
+        return res.status(400).json({ message: '手动结单备注不能超过 500 字' })
+      }
+    }
     const order = await orderLifecycleService.executeSettlement({
       orderId,
-      supportUserId: req.auth.userId
+      supportUserId: req.auth.userId,
+      payoutMode,
+      manualNote
     })
     res.json(normalizeOrderMoneyFields(order))
   } catch (error) {

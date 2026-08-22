@@ -288,7 +288,11 @@ export function createOrderLifecycleService({
     return Number(rows[0]?.total || 0)
   }
 
-  async function upsertSettlement(executor, orderId, preview, status = 'draft', supportUserId = null) {
+  async function upsertSettlement(executor, orderId, preview, status = 'draft', supportUserId = null, options = {}) {
+    const payoutMode = options.payoutMode === 'manual' ? 'manual' : 'huifu'
+    const manualPayoutNote = payoutMode === 'manual'
+      ? String(options.manualPayoutNote || '').trim().slice(0, 500) || null
+      : null
     await executor.execute(
       `INSERT INTO order_settlements (
         order_id,
@@ -298,10 +302,12 @@ export function createOrderLifecycleService({
         platform_fee_amount,
         seller_income_amount,
         buyer_refund_amount,
+        payout_mode,
+        manual_payout_note,
         status,
         executed_by_support_id,
         executed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         rent_amount = VALUES(rent_amount),
         deposit_amount = VALUES(deposit_amount),
@@ -309,6 +315,8 @@ export function createOrderLifecycleService({
         platform_fee_amount = VALUES(platform_fee_amount),
         seller_income_amount = VALUES(seller_income_amount),
         buyer_refund_amount = VALUES(buyer_refund_amount),
+        payout_mode = VALUES(payout_mode),
+        manual_payout_note = VALUES(manual_payout_note),
         status = VALUES(status),
         executed_by_support_id = VALUES(executed_by_support_id),
         executed_at = VALUES(executed_at)`,
@@ -320,6 +328,8 @@ export function createOrderLifecycleService({
         preview.platformFeeAmount,
         preview.sellerIncomeAmount,
         preview.buyerRefundAmount,
+        payoutMode,
+        manualPayoutNote,
         status,
         supportUserId ? Number(supportUserId) : null,
         status === 'executed' ? new Date() : null
@@ -1488,7 +1498,7 @@ export function createOrderLifecycleService({
     return requestCancel({ orderId, userId, reason: note })
   }
 
-  async function executeSettlement({ orderId, supportUserId }) {
+  async function executeSettlement({ orderId, supportUserId, payoutMode = 'huifu', manualNote = '' }) {
     return runWithDistributedLock(
       typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
       '当前订单正在执行分账，请稍后再试',
@@ -1497,6 +1507,8 @@ export function createOrderLifecycleService({
         let preview = null
         let isFrozenSettlement = false
         let isRegularSettlement = false
+        let isManualPayout = String(payoutMode || '').trim() === 'manual'
+        let manualPayoutNote = String(manualNote || '').trim().slice(0, 500)
         const conn = await pool.getConnection()
         try {
           await conn.beginTransaction()
@@ -1528,7 +1540,29 @@ export function createOrderLifecycleService({
             fail(400, { message: '卖家确认额外物品后，才可执行分账' })
           }
 
-          if (isRegularSettlement && Number(order.seller_id || 0) > 0) {
+          // 手动结单仅适用于普通结算：冻结裁决卖家无收益，无需线下收款
+          if (isManualPayout && !isRegularSettlement) {
+            fail(400, { message: '手动结单仅适用于普通结算流程，冻结资金订单请按冻结规则执行分账' })
+          }
+
+          // 对账收口等重入场景不携带 payoutMode，以已持久化的模式为准，
+          // 避免手动结单后的退款确认重入时再次尝试给未进件卖家打款
+          const [[settlementRow]] = await conn.execute(
+            `SELECT payout_mode, manual_payout_note
+             FROM order_settlements
+             WHERE order_id = ?
+             LIMIT 1`,
+            [orderId]
+          )
+          if (String(settlementRow?.payout_mode || '').trim() === 'manual') {
+            isManualPayout = true
+            // 重入不携带备注时保留已留痕的手动结单备注，避免被空值覆盖
+            if (!manualPayoutNote && settlementRow?.manual_payout_note) {
+              manualPayoutNote = String(settlementRow.manual_payout_note).slice(0, 500)
+            }
+          }
+
+          if (isRegularSettlement && !isManualPayout && Number(order.seller_id || 0) > 0) {
             const [sellerAccounts] = await conn.execute(
               `SELECT bind_status, huifu_id, acct_id
                FROM user_settlement_accounts
@@ -1541,14 +1575,17 @@ export function createOrderLifecycleService({
               || String(sellerAccount.bind_status || '').trim() !== 'active'
               || !String(sellerAccount.huifu_id || '').trim()
               || !String(sellerAccount.acct_id || '').trim()) {
-              fail(400, { message: '卖家尚未完成个人进件与绑卡（收款账号未配置或未启用），无法执行分账' })
+              fail(400, { message: '卖家尚未完成个人进件与绑卡（收款账号未配置或未启用），无法执行分账。如卖家无法进件，请使用手动结单，由客服线下联系卖家收款' })
             }
           }
 
           preview = isFrozenSettlement
             ? buildFrozenFundsSettlementPreview(order)
             : await buildSettlementPreview(conn, orderId)
-          await upsertSettlement(conn, orderId, preview, 'draft', supportUserId)
+          await upsertSettlement(conn, orderId, preview, 'draft', supportUserId, {
+            payoutMode: isManualPayout ? 'manual' : 'huifu',
+            manualPayoutNote: manualPayoutNote
+          })
           await conn.execute(
             `UPDATE orders
              SET status = 'support_handling',
@@ -1558,11 +1595,18 @@ export function createOrderLifecycleService({
                  END,
                  support_scene = ?,
                  support_status = 'handling',
-                 support_note = '客服已发起资金处理，等待支付通道确认。',
+                 support_note = ?,
                  support_resolved_at = NULL,
                  settlement_executed_at = NULL
              WHERE id = ?`,
-            [isRegularSettlement ? 1 : 0, isFrozenSettlement ? 'frozen_funds_processing' : 'settlement_funds_processing', orderId]
+            [
+              isRegularSettlement ? 1 : 0,
+              isFrozenSettlement ? 'frozen_funds_processing' : 'settlement_funds_processing',
+              isManualPayout
+                ? '客服已发起手动结单：买家押金原路退回待支付通道确认，卖家结算款需客服线下联系卖家支付。'
+                : '客服已发起资金处理，等待支付通道确认。',
+              orderId
+            ]
           )
           await conn.commit()
         } catch (error) {
@@ -1577,7 +1621,7 @@ export function createOrderLifecycleService({
           : '客服执行结算-押金原路退回'
         const sellerPayoutRemark = '客服执行结算-卖家余额支付'
         const needsRefund = Number(preview?.buyerRefundAmount || 0) > 0
-        const needsPayout = !isFrozenSettlement && Number(order?.seller_id || 0) > 0 && Number(preview?.sellerIncomeAmount || 0) > 0
+        const needsPayout = !isFrozenSettlement && !isManualPayout && Number(order?.seller_id || 0) > 0 && Number(preview?.sellerIncomeAmount || 0) > 0
 
         let refundResult = needsRefund ? await fetchLatestRefundByReason(pool, orderId, buyerRefundReason) : null
         let payoutResult = needsPayout ? await fetchLatestPayoutByRemark(pool, orderId, sellerPayoutRemark) : null
@@ -1650,7 +1694,9 @@ export function createOrderLifecycleService({
             actorRole: 'support',
             content: isFrozenSettlement
               ? '客服已按冻结资金规则发起资金处理：押金将原路退回买家，租金归平台，等待支付通道确认结果。'
-              : '客服已发起订单资金处理：买家将原路收到退款，卖家将收到平台余额支付打款，当前等待支付通道确认结果。'
+              : (isManualPayout
+                ? '客服已发起手动结单资金处理：买家将原路收到退款，卖家结算款将由客服线下联系支付，当前等待支付通道确认结果。'
+                : '客服已发起订单资金处理：买家将原路收到退款，卖家将收到平台余额支付打款，当前等待支付通道确认结果。')
           })
           return updated
         }
@@ -1659,7 +1705,10 @@ export function createOrderLifecycleService({
         let pendingRewardInfo = null
         try {
           await finalizeConn.beginTransaction()
-          await upsertSettlement(finalizeConn, orderId, preview, 'executed', supportUserId)
+          await upsertSettlement(finalizeConn, orderId, preview, 'executed', supportUserId, {
+            payoutMode: isManualPayout ? 'manual' : 'huifu',
+            manualPayoutNote: manualPayoutNote
+          })
           if (!isFrozenSettlement) {
             pendingRewardInfo = await awardInviteRewardForSettlement(finalizeConn, order, preview)
           }
@@ -1715,7 +1764,9 @@ export function createOrderLifecycleService({
           actorRole: 'support',
           content: isFrozenSettlement
             ? '客服已按冻结资金规则完成结算：押金已原路退回买家，买家支付租金计入平台收益，卖家无收益。'
-            : '客服已完成结算：买家退款已原路退回，卖家结算款已通过余额支付发起/到账。'
+            : (isManualPayout
+              ? '客服已完成手动结单：买家退款已原路退回，卖家结算款将由客服线下联系支付。'
+              : '客服已完成结算：买家退款已原路退回，卖家结算款已通过余额支付发起/到账。')
         })
         return updated
       }

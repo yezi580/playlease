@@ -466,6 +466,15 @@
                 >
                   {{ settlementSubmitting ? '执行中...' : '执行分账' }}
                 </button>
+                <button
+                  v-if="canManualSettle"
+                  type="button"
+                  class="ghost-btn"
+                  :disabled="settlementSubmitting"
+                  @click="openManualSettleDialog"
+                >
+                  手动结单
+                </button>
               </div>
 
               <article class="info-block">
@@ -575,6 +584,43 @@
         </section>
       </div>
     </Transition>
+
+    <Transition name="freeze-dialog-fade">
+      <div
+        v-if="manualSettleDialogVisible"
+        class="freeze-dialog-overlay"
+        @click.self="closeManualSettleDialog"
+      >
+        <section class="freeze-dialog" role="dialog" aria-modal="true" aria-label="手动结单确认框">
+          <div class="freeze-dialog__body">
+            <div class="note-head">
+              <h4>手动结单</h4>
+              <span>{{ manualSettleNoteDraft.length }}/500</span>
+            </div>
+            <p class="manual-settle-tips">
+              适用于卖家无法完成汇付进件的订单：买家押金仍将原路退回，{{ manualSellerIncomeText
+              }}不走汇付打款，需由客服线下联系卖家完成收款。
+            </p>
+            <textarea
+              v-model.trim="manualSettleNoteDraft"
+              class="note-textarea freeze-dialog__textarea"
+              rows="4"
+              maxlength="500"
+              placeholder="必填：说明手动结单原因与线下收款安排，例如「卖家无法汇付进件，已与卖家约定微信转账收款」。"
+            ></textarea>
+          </div>
+
+          <div class="freeze-dialog__footer">
+            <button type="button" class="ghost-btn" :disabled="settlementSubmitting" @click="closeManualSettleDialog">
+              取消
+            </button>
+            <button type="button" class="primary-btn" :disabled="settlementSubmitting" @click="executeManualSettlement">
+              {{ settlementSubmitting ? '提交中...' : '确认手动结单' }}
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
     </div>
     <ListingReviewDesk v-if="deskMode === 'review'" @reviewed="fetchReviewPendingCount" />
     </template>
@@ -640,6 +686,10 @@ export default {
       noteDraft: '',
       freezeReasonDraft: '',
       freezeDialogVisible: false,
+      manualSettleDialogVisible: false,
+      manualSettleNoteDraft: '',
+      manualSettlePreview: null,
+      manualSettlePreviewLoading: false,
       noteSaving: false,
       statusSubmitting: false,
       cancelSubmitting: false,
@@ -746,6 +796,16 @@ export default {
         && this.activeOrder?.support_status !== 'resolved'
       )
     },
+    // 手动结单：仅普通结算分支可用（冻结裁决卖家无收益，走原冻结规则）
+    canManualSettle() {
+      return this.activeOrder?.status === 'settlement_pending'
+        && Boolean(this.activeOrder?.seller_item_confirmed_at)
+    },
+    manualSellerIncomeText() {
+      if (this.manualSettlePreviewLoading) return '结算金额计算中'
+      if (!this.manualSettlePreview) return '结算金额以平台核算为准'
+      return `卖家应结算款 ￥${formatMoneyFixed(this.manualSettlePreview.seller_income_amount)}`
+    },
     canCancelOrder() {
       return this.activeOrder?.status === 'support_handling'
         && this.activeOrder?.support_scene === 'cancel_request'
@@ -786,6 +846,9 @@ export default {
         this.noteDraft = order?.support_note || ''
         this.freezeReasonDraft = order?.support_freeze_reason || ''
         this.freezeDialogVisible = false
+        this.manualSettleDialogVisible = false
+        this.manualSettleNoteDraft = ''
+        this.manualSettlePreview = null
         this.$nextTick(() => {
           this.updateScrollbar('detail')
         })
@@ -1356,6 +1419,60 @@ export default {
         await this.fetchOrders(this.activeStatus)
       } catch (error) {
         showErrorToast(error.message || '执行分账失败')
+      } finally {
+        this.settlementSubmitting = false
+      }
+    },
+    async openManualSettleDialog() {
+      if (!this.activeOrder || this.settlementSubmitting) return
+      this.manualSettleNoteDraft = ''
+      this.manualSettlePreview = null
+      this.manualSettleDialogVisible = true
+      // 结算预览金额仅供客服核对，加载失败不阻塞手动结单（服务端以自身核算为准）
+      const orderId = this.activeOrder.id
+      this.manualSettlePreviewLoading = true
+      try {
+        const preview = await apiFetch(`/api/orders/${orderId}/settlement-preview`)
+        if (Number(this.activeOrderId) === Number(orderId)) {
+          this.manualSettlePreview = preview || null
+        }
+      } catch (_error) {
+        // 金额预览失败时弹窗显示兜底文案
+      } finally {
+        this.manualSettlePreviewLoading = false
+      }
+    },
+    closeManualSettleDialog() {
+      if (this.settlementSubmitting) return
+      this.manualSettleDialogVisible = false
+    },
+    async executeManualSettlement() {
+      if (!this.activeOrder || this.settlementSubmitting) return
+      if (!this.manualSettleNoteDraft) {
+        showErrorToast('请先填写手动结单备注，说明线下收款安排')
+        return
+      }
+      this.settlementSubmitting = true
+      try {
+        await stepUpFetch(
+          `/api/support/orders/${this.activeOrder.id}/execute-settlement`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              payoutMode: 'manual',
+              manualNote: this.manualSettleNoteDraft
+            })
+          },
+          'support_execute_settlement'
+        )
+        this.manualSettleDialogVisible = false
+        showSuccessToast('手动结单已发起：买家押金将原路退回，请线下联系卖家收款')
+        await this.fetchOrders(this.activeStatus)
+        if (this.activeOrderId) {
+          await this.fetchTimeline(this.activeOrderId)
+        }
+      } catch (error) {
+        showErrorToast(error.message || '手动结单失败')
       } finally {
         this.settlementSubmitting = false
       }
@@ -2189,6 +2306,18 @@ export default {
 
 .freeze-dialog__textarea {
   min-height: 128px;
+}
+
+.manual-settle-tips {
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: 10px;
+  background: var(--warning-bg);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-main);
+  word-break: break-word;
 }
 
 .freeze-dialog__footer {
