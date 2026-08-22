@@ -179,7 +179,7 @@
         <div v-if="isLoggedIn && !settlementAccountReady" class="profile-onboarding-alert">
           <div class="profile-onboarding-alert-content">
             <strong>收款账号未入驻</strong>
-            <p>完成收款账号入驻后，订单结算时才能正常收到打款。未入驻的卖家在客服分账时会被拦截。</p>
+            <p>完成收款账号入驻后，订单结算时才能正常收到打款。</p>
           </div>
           <button type="button" class="order-action-btn primary profile-onboarding-btn" @click="switchSection('wallet')">去配置</button>
         </div>
