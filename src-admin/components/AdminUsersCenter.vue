@@ -2,7 +2,8 @@
   <section class="page">
     <div class="panel">
       <div class="panel-head">
-        <span>共 {{ users.length }} 条</span>
+        <span>共 {{ total }} 条</span>
+        <span v-if="totalPages > 1">第 {{ page }} / {{ totalPages }} 页</span>
       </div>
 
       <div class="toolbar">
@@ -12,9 +13,9 @@
           maxlength="50"
           class="toolbar-input"
           placeholder="搜索用户名或手机号"
-          @keydown.enter.prevent="loadUsers"
+          @keydown.enter.prevent="searchUsers"
         >
-        <button type="button" class="row-btn" :disabled="loading" @click="loadUsers">
+        <button type="button" class="row-btn" :disabled="loading" @click="searchUsers">
           {{ loading ? '搜索中...' : '搜索' }}
         </button>
         <button type="button" class="row-btn" :disabled="loading || !keyword" @click="resetSearch">
@@ -131,6 +132,36 @@
         </table>
       </div>
 
+      <div v-if="totalPages > 1" class="pager">
+        <button
+          type="button"
+          class="row-btn"
+          :disabled="loading || page <= 1"
+          @click="goPage(page - 1)"
+        >
+          上一页
+        </button>
+        <button
+          v-for="p in pageButtons"
+          :key="p"
+          type="button"
+          class="row-btn pager-num"
+          :class="{ 'pager-num--active': p === page }"
+          :disabled="loading"
+          @click="goPage(p)"
+        >
+          {{ p }}
+        </button>
+        <button
+          type="button"
+          class="row-btn"
+          :disabled="loading || page >= totalPages"
+          @click="goPage(page + 1)"
+        >
+          下一页
+        </button>
+      </div>
+
       <p v-if="userRoleMessage" class="inline-message" :class="{ 'inline-message--error': userRoleMessageType === 'error' }">
         {{ userRoleMessage }}
       </p>
@@ -202,6 +233,9 @@ export default {
       error: '',
       keyword: '',
       users: [],
+      page: 1,
+      pageSize: 20,
+      total: 0,
       roleOptions: ROLE_OPTIONS,
       roleDrafts: {},
       roleSubmittingMap: {},
@@ -231,6 +265,22 @@ export default {
       if (!this.pendingBanUser) return ''
       const days = Number(this.banDaysDrafts[this.pendingBanUser.id] || 0)
       return `确认将 ${this.pendingBanUser.username || '--'} 封禁 ${days} 天吗？此操作会立即影响该用户的后台与前台使用。`
+    },
+    totalPages() {
+      return Math.max(1, Math.ceil(Number(this.total || 0) / this.pageSize))
+    },
+    pageButtons() {
+      const current = this.page
+      const last = this.totalPages
+      // 以当前页为中心取最多 5 个连续页码，收边不越界
+      let start = Math.max(1, Math.min(current - 2, last - 4))
+      const end = Math.min(last, start + 4)
+      start = Math.max(1, end - 4)
+      const buttons = []
+      for (let p = start; p <= end; p += 1) {
+        buttons.push(p)
+      }
+      return buttons
     }
   },
   methods: {
@@ -242,11 +292,15 @@ export default {
       this.usernameMessage = ''
       try {
         const params = new URLSearchParams({
-          page: '1',
-          pageSize: '20',
+          page: String(this.page),
+          pageSize: String(this.pageSize),
           keyword: this.keyword
         })
         const data = await apiFetch(`/api/admin/users?${params.toString()}`)
+        this.total = Number(data.total || 0)
+        if (Number(data.page)) {
+          this.page = Number(data.page)
+        }
         this.users = this.sortUsers(Array.isArray(data.list) ? data.list : [])
         this.roleDrafts = this.users.reduce((acc, item) => {
           acc[item.id] = item.role
@@ -266,8 +320,20 @@ export default {
         this.loading = false
       }
     },
+    searchUsers() {
+      // 换搜索词后结果集变化，回到第一页
+      this.page = 1
+      this.loadUsers()
+    },
+    goPage(target) {
+      const next = Math.min(Math.max(1, Number(target) || 1), this.totalPages)
+      if (next === this.page) return
+      this.page = next
+      this.loadUsers()
+    },
     resetSearch() {
       this.keyword = ''
+      this.page = 1
       this.loadUsers()
     },
     shouldShowRoleSave(item) {
@@ -650,6 +716,25 @@ export default {
 .username-input {
   width: 150px;
   min-height: 36px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.pager-num {
+  min-width: 40px;
+  padding: 0 10px;
+}
+
+.pager-num--active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
 }
 
 .inline-message {
