@@ -137,6 +137,14 @@
           type="button"
           class="row-btn"
           :disabled="loading || page <= 1"
+          @click="goPage(1)"
+        >
+          第一页
+        </button>
+        <button
+          type="button"
+          class="row-btn"
+          :disabled="loading || page <= 1"
           @click="goPage(page - 1)"
         >
           上一页
@@ -159,6 +167,14 @@
           @click="goPage(page + 1)"
         >
           下一页
+        </button>
+        <button
+          type="button"
+          class="row-btn"
+          :disabled="loading || page >= totalPages"
+          @click="goPage(totalPages)"
+        >
+          末页
         </button>
       </div>
 
