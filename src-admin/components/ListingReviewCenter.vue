@@ -162,6 +162,30 @@
                 <div class="detail-section">
                   <div class="detail-grid">
                     <label>
+                      <span>保险等级</span>
+                      <input :value="detail.insurance_level || '--'" readonly>
+                    </label>
+                    <label>
+                      <span>体力等级</span>
+                      <input :value="detail.energy_level || '--'" readonly>
+                    </label>
+                    <label>
+                      <span>负重等级</span>
+                      <input :value="detail.weight_level || '--'" readonly>
+                    </label>
+                    <label class="detail-grid__full">
+                      <span>武器皮肤</span>
+                      <input :value="detail.weapon_skin || '--'" readonly>
+                    </label>
+                    <label>
+                      <span>所在地区</span>
+                      <input :value="detail.region || '--'" readonly>
+                    </label>
+                    <label>
+                      <span>人脸归属</span>
+                      <input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly>
+                    </label>
+                    <label>
                       <span>段位</span>
                       <input :value="detail.rank_name || '--'" readonly>
                     </label>
@@ -176,18 +200,6 @@
                     <label>
                       <span>上号时间</span>
                       <input :value="detail.login_time_range || '--'" readonly>
-                    </label>
-                    <label>
-                      <span>保险等级</span>
-                      <input :value="detail.insurance_level || '--'" readonly>
-                    </label>
-                    <label>
-                      <span>体力等级</span>
-                      <input :value="detail.energy_level || '--'" readonly>
-                    </label>
-                    <label>
-                      <span>负重等级</span>
-                      <input :value="detail.weight_level || '--'" readonly>
                     </label>
                     <label>
                       <span>潜水等级</span>
@@ -238,17 +250,9 @@
               <div v-else>
                 <div class="detail-section">
                   <div class="detail-grid">
-                    <label>
-                      <span>所在地区</span>
-                      <input :value="detail.region || '--'" readonly>
-                    </label>
-                    <label>
+                    <label class="detail-grid__full">
                       <span>封禁记录</span>
                       <input :value="detail.ban_record || '--'" readonly>
-                    </label>
-                    <label>
-                      <span>人脸归属</span>
-                      <input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly>
                     </label>
                     <label class="detail-grid__full">
                       <span>备注</span>

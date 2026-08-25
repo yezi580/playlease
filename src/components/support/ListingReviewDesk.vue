@@ -129,13 +129,16 @@
 
           <div class="detail-section">
             <div class="detail-grid">
+              <label><span>保险等级</span><input :value="detail.insurance_level || '--'" readonly></label>
+              <label><span>体力等级</span><input :value="detail.energy_level || '--'" readonly></label>
+              <label><span>负重等级</span><input :value="detail.weight_level || '--'" readonly></label>
+              <label class="detail-grid__full"><span>武器皮肤</span><input :value="detail.weapon_skin || '--'" readonly></label>
+              <label><span>所在地区</span><input :value="detail.region || '--'" readonly></label>
+              <label><span>人脸归属</span><input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly></label>
               <label><span>段位</span><input :value="detail.rank_name || '--'" readonly></label>
               <label><span>绝密KD</span><input :value="formatPlain(detail.secret_kd)" readonly></label>
               <label><span>上号方式</span><input :value="detail.login_method || '--'" readonly></label>
               <label><span>上号时间</span><input :value="detail.login_time_range || '--'" readonly></label>
-              <label><span>保险等级</span><input :value="detail.insurance_level || '--'" readonly></label>
-              <label><span>体力等级</span><input :value="detail.energy_level || '--'" readonly></label>
-              <label><span>负重等级</span><input :value="detail.weight_level || '--'" readonly></label>
               <label><span>潜水等级</span><input :value="`${formatPlain(detail.dive_level, '0')}级`" readonly></label>
               <label><span>洗消舱等级</span><input :value="`${formatPlain(detail.decontamination_chamber_level, '0')}级`" readonly></label>
               <label><span>哈夫币</span><input :value="formatPlain(detail.hafu_coin, '0')" readonly></label>
@@ -160,9 +163,7 @@
 
           <div class="detail-section">
             <div class="detail-grid">
-              <label><span>所在地区</span><input :value="detail.region || '--'" readonly></label>
-              <label><span>封禁记录</span><input :value="detail.ban_record || '--'" readonly></label>
-              <label><span>人脸归属</span><input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly></label>
+              <label class="detail-grid__full"><span>封禁记录</span><input :value="detail.ban_record || '--'" readonly></label>
               <label class="detail-grid__full"><span>备注</span><textarea :value="detail.remark || '--'" rows="2" readonly /></label>
             </div>
 
