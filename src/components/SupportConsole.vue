@@ -1862,7 +1862,7 @@ export default {
       if (!this.activeOrder || this.cancelSubmitting) return
       const confirmed = await showConfirm({
         title: '取消订单',
-        message: '确认由客服取消该订单吗？该操作将按规则执行全额退款处理，并在聊天室留痕。',
+        message: '确认由客服取消该订单吗？该操作将按规则执行全额退款处理，商品将转为已下架，并在聊天室留痕。',
         confirmText: '确认取消',
         cancelText: '返回',
         tone: 'danger'

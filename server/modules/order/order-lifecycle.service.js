@@ -614,10 +614,11 @@ export function createOrderLifecycleService({
       [markSettlementExecuted ? 'executed' : 'none', markSettlementExecuted ? 1 : 0, orderId]
     )
 
+    // 客服取消/后台关单不自动重新上架：商品转为已下架，是否继续出租由卖家自行决定
     if (Number(order.listing_id || 0) > 0) {
       await executor.execute(
         `UPDATE listings
-         SET listing_status = 'active'
+         SET listing_status = 'inactive'
          WHERE id = ? AND listing_status = 'rented'`,
         [order.listing_id]
       )
