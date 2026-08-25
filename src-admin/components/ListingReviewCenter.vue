@@ -177,6 +177,10 @@
                       <span>武器皮肤</span>
                       <input :value="detail.weapon_skin || '--'" readonly>
                     </label>
+                    <label class="detail-grid__full">
+                      <span>干员外观</span>
+                      <input :value="detail.operator_appearance || '--'" readonly>
+                    </label>
                     <label>
                       <span>所在地区</span>
                       <input :value="detail.region || '--'" readonly>
@@ -831,6 +835,8 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* admin-main 上下 padding 各 32px；内部 content-grid 弹性拉伸铺满剩余高度 */
+  height: calc(100vh - 64px);
 }
 
 .toolbar {
@@ -929,8 +935,10 @@ export default {
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  flex: 1;
+  min-height: 0;
 }
 
 .list-card,
@@ -945,7 +953,6 @@ export default {
 .list-card,
 .detail-card {
   position: relative;
-  height: calc(100vh - 190px);
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -1525,10 +1532,19 @@ export default {
 }
 
 @media (max-width: 1100px) {
+  .review-center {
+    height: auto;
+  }
+
   .content-grid,
   .summary-grid,
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .content-grid {
+    grid-template-rows: auto;
+    flex: none;
   }
 
   .detail-section--split {

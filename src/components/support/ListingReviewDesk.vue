@@ -133,6 +133,7 @@
               <label><span>体力等级</span><input :value="detail.energy_level || '--'" readonly></label>
               <label><span>负重等级</span><input :value="detail.weight_level || '--'" readonly></label>
               <label class="detail-grid__full"><span>武器皮肤</span><input :value="detail.weapon_skin || '--'" readonly></label>
+              <label class="detail-grid__full"><span>干员外观</span><input :value="detail.operator_appearance || '--'" readonly></label>
               <label><span>所在地区</span><input :value="detail.region || '--'" readonly></label>
               <label><span>人脸归属</span><input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly></label>
               <label><span>段位</span><input :value="detail.rank_name || '--'" readonly></label>
@@ -549,6 +550,8 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* 桌面端上方仅 desk-mode-bar（42px + 8px 下边距）；内部 content-grid 弹性拉伸铺满剩余高度 */
+  height: calc(100vh - 50px);
 }
 .toolbar {
   display: flex;
@@ -636,8 +639,10 @@ export default {
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  flex: 1;
+  min-height: 0;
 }
 .list-card,
 .detail-card,
@@ -649,14 +654,12 @@ export default {
 }
 .list-card {
   padding: 16px;
-  height: calc(100vh - 300px);
   display: flex;
   flex-direction: column;
   overflow: auto;
 }
 .detail-card {
   padding: 16px;
-  height: calc(100vh - 300px);
   display: flex;
   flex-direction: column;
   overflow: auto;
@@ -985,12 +988,19 @@ export default {
   background: #020617;
 }
 @media (max-width: 1100px) {
+  .review-desk {
+    height: auto;
+  }
   .content-grid,
   .summary-grid,
   .detail-grid,
   .audit-section,
   .detail-media-split {
     grid-template-columns: 1fr;
+  }
+  .content-grid {
+    grid-template-rows: auto;
+    flex: none;
   }
   .list-card,
   .detail-card {
