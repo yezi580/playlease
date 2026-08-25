@@ -114,14 +114,6 @@
               <strong>{{ detail.owner_phone || '--' }}</strong>
             </div>
             <div class="summary-item">
-              <span>审核状态</span>
-              <strong>{{ formatReviewStatus(detail.review_status) }}</strong>
-            </div>
-            <div class="summary-item">
-              <span>商品状态</span>
-              <strong>{{ formatListingStatus(detail.listing_status) }}</strong>
-            </div>
-            <div class="summary-item">
               <span>发布时间</span>
               <strong>{{ formatDateTime(detail.published_at || detail.created_at) }}</strong>
             </div>
@@ -132,22 +124,21 @@
               <label><span>保险等级</span><input :value="detail.insurance_level || '--'" readonly></label>
               <label><span>体力等级</span><input :value="detail.energy_level || '--'" readonly></label>
               <label><span>负重等级</span><input :value="detail.weight_level || '--'" readonly></label>
-              <label class="detail-grid__full"><span>武器皮肤</span><input :value="detail.weapon_skin || '--'" readonly></label>
-              <label class="detail-grid__full"><span>干员外观</span><input :value="detail.operator_appearance || '--'" readonly></label>
-              <label><span>所在地区</span><input :value="detail.region || '--'" readonly></label>
               <label><span>人脸归属</span><input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly></label>
+              <label><span>武器皮肤</span><input :value="detail.weapon_skin || '--'" readonly></label>
+              <label><span>干员外观</span><input :value="detail.operator_appearance || '--'" readonly></label>
+              <label><span>所在地区</span><input :value="detail.region || '--'" readonly></label>
               <label><span>段位</span><input :value="detail.rank_name || '--'" readonly></label>
               <label><span>绝密KD</span><input :value="formatPlain(detail.secret_kd)" readonly></label>
               <label><span>上号方式</span><input :value="detail.login_method || '--'" readonly></label>
               <label><span>上号时间</span><input :value="detail.login_time_range || '--'" readonly></label>
               <label><span>潜水等级</span><input :value="`${formatPlain(detail.dive_level, '0')}级`" readonly></label>
               <label><span>洗消舱等级</span><input :value="`${formatPlain(detail.decontamination_chamber_level, '0')}级`" readonly></label>
-              <label><span>哈夫币</span><input :value="formatPlain(detail.hafu_coin, '0')" readonly></label>
+              <label><span>哈夫币</span><input :value="`${formatPlain(detail.hafu_coin, '0')}M`" readonly></label>
               <label><span>基础比例</span><input :value="formatPlain(detail.base_ratio, '0')" readonly></label>
               <label><span>租金</span><input :value="formatMoney(detail.rent_price)" readonly></label>
               <label><span>押金</span><input :value="formatMoney(detail.deposit)" readonly></label>
               <label><span>出租天数</span><input :value="formatPlain(detail.rent_days, '0')" readonly></label>
-              <label><span>每日消耗</span><input :value="formatPlain(detail.daily_cost)" readonly></label>
             </div>
           </div>
 
@@ -261,14 +252,6 @@ const REVIEW_STATUS_LABELS = Object.freeze({
   pending: '待审核',
   approved: '已通过',
   rejected: '已驳回'
-})
-
-const LISTING_STATUS_LABELS = Object.freeze({
-  active: '上架中',
-  inactive: '已下架',
-  pending_review: '审核中',
-  sold_out: '已售出',
-  rented: '已租出'
 })
 
 const REVIEW_SALE_ITEMS = Object.freeze([
@@ -503,9 +486,6 @@ export default {
     },
     formatReviewStatus(status) {
       return REVIEW_STATUS_LABELS[String(status || '').trim()] || '未知状态'
-    },
-    formatListingStatus(status) {
-      return LISTING_STATUS_LABELS[String(status || '').trim()] || '未知状态'
     },
     formatDateTime(value) {
       if (!value) return '--'
@@ -761,7 +741,7 @@ export default {
   padding-right: 4px;
 }
 .summary-grid--detail {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .summary-item {
   padding: 12px;

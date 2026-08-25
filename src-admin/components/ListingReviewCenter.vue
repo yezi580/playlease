@@ -146,14 +146,6 @@
                     <strong>{{ detail.owner_phone || '--' }}</strong>
                   </div>
                   <div class="summary-item">
-                    <span>审核状态</span>
-                    <strong>{{ formatReviewStatus(detail.review_status) }}</strong>
-                  </div>
-                  <div class="summary-item">
-                    <span>商品状态</span>
-                    <strong>{{ formatListingStatus(detail.listing_status) }}</strong>
-                  </div>
-                  <div class="summary-item">
                     <span>发布时间</span>
                     <strong>{{ formatDateTime(detail.published_at || detail.created_at) }}</strong>
                   </div>
@@ -173,21 +165,21 @@
                       <span>负重等级</span>
                       <input :value="detail.weight_level || '--'" readonly>
                     </label>
-                    <label class="detail-grid__full">
+                    <label>
+                      <span>人脸归属</span>
+                      <input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly>
+                    </label>
+                    <label>
                       <span>武器皮肤</span>
                       <input :value="detail.weapon_skin || '--'" readonly>
                     </label>
-                    <label class="detail-grid__full">
+                    <label>
                       <span>干员外观</span>
                       <input :value="detail.operator_appearance || '--'" readonly>
                     </label>
                     <label>
                       <span>所在地区</span>
                       <input :value="detail.region || '--'" readonly>
-                    </label>
-                    <label>
-                      <span>人脸归属</span>
-                      <input :value="Number(detail.face_verified) === 1 ? '是' : '否'" readonly>
                     </label>
                     <label>
                       <span>段位</span>
@@ -215,7 +207,7 @@
                     </label>
                     <label>
                       <span>哈夫币</span>
-                      <input :value="formatPlain(detail.hafu_coin, '0')" readonly>
+                      <input :value="`${formatPlain(detail.hafu_coin, '0')}M`" readonly>
                     </label>
                     <label>
                       <span>基础比例</span>
@@ -232,10 +224,6 @@
                     <label>
                       <span>出租天数</span>
                       <input :value="formatPlain(detail.rent_days, '0')" readonly>
-                    </label>
-                    <label>
-                      <span>每日消耗</span>
-                      <input :value="formatPlain(detail.daily_cost)" readonly>
                     </label>
                   </div>
                 </div>
@@ -425,14 +413,6 @@ const REVIEW_STATUS_LABELS = Object.freeze({
   pending: '待审核',
   approved: '已通过',
   rejected: '已驳回'
-})
-
-const LISTING_STATUS_LABELS = Object.freeze({
-  active: '上架中',
-  inactive: '已下架',
-  pending_review: '审核中',
-  sold_out: '已售出',
-  rented: '已租出'
 })
 
 const REVIEW_SALE_ITEMS = Object.freeze([
@@ -783,9 +763,6 @@ export default {
     },
     formatReviewStatus(status) {
       return REVIEW_STATUS_LABELS[String(status || '').trim()] || '未知状态'
-    },
-    formatListingStatus(status) {
-      return LISTING_STATUS_LABELS[String(status || '').trim()] || '未知状态'
     },
     formatDateTime(value) {
       if (!value) return '--'
@@ -1162,7 +1139,7 @@ export default {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
