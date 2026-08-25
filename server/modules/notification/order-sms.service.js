@@ -9,15 +9,7 @@
  * - 进程内按订单幂等去重：同一订单无论触发几次只发一条
  */
 
-const SELLER_ORDER_PAID_TITLE_MAX_LENGTH = 12
 const SELLER_NOTIFY_SENT_TTL_MS = 24 * 60 * 60 * 1000
-
-function buildSmsTitleParam(listingTitle = '') {
-  return String(listingTitle || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, SELLER_ORDER_PAID_TITLE_MAX_LENGTH) || '账号'
-}
 
 export function createOrderSmsService({ pool, smsProvider }) {
   // 进程内已发订单快照：orderId -> 发送时间戳，超时清理防止内存缓慢增长
@@ -47,7 +39,7 @@ export function createOrderSmsService({ pool, smsProvider }) {
       sentOrderIds.set(safeOrderId, Date.now())
 
       const [rows] = await pool.execute(
-        `SELECT o.order_no, o.listing_title, o.seller_id, u.phone AS seller_phone
+        `SELECT o.order_no, o.seller_id, u.phone AS seller_phone
          FROM orders o
          JOIN users u ON u.id = o.seller_id
          WHERE o.id = ?
@@ -64,10 +56,10 @@ export function createOrderSmsService({ pool, smsProvider }) {
         return { ok: false, reason: 'seller_phone_missing', orderId: safeOrderId }
       }
 
+      // 模板为无变量固定文案（个人认证通知类模板不允许变量），不传 TemplateParamSet
       const result = await smsProvider.sendNotification({
         scene: 'seller_order_paid',
-        phone: sellerPhone,
-        params: [buildSmsTitleParam(rows[0].listing_title), String(orderNo || '')].filter(Boolean)
+        phone: sellerPhone
       })
 
       if (result?.ok) {

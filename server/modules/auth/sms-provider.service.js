@@ -169,16 +169,19 @@ function createTencentSmsProvider(config = {}) {
     return cachedClient
   }
 
-  // 腾讯云发送核心：验证码与通知短信共用，只差模板 ID 与参数集
+  // 腾讯云发送核心：验证码与通知短信共用，只差模板 ID 与参数集。
+  // 无变量模板（如个人认证通知类）不传 TemplateParamSet，传了反而报参数不匹配
   async function sendTencentSms({ phone, templateId, templateParamSet, scene, sessionContext }) {
     const client = await getClient()
     const requestPayload = {
       SmsSdkAppId: smsSdkAppId,
       SignName: signName,
       TemplateId: templateId,
-      TemplateParamSet: templateParamSet,
       PhoneNumberSet: [normalizePhoneNumberToE164(phone)],
       SessionContext: sessionContext || buildSessionContext({ scene }, appName)
+    }
+    if (Array.isArray(templateParamSet) && templateParamSet.length > 0) {
+      requestPayload.TemplateParamSet = templateParamSet
     }
     if (extendCode) {
       requestPayload.ExtendCode = extendCode
