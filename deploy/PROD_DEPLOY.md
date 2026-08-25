@@ -134,6 +134,16 @@ ssh -i "D:\pic\only_key.pem" root@49.235.59.19
 5. 在服务器解压部署包，保留原有环境变量、证书和上传目录:
 
 ```bash
+# 推荐：直接运行仓库自带脚本（自动保 inode、恢复白名单/upstream、证书自检）。
+# ⚠️ 不要手工执行下方命令：nginx 容器挂载的是 certs/prod 子目录，手工 rm -rf certs/*
+# 会删掉 prod 目录本身导致换 inode，运行中 nginx 的挂载点脱离、nginx -t 找不到证书
+# （2026-08-25 实际发生，只能 force-recreate nginx 恢复）。
+bash /opt/my-app/deploy/scripts/remote-deploy-extract.sh
+```
+
+以下手工步骤仅作脚本逻辑参考:
+
+```bash
 # 先清掉上次部署残留的备份目录，避免 cp 把内容拷贝进旧目录导致嵌套
 rm -rf /tmp/my-app-prod.env.bak /tmp/my-app-certs.bak /tmp/my-app-uploads.bak
 cp /opt/my-app/deploy/env/prod.env /tmp/my-app-prod.env.bak
