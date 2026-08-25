@@ -68,7 +68,8 @@ export function createOrderLifecycleService({
   emitSupportDeskUpdate,
   createOrderRefund,
   createSettlementPayout,
-  closeOrderPayment
+  closeOrderPayment,
+  notifySellerOrderPaid
 }) {
   const createOrderNo = typeof generateOrderNo === 'function' ? generateOrderNo : buildDefaultOrderNo
 
@@ -870,6 +871,11 @@ export function createOrderLifecycleService({
 
           const updated = await fetchOrderById(conn, orderId)
           await conn.commit()
+
+          // 短信通知号主（卖家）尽快上号交付：fire-and-forget，失败只记日志不影响支付
+          if (typeof notifySellerOrderPaid === 'function') {
+            Promise.resolve(notifySellerOrderPaid({ orderId })).catch(() => {})
+          }
 
           emitSupportDeskUpdate({
             supportUserId: supportUser.id,

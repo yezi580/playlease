@@ -91,6 +91,7 @@ import { createChatModule } from './modules/chat/chat.module.js'
 import { registerChatSocket } from './modules/chat/chat.socket.js'
 import { createPaymentProvider } from './modules/payment/payment-provider.service.js'
 import { createPaymentService } from './modules/payment/payment.service.js'
+import { createOrderSmsService } from './modules/notification/order-sms.service.js'
 
 import { registerAuthRoutes } from './routes/auth.routes.js'
 import { registerPaymentRoutes } from './routes/payment.routes.js'
@@ -668,6 +669,8 @@ console.log('[auth] sms provider ready', {
   endpoint: smsRuntimeConfig?.endpoint || '',
   region: smsRuntimeConfig?.region || ''
 })
+// 订单履约短信：支付成功后通知号主（模板 ID 未配置时静默关闭）
+const orderSmsService = createOrderSmsService({ pool, smsProvider })
 if (smsCodeRuntimeConfig) {
   console.log('[auth] sms code security ready', {
     ttlSeconds: smsCodeRuntimeConfig.ttlSeconds,
@@ -818,7 +821,8 @@ const orderLifecycleService = createOrderLifecycleService({
   emitSupportDeskUpdate,
   createOrderRefund: (payload) => paymentService?.createOrderRefund(payload),
   createSettlementPayout: (payload) => paymentService?.createSettlementPayout(payload),
-  closeOrderPayment: (payload) => paymentService?.closeOrderPayment(payload)
+  closeOrderPayment: (payload) => paymentService?.closeOrderPayment(payload),
+  notifySellerOrderPaid: (payload) => orderSmsService?.notifySellerOrderPaid?.(payload)
 })
 paymentService = createPaymentService({
   pool,
