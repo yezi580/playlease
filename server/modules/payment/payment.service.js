@@ -1661,6 +1661,7 @@ export function createPaymentService(config = {}) {
       orgHfSeqId: encashment.provider_request_id
     })
     if (!queryResult?.ok) {
+      console.warn(`[payment] 取现查单失败 encashment_no=${encashmentNo} reason=${queryResult?.reason || ''} message=${queryResult?.message || ''}`)
       return {
         ...buildEncashmentResult(encashment),
         provider_query_status: 'failed',

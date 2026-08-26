@@ -384,7 +384,9 @@ function createHuifuCashierProvider(config = {}) {
     userQueryUrl: resolveHuifuApiUrl(config.huifuUserQueryUrl, config.huifuGatewayUrl, '/v2/user/basicdata/query'),
     balanceQueryUrl: resolveHuifuApiUrl(config.huifuBalanceQueryUrl, config.huifuGatewayUrl, '/v2/trade/acctpayment/balance/query'),
     encashmentUrl: resolveHuifuApiUrl(config.huifuEncashmentUrl, config.huifuGatewayUrl, '/v2/trade/settlement/encashment'),
-    encashmentQueryUrl: resolveHuifuApiUrl(config.huifuEncashmentQueryUrl, config.huifuGatewayUrl, '/v2/trade/settlement/encashment/query'),
+    // 出金交易查询（取现&代发查询）：官方端点是 /v2/trade/settlement/query，
+    // 不存在 encashment/query 子路径（对照官方 bspay-php-sdk FunctionCodeEnum 核实）
+    encashmentQueryUrl: resolveHuifuApiUrl(config.huifuEncashmentQueryUrl, config.huifuGatewayUrl, '/v2/trade/settlement/query'),
     hostingCloseUrl: resolveHuifuApiUrl(config.huifuHostingCloseUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/close'),
     notifyUrl: String(config.huifuNotifyUrl || '').trim(),
     returnUrl: String(config.huifuReturnUrl || '').trim(),
@@ -1201,6 +1203,8 @@ function createHuifuCashierProvider(config = {}) {
         req_seq_id: reqSeqId,
         req_date: getReqDateFromTransactionNo(reqSeqId),
         huifu_id: huifuId,
+        // org_req_date 为官方必填（V2TradeSettlementQueryRequest），从原取现流水号推导
+        org_req_date: String(payload.orgReqDate || getReqDateFromTransactionNo(orgReqSeqId)).trim(),
         org_req_seq_id: orgReqSeqId || undefined,
         org_hf_seq_id: orgHfSeqId || undefined
       })
