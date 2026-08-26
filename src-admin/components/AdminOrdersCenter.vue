@@ -50,7 +50,7 @@
               <td>{{ item.order_no }}</td>
               <td>{{ item.buyer_name }}</td>
               <td>{{ item.seller_name || '--' }}</td>
-              <td>{{ formatOrderStatus(item.status) }}</td>
+              <td>{{ formatOrderStatusLabel(item) }}</td>
               <td>{{ formatMoney(item.amount) }}</td>
               <td>
                 <button
@@ -60,6 +60,14 @@
                   @click="closeOrder(item)"
                 >
                   {{ orderSubmittingMap[item.id] ? '处理中...' : '关闭订单' }}
+                </button>
+                <button
+                  v-else-if="getRefundProcessingSceneLabel(item)"
+                  type="button"
+                  class="row-btn"
+                  disabled
+                >
+                  {{ getRefundProcessingSceneLabel(item) }}
                 </button>
               </td>
               <td>{{ formatDateTime(item.created_at) }}</td>
@@ -110,6 +118,17 @@ const ORDER_STATUS_LABELS = Object.freeze({
   refunded: '已退款'
 })
 
+// 资金在途场景：退款/打款已在处理中，后台再关单会造成重复退款/付款，按钮禁用等对账任务自动收尾
+const REFUND_PROCESSING_SCENE_LABELS = Object.freeze({
+  cancel_refund_processing: '客服取消退款中',
+  admin_close_refund_processing: '关单退款中',
+  settlement_funds_processing: '结算打款中',
+  frozen_funds_processing: '冻结资金处理中',
+  deposit_funds_processing: '押金退款中'
+})
+
+const AUTO_REFRESH_INTERVAL_MS = 30000
+
 export default {
   name: 'AdminOrdersCenter',
   components: {
@@ -125,11 +144,18 @@ export default {
       pendingCloseOrder: null,
       orderSubmittingMap: {},
       actionMessage: '',
-      actionMessageType: 'success'
+      actionMessageType: 'success',
+      autoRefreshTimer: null,
+      refreshing: false,
+      handleWindowFocus: null
     }
   },
   async mounted() {
     await this.loadOrders()
+    this.startAutoRefresh()
+  },
+  beforeUnmount() {
+    this.stopAutoRefresh()
   },
   computed: {
     closeOrderConfirmMessage() {
@@ -143,10 +169,16 @@ export default {
     }
   },
   methods: {
-    async loadOrders() {
-      this.loading = true
-      this.error = ''
-      this.actionMessage = ''
+    // 静默刷新（silent=true）供定时/聚焦同步用：不转圈、不清提示，避免打断管理员阅读操作结果
+    async loadOrders(silent = false) {
+      if (silent && (this.loading || this.refreshing)) return
+      if (silent) {
+        this.refreshing = true
+      } else {
+        this.loading = true
+        this.error = ''
+        this.actionMessage = ''
+      }
       try {
         const params = new URLSearchParams({
           page: '1',
@@ -158,10 +190,38 @@ export default {
         }
         const data = await apiFetch(`/api/admin/orders?${params.toString()}`)
         this.orders = Array.isArray(data.list) ? data.list : []
+        if (silent) {
+          // 同步后刷新确认弹窗里的订单快照，避免用旧状态提交
+          const pendingId = Number(this.pendingCloseOrder?.id || 0)
+          if (pendingId) {
+            const fresh = this.orders.find((order) => Number(order.id) === pendingId)
+            if (fresh) this.pendingCloseOrder = fresh
+          }
+        }
       } catch (error) {
-        this.error = error.message || '获取订单列表失败'
+        if (!silent) this.error = error.message || '获取订单列表失败'
       } finally {
+        this.refreshing = false
         this.loading = false
+      }
+    },
+    startAutoRefresh() {
+      // 客服侧取消/关闭不会推送管理侧，定时+聚焦静默拉取保证状态同步
+      this.autoRefreshTimer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+        this.loadOrders(true)
+      }, AUTO_REFRESH_INTERVAL_MS)
+      this.handleWindowFocus = () => this.loadOrders(true)
+      window.addEventListener('focus', this.handleWindowFocus)
+    },
+    stopAutoRefresh() {
+      if (this.autoRefreshTimer) {
+        clearInterval(this.autoRefreshTimer)
+        this.autoRefreshTimer = null
+      }
+      if (this.handleWindowFocus) {
+        window.removeEventListener('focus', this.handleWindowFocus)
+        this.handleWindowFocus = null
       }
     },
     resetSearch() {
@@ -169,8 +229,12 @@ export default {
       this.date = ''
       this.loadOrders()
     },
+    getRefundProcessingSceneLabel(item) {
+      return REFUND_PROCESSING_SCENE_LABELS[String(item?.support_scene || '')] || ''
+    },
     canCloseOrder(item) {
       if (Boolean(this.orderSubmittingMap[item.id])) return false
+      if (this.getRefundProcessingSceneLabel(item)) return false
       return !['cancelled', 'completed', 'refunded'].includes(String(item.status || ''))
     },
     async closeOrder(item) {
@@ -179,7 +243,14 @@ export default {
     },
     async confirmCloseOrder() {
       const item = this.pendingCloseOrder
-      if (!item || !this.canCloseOrder(item)) {
+      if (!item) return
+      // 弹窗打开期间订单可能已被客服取消/进入资金处理（静默刷新会同步快照），此时说明原因而非无声关闭
+      if (!this.canCloseOrder(item)) {
+        const sceneLabel = this.getRefundProcessingSceneLabel(item)
+        this.actionMessageType = 'error'
+        this.actionMessage = sceneLabel
+          ? `订单 ${item.order_no} 已${sceneLabel}，退款到账后将自动关闭，请稍后刷新查看`
+          : '订单状态已变更（可能已由客服处理），请刷新后查看最新状态'
         this.pendingCloseOrder = null
         return
       }
@@ -229,6 +300,13 @@ export default {
     },
     formatOrderStatus(status) {
       return ORDER_STATUS_LABELS[String(status || '').trim()] || String(status || '--')
+    },
+    formatOrderStatusLabel(item) {
+      const statusLabel = this.formatOrderStatus(item.status)
+      const sceneLabel = this.getRefundProcessingSceneLabel(item)
+      return sceneLabel && String(item.status || '') === 'support_handling'
+        ? `${statusLabel}·${sceneLabel}`
+        : statusLabel
     },
     formatDateTime(value) {
       if (!value) return '--'

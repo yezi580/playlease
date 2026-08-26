@@ -2109,7 +2109,7 @@ export function createOrderLifecycleService({
         try {
           await conn.beginTransaction()
           const [orders] = await conn.execute(
-            `SELECT id, status, amount, deposit_amount, buyer_id, listing_id
+            `SELECT id, status, support_scene, amount, deposit_amount, buyer_id, listing_id
              FROM orders
              WHERE id = ?
              LIMIT 1
@@ -2124,6 +2124,18 @@ export function createOrderLifecycleService({
           // 押金保管期订单结算款已付出，全额退款会造成重复退押金；请等待保管到期或走举报裁决
           if (String(order.status || '').trim() === 'deposit_holding') {
             fail(400, { message: '押金保管期订单不支持后台关闭，请等待保管到期自动退款或由客服按举报裁决处理' })
+          }
+          // 资金在途场景（退款/打款已在处理中）再发起全额退款会触发重复退款上限报错甚至重复付款，
+          // 统一提前拦截；这些场景由资金对账任务在到账后自动收尾关单
+          const supportScene = String(order.support_scene || '').trim()
+          if (supportScene === 'cancel_refund_processing') {
+            fail(400, { message: '客服已发起取消退款，正在等待支付通道确认，到账后订单将自动关闭，请勿重复操作' })
+          }
+          if (supportScene === 'admin_close_refund_processing') {
+            fail(400, { message: '该订单关单退款已在处理中，到账后将自动关闭，请稍后刷新状态' })
+          }
+          if (['settlement_funds_processing', 'frozen_funds_processing', 'deposit_funds_processing'].includes(supportScene)) {
+            fail(400, { message: '该订单资金处理中（结算/冻结/押金退款打款在途），暂不支持后台关闭，请等待资金流程完成' })
           }
 
           const [paidRows] = await conn.execute(

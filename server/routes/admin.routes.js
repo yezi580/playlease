@@ -2136,6 +2136,7 @@ app.get('/api/admin/orders', authRequired, adminOnly, async (req, res) => {
          o.id,
          o.order_no,
          o.status,
+         o.support_scene,
          o.amount,
          o.created_at,
          COALESCE(NULLIF(buyer.phone, ''), buyer.username) AS buyer_name,
