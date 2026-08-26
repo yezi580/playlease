@@ -104,6 +104,7 @@ tar -czf deploy\artifacts\my-app-prod-deploy.tar.gz `
   --exclude=deploy/nginx/admin-allowlist.prod.conf `
   --exclude=deploy/nginx/admin-allowlist.extra.list `
   --exclude=deploy/nginx/admin-allowlist.own.conf `
+  --exclude=deploy/nginx/upstream-backend.conf `
   deploy dist server
 ```
 
@@ -114,6 +115,7 @@ tar -czf deploy\artifacts\my-app-prod-deploy.tar.gz `
 - `server/.env`
 - `deploy/nginx/certs`
 - `deploy/nginx/admin-allowlist.prod.conf` / `admin-allowlist.extra.list` / `admin-allowlist.own.conf`（线上由 update-admin-allowlist.sh 生成维护；上传仓库空模板会覆盖线上白名单，导致管理后台对全网开放。全新服务器初始化时需先跑一次该脚本再启动 nginx）
+- `deploy/nginx/upstream-backend.conf`（线上运行状态文件，记录当前活跃色；tar 解压会重建文件换 inode，使 nginx 的单文件 bind mount 脱离、蓝绿切换静默失效——2026-08-26 实际发生。全新服务器解压后由 blue-green-deploy.sh 的 ensure_upstream_conf 自动生成默认状态）
 
 同时会上传生产必需的新配置文件:
 

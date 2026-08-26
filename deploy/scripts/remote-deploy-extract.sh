@@ -47,11 +47,28 @@ cp -a /tmp/my-app-uploads.bak/. /opt/my-app/server/uploads/
 if [ -f /tmp/my-app-admin-allowlist.bak ]; then cp /tmp/my-app-admin-allowlist.bak /opt/my-app/deploy/nginx/admin-allowlist.prod.conf; fi
 if [ -f /tmp/my-app-admin-allowlist-extra.bak ]; then cp /tmp/my-app-admin-allowlist-extra.bak /opt/my-app/deploy/nginx/admin-allowlist.extra.list; fi
 if [ -f /tmp/my-app-admin-allowlist-own.bak ]; then cp /tmp/my-app-admin-allowlist-own.bak /opt/my-app/deploy/nginx/admin-allowlist.own.conf; fi
-if [ -f /tmp/my-app-upstream.bak ]; then cp /tmp/my-app-upstream.bak /opt/my-app/deploy/nginx/upstream-backend.conf; fi
+# ⚠️ upstream 用 cat > 原地写保 inode：它也是单文件挂载进 nginx 的（conf.d/upstream.conf），
+# cp 到已存在路径虽保 inode，但若 tar 曾解压出同名文件（旧打包未排除时）inode 已被换掉
+if [ -f /tmp/my-app-upstream.bak ]; then cat /tmp/my-app-upstream.bak > /opt/my-app/deploy/nginx/upstream-backend.conf; fi
 
 echo "=== 验证证书在挂载源就位 ==="
 ls /opt/my-app/deploy/nginx/certs/prod/fullchain.pem /opt/my-app/deploy/nginx/certs/prod/privkey.pem \
   /opt/my-app/deploy/nginx/certs/prod/admin.fullchain.pem /opt/my-app/deploy/nginx/certs/prod/admin.privkey.pem
+
+echo "=== 检查 nginx 单文件挂载是否脱离 ==="
+# upstream-backend.conf 单文件挂载为容器内 /etc/nginx/conf.d/upstream.conf，bind mount 绑定的是
+# 解压/覆盖那一刻的宿主机 inode；若本次部署链路换了 inode（如旧 tar 包没排除该文件），
+# 运行中的 nginx 会永远读到旧内容——蓝绿 switch 静默失效、回滚同样失效（2026-08-26 实际发生）。
+# 脱离时自动 restart nginx 重新绑定：此刻文件内容=部署前备份（活跃色未变），秒级中断且无流量切换
+host_upstream_inode=$(stat -c %i /opt/my-app/deploy/nginx/upstream-backend.conf 2>/dev/null || true)
+container_upstream_inode=$(docker exec my-app-prod-nginx-1 stat -c %i /etc/nginx/conf.d/upstream.conf 2>/dev/null || true)
+if [ -n "$host_upstream_inode" ] && [ -n "$container_upstream_inode" ] && [ "$host_upstream_inode" != "$container_upstream_inode" ]; then
+  echo "⚠️  upstream 挂载 inode 已脱离（宿主 $host_upstream_inode ≠ 容器 $container_upstream_inode），重新绑定 nginx..."
+  docker restart my-app-prod-nginx-1
+  echo "✓ nginx 已重启，挂载重新绑定到当前 upstream 文件"
+else
+  echo "✓ upstream 挂载 inode 一致（${host_upstream_inode:-未知/新部署}）"
+fi
 
 echo "=== 验证封禁逻辑已部署 ==="
 grep -n "不能封禁管理员账号" /opt/my-app/server/routes/admin.routes.js
