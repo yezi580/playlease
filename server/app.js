@@ -944,6 +944,9 @@ async function canAccessConversationImageByUrl(db, mediaUrl, auth) {
 
 
 const BASE_RATIO_CONFIG = {
+  // 2格/4格保险为固定比例，不区分刀皮枪皮
+  grid2: 60,
+  grid4: 55,
   grid9: {
     specialKnife: 40,
     otherKnife: 41,

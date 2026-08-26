@@ -542,6 +542,7 @@ import {
   getRecommendedDailyCost,
   getRecommendedRentDays,
   getRentDaysLimit,
+  getSmallInsuranceBaseRatio,
   getWeaponSkinOptions
 } from '../utils/businessSettings.js'
 import {
@@ -644,7 +645,7 @@ export default {
     },
     recommendedBaseRatio() {
       if (this.publishForm.insuranceLevel === '2格' || this.publishForm.insuranceLevel === '4格') {
-        return 50
+        return getSmallInsuranceBaseRatio(this.publishForm.insuranceLevel, this.businessSettings)
       }
       let ratio = calculateBaseRatio(this.gridSize, this.selectedKnifeSkins.join('、'), this.businessSettings)
       const energyLevel = parseInt(this.publishForm.energyLevel, 10) || 7

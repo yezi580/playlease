@@ -145,7 +145,9 @@ export function createListingService({ baseRatioConfig, specialKnives, toUnsigne
 
     let baseRatio = 0
     if (insuranceLevel === '2格' || insuranceLevel === '4格') {
-      baseRatio = 50
+      baseRatio = insuranceLevel === '2格'
+        ? Number(ratioSettings?.grid2 || baseRatioConfig.grid2)
+        : Number(ratioSettings?.grid4 || baseRatioConfig.grid4)
     } else {
       const gridSize = insuranceLevel === '9格' ? 9 : 6
       baseRatio = runtimeSettings

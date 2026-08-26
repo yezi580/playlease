@@ -45,9 +45,17 @@
           <article class="panel">
             <div class="panel-head">
               <strong>比例推荐逻辑</strong>
-              <span>维护九格/六格比例、基础比例填写区间与特殊刀皮名单</span>
+              <span>维护二/四/六/九格比例、基础比例填写区间与特殊刀皮名单</span>
             </div>
             <div class="field-grid field-grid--triple">
+              <label class="field">
+                <span>二格保险固定比例</span>
+                <input v-model.number="form.ratioRecommendation.grid2" type="number" min="1" max="1000">
+              </label>
+              <label class="field">
+                <span>四格保险固定比例</span>
+                <input v-model.number="form.ratioRecommendation.grid4" type="number" min="1" max="1000">
+              </label>
               <label class="field">
                 <span>九格-特殊刀皮比例</span>
                 <input v-model.number="form.ratioRecommendation.grid9.specialKnife" type="number" min="1" max="1000">

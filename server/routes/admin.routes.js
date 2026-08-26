@@ -307,6 +307,9 @@ const DEFAULT_ADMIN_BUSINESS_SETTINGS = Object.freeze({
     // 发布页基础比例填写区间的上下限
     baseRatioMin: 35,
     baseRatioMax: 120,
+    // 2格/4格保险为固定比例，不区分刀皮枪皮
+    grid2: 60,
+    grid4: 55,
     grid9: {
       specialKnife: 40,
       otherKnife: 41,
@@ -506,6 +509,8 @@ function normalizeAdminBusinessSettings(rawValue = {}) {
       ),
       baseRatioMin: hasValidBaseRatioRange ? baseRatioMin : defaults.ratioRecommendation.baseRatioMin,
       baseRatioMax: hasValidBaseRatioRange ? baseRatioMax : defaults.ratioRecommendation.baseRatioMax,
+      grid2: normalizeAdminInteger(ratioSource.grid2, defaults.ratioRecommendation.grid2, { min: 1, max: 1000 }),
+      grid4: normalizeAdminInteger(ratioSource.grid4, defaults.ratioRecommendation.grid4, { min: 1, max: 1000 }),
       grid9: {
         specialKnife: normalizeAdminInteger(ratioSource.grid9?.specialKnife, defaults.ratioRecommendation.grid9.specialKnife, { min: 1, max: 1000 }),
         otherKnife: normalizeAdminInteger(ratioSource.grid9?.otherKnife, defaults.ratioRecommendation.grid9.otherKnife, { min: 1, max: 1000 }),
