@@ -374,7 +374,9 @@ function createHuifuCashierProvider(config = {}) {
     preOrderUrl: resolveAbsoluteUrl(config.huifuHostingPreOrderUrl, config.huifuGatewayUrl),
     hostingQueryOrderUrl: resolveHuifuApiUrl(config.huifuHostingQueryOrderUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/queryorderinfo'),
     hostingRefundUrl: resolveHuifuApiUrl(config.huifuHostingRefundUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/htRefund'),
-    hostingRefundQueryUrl: resolveHuifuApiUrl(config.huifuHostingRefundQueryUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/queryrefundinfo'),
+    // ⚠️ 路径大小写敏感：官方端点是 queryRefundInfo（驼峰）；全小写 queryrefundinfo 会 404，
+    // 退款查单将永远失败且表现为「退款处理中」，订单无法自动收尾（2026-08-26 线上实际发生）
+    hostingRefundQueryUrl: resolveHuifuApiUrl(config.huifuHostingRefundQueryUrl, config.huifuGatewayUrl, '/v2/trade/hosting/payment/queryRefundInfo'),
     acctPaymentPayUrl: resolveHuifuApiUrl(config.huifuAcctPaymentPayUrl, config.huifuGatewayUrl, '/v2/trade/acctpayment/pay'),
     acctPaymentPayQueryUrl: resolveHuifuApiUrl(config.huifuAcctPaymentPayQueryUrl, config.huifuGatewayUrl, '/v2/trade/acctpayment/pay/query'),
     userRegisterUrl: resolveHuifuApiUrl(config.huifuUserRegisterUrl, config.huifuGatewayUrl, '/v2/user/basicdata/indv'),

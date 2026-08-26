@@ -346,6 +346,8 @@ export function createPaymentService(config = {}) {
       orgReqDate: getReqDateFromTransactionNo(refundNo)
     })
     if (!queryResult?.ok) {
+      // 查单失败必须留痕：否则退款会永远停在 processing，订单卡「退款处理中」无人察觉
+      console.warn(`[payment] 退款查单失败 refund_no=${refundNo} reason=${queryResult?.reason || ''} message=${queryResult?.message || ''}`)
       return {
         ...buildRefundResult(refund),
         provider_query_status: 'failed',
@@ -401,6 +403,7 @@ export function createPaymentService(config = {}) {
       orgReqDate: getReqDateFromTransactionNo(payoutNo)
     })
     if (!queryResult?.ok) {
+      console.warn(`[payment] 余额支付查单失败 payout_no=${payoutNo} reason=${queryResult?.reason || ''} message=${queryResult?.message || ''}`)
       return {
         ...buildSettlementPayoutResult(payout),
         provider_query_status: 'failed',
