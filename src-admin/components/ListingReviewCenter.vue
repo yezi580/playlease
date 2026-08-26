@@ -73,7 +73,7 @@
                     </td>
                     <td>
                       <div class="cell-main">{{ item.owner_name || '--' }}</div>
-                      <div class="cell-sub">{{ item.owner_phone || '--' }}</div>
+                      <div class="cell-sub">客服：{{ item.review_assignee_name || '未分配' }}</div>
                     </td>
                     <td>
                       <span class="status-badge" :class="`status-badge--${item.review_status || 'pending'}`">

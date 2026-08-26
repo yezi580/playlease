@@ -2386,6 +2386,7 @@ app.get('/api/admin/review/listings', authRequired, adminOnly, async (req, res) 
          l.listing_no,
          COALESCE(NULLIF(owner.phone, ''), NULLIF(owner.username, ''), l.owner_name) AS owner_name,
          owner.phone AS owner_phone,
+         assignee.username AS review_assignee_name,
          l.listing_status,
          l.review_status,
          l.review_reason,
@@ -2401,6 +2402,7 @@ app.get('/api/admin/review/listings', authRequired, adminOnly, async (req, res) 
          ) AS title
        FROM listings l
        LEFT JOIN users owner ON owner.id = l.owner_user_id
+       LEFT JOIN users assignee ON assignee.id = l.review_assignee_id
        ${whereSql}
        ORDER BY
          CASE
