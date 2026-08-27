@@ -263,13 +263,37 @@
                 class="preview-media-trigger"
                 @click="openImagePreview(image, `商品图片${index + 1}`)"
               >
-                <img
-                  :src="withMediaVariant(image, 'mid')"
-                  :alt="`商品图片${index + 1}`"
-                  loading="lazy"
-                  decoding="async"
-                  @error="handleMediaImageError"
-                />
+                <span class="preview-media-frame">
+                  <span v-if="imageLoadState[`listing-${index}`] !== 'loaded'" class="media-load-hint">
+                    <template v-if="imageLoadState[`listing-${index}`] === 'failed'">加载失败</template>
+                    <template v-else>
+                      <svg class="media-load-spinner" viewBox="0 0 50 50" width="26" height="26" aria-hidden="true">
+                        <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" style="stroke: var(--border-strong)" />
+                        <circle
+                          class="media-load-arc"
+                          cx="25"
+                          cy="25"
+                          r="20"
+                          fill="none"
+                          stroke-width="4"
+                          stroke-dasharray="90 31.4"
+                          stroke-linecap="round"
+                          style="stroke: var(--info-strong)"
+                        />
+                      </svg>
+                      <i>图片加载中…</i>
+                    </template>
+                  </span>
+                  <img
+                    v-show="imageLoadState[`listing-${index}`] === 'loaded'"
+                    :src="withMediaVariant(image, 'mid')"
+                    :alt="`商品图片${index + 1}`"
+                    loading="lazy"
+                    decoding="async"
+                    @load="setImageLoadState(`listing-${index}`, 'loaded')"
+                    @error="handleGridImageError(`listing-${index}`, $event)"
+                  />
+                </span>
               </button>
             </div>
           </div>
@@ -278,30 +302,62 @@
 
         <div class="media-block" v-if="detail.ban_record === '有' || detail.banImages?.length || detail.banVideo">
           <h4>封禁凭证</h4>
-          <div v-if="detail.banImages?.length" class="preview-grid">
+          <div v-if="detail.banImages?.length && isLoggedIn" class="preview-grid">
             <div v-for="(image, index) in detail.banImages" :key="`ban-image-${index}`" class="preview-card">
               <button
                 type="button"
                 class="preview-media-trigger"
                 @click="openImagePreview(image, `处罚截图${index + 1}`)"
               >
-                <img
-                  :src="getBanImageSource(image)"
-                  :alt="`处罚截图${index + 1}`"
-                  loading="lazy"
-                  decoding="async"
-                  @error="handleMediaImageError"
-                />
+                <span class="preview-media-frame">
+                  <span v-if="imageLoadState[`ban-${index}`] !== 'loaded'" class="media-load-hint">
+                    <template v-if="imageLoadState[`ban-${index}`] === 'failed'">加载失败</template>
+                    <template v-else>
+                      <svg class="media-load-spinner" viewBox="0 0 50 50" width="26" height="26" aria-hidden="true">
+                        <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" style="stroke: var(--border-strong)" />
+                        <circle
+                          class="media-load-arc"
+                          cx="25"
+                          cy="25"
+                          r="20"
+                          fill="none"
+                          stroke-width="4"
+                          stroke-dasharray="90 31.4"
+                          stroke-linecap="round"
+                          style="stroke: var(--info-strong)"
+                        />
+                      </svg>
+                      <i>图片加载中…</i>
+                    </template>
+                  </span>
+                  <img
+                    v-show="imageLoadState[`ban-${index}`] === 'loaded'"
+                    :src="getBanImageSource(image)"
+                    :alt="`处罚截图${index + 1}`"
+                    loading="lazy"
+                    decoding="async"
+                    @load="setImageLoadState(`ban-${index}`, 'loaded')"
+                    @error="handleGridImageError(`ban-${index}`, $event)"
+                  />
+                </span>
               </button>
             </div>
           </div>
+          <button
+            v-else-if="detail.banImages?.length"
+            type="button"
+            class="ban-media-locked-btn"
+            @click="requestLoginForBanMedia"
+          >
+            登录后可查看处罚截图
+          </button>
           <button
             v-if="detail.banVideo"
             type="button"
             class="video-link"
             @click="openBanVideoPreview"
           >
-            查看封禁记录视频
+            {{ isLoggedIn ? '查看封禁记录视频' : '登录后可查看封禁记录视频' }}
           </button>
           <div v-if="!detail.banImages?.length && !detail.banVideo" class="status-box inner">暂无封禁凭证</div>
         </div>
@@ -395,20 +451,46 @@
       <Transition name="media-preview-fade">
         <div v-if="previewMediaUrl" class="media-preview-overlay" @click.self="closeMediaPreview">
           <button type="button" class="media-preview-close" @click="closeMediaPreview">关闭</button>
-          <img
-            v-if="previewMediaType === 'image'"
-            :src="previewMediaUrl"
-            :alt="previewMediaName || '图片预览'"
-            class="media-preview-image"
-          />
-          <video
-            v-else
-            :src="previewMediaUrl"
-            :aria-label="previewMediaName || '视频预览'"
-            class="media-preview-video"
-            controls
-            autoplay
-          ></video>
+          <template v-if="previewMediaType === 'image'">
+            <div v-if="!previewImageLoaded && !previewImageFailed" class="media-preview-loading">
+              <svg class="media-load-spinner" viewBox="0 0 50 50" width="40" height="40" aria-hidden="true">
+                <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" style="stroke: rgba(255, 255, 255, 0.25)" />
+                <circle
+                  class="media-load-arc"
+                  cx="25"
+                  cy="25"
+                  r="20"
+                  fill="none"
+                  stroke-width="4"
+                  stroke-dasharray="90 31.4"
+                  stroke-linecap="round"
+                  style="stroke: #fff"
+                />
+              </svg>
+              <i>图片加载中…</i>
+            </div>
+            <img
+              v-show="previewImageLoaded"
+              :src="previewMediaUrl"
+              :alt="previewMediaName || '图片预览'"
+              class="media-preview-image"
+              @load="previewImageLoaded = true"
+              @error="handlePreviewImageError"
+            />
+            <div v-if="previewImageFailed" class="media-preview-loading">图片加载失败，请检查网络后重试</div>
+          </template>
+          <template v-else>
+            <video
+              v-if="!previewVideoFailed"
+              :src="previewMediaUrl"
+              :aria-label="previewMediaName || '视频预览'"
+              class="media-preview-video"
+              controls
+              autoplay
+              @error="previewVideoFailed = true"
+            ></video>
+            <div v-else class="media-preview-loading">视频加载失败，请检查网络或登录状态后重试</div>
+          </template>
           <div v-if="previewMediaName" class="media-preview-name">{{ previewMediaName }}</div>
         </div>
       </Transition>
@@ -497,6 +579,11 @@ export default {
       previewMediaType: 'image',
       previewMediaUrl: '',
       previewMediaName: '',
+      // 网格缩略图加载状态：key -> 'loading' | 'loaded' | 'failed'
+      imageLoadState: {},
+      previewImageLoaded: false,
+      previewImageFailed: false,
+      previewVideoFailed: false,
       agreementState: {
         acceptPaymentAgreement: false,
         acceptBuyerAgreement: false
@@ -623,6 +710,8 @@ export default {
       const targetUrl = withMediaVariant(String(imageUrl || '').trim(), 'full')
       if (!targetUrl) return
       this.previewMediaType = 'image'
+      this.previewImageLoaded = false
+      this.previewImageFailed = false
       this.previewMediaUrl = targetUrl
       this.previewMediaName = String(imageName || '').trim()
     },
@@ -630,8 +719,31 @@ export default {
       const targetUrl = String(videoUrl || '').trim()
       if (!targetUrl) return
       this.previewMediaType = 'video'
+      this.previewVideoFailed = false
       this.previewMediaUrl = targetUrl
       this.previewMediaName = String(videoName || '').trim()
+    },
+    setImageLoadState(key, state) {
+      this.imageLoadState[key] = state
+    },
+    // 缩略图出错：先走变体回退重试一次，回退后仍失败才标记为加载失败
+    handleGridImageError(key, event) {
+      const hadFallbackTried = event?.target?.dataset?.mediaVariantFallback === '1'
+      handleMediaImageError(event)
+      if (hadFallbackTried) {
+        this.setImageLoadState(key, 'failed')
+      }
+    },
+    handlePreviewImageError(event) {
+      const hadFallbackTried = event?.target?.dataset?.mediaVariantFallback === '1'
+      handleMediaImageError(event)
+      if (hadFallbackTried) {
+        this.previewImageFailed = true
+      }
+    },
+    // 封禁凭证（截图/视频）服务端要求登录，未登录统一引导登录而不是空等 401
+    requestLoginForBanMedia() {
+      this.$emit('require-login', '请先登录后查看封禁凭证')
     },
     closeMediaPreview() {
       this.previewMediaType = 'image'
@@ -639,7 +751,13 @@ export default {
       this.previewMediaName = ''
     },
     async applyDetail(detail) {
+      // 仅在切换商品时重置缩略图加载状态；同一商品重复应用（prefetched 深监听）
+      // 不能重置，否则已加载图片被 v-show 隐藏且不再触发 @load，占位永远转圈
+      const listingChanged = Number(detail?.id || 0) !== Number(this.detail?.id || 0)
       this.detail = detail
+      if (listingChanged) {
+        this.imageLoadState = {}
+      }
       this.agreementState = {
         acceptPaymentAgreement: false,
         acceptBuyerAgreement: false
@@ -776,6 +894,10 @@ export default {
       return withMediaVariant(image, 'mid')
     },
     openBanVideoPreview() {
+      if (!this.isLoggedIn) {
+        this.requestLoginForBanMedia()
+        return
+      }
       const rawVideoUrl = String(this.detail?.banVideo || '').trim()
       if (!rawVideoUrl) return
       // 直连流式播放(代理支持 Range),点击前零下载,关闭即停
@@ -1253,11 +1375,70 @@ export default {
   cursor: zoom-in;
 }
 
-.preview-card img {
+/* 缩略图占位框：加载中/失败状态下也保持 1:1 占位，避免网格跳动 */
+.preview-media-frame {
+  position: relative;
+  display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-page);
+}
+
+.preview-media-frame img {
+  width: 100%;
+  height: 100%;
   object-fit: fill;
   border-radius: 6px;
+}
+
+.media-load-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.media-load-hint i {
+  font-style: normal;
+}
+
+@keyframes media-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.media-load-arc {
+  transform-origin: center;
+  animation: media-spin 1s linear infinite;
+}
+
+.media-load-spinner {
+  display: block;
+}
+
+.ban-media-locked-btn {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 8px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--info-strong);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ban-media-locked-btn:hover {
+  border-style: solid;
 }
 
 .video-link {
@@ -1533,6 +1714,22 @@ export default {
   object-fit: contain;
   background: #111827;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.media-preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 160px;
+  padding: 32px;
+  color: #e5e7eb;
+  font-size: 13px;
+}
+
+.media-preview-loading i {
+  font-style: normal;
 }
 
 .media-preview-name {
