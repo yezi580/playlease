@@ -263,37 +263,13 @@
                 class="preview-media-trigger"
                 @click="openImagePreview(image, `商品图片${index + 1}`)"
               >
-                <span class="preview-media-frame">
-                  <span v-if="imageLoadState[`listing-${index}`] !== 'loaded'" class="media-load-hint">
-                    <template v-if="imageLoadState[`listing-${index}`] === 'failed'">加载失败</template>
-                    <template v-else>
-                      <svg class="media-load-spinner" viewBox="0 0 50 50" width="26" height="26" aria-hidden="true">
-                        <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" style="stroke: var(--border-strong)" />
-                        <circle
-                          class="media-load-arc"
-                          cx="25"
-                          cy="25"
-                          r="20"
-                          fill="none"
-                          stroke-width="4"
-                          stroke-dasharray="90 31.4"
-                          stroke-linecap="round"
-                          style="stroke: var(--info-strong)"
-                        />
-                      </svg>
-                      <i>图片加载中…</i>
-                    </template>
-                  </span>
-                  <img
-                    v-show="imageLoadState[`listing-${index}`] === 'loaded'"
-                    :src="withMediaVariant(image, 'mid')"
-                    :alt="`商品图片${index + 1}`"
-                    loading="lazy"
-                    decoding="async"
-                    @load="setImageLoadState(`listing-${index}`, 'loaded')"
-                    @error="handleGridImageError(`listing-${index}`, $event)"
-                  />
-                </span>
+                <img
+                  :src="withMediaVariant(image, 'mid')"
+                  :alt="`商品图片${index + 1}`"
+                  loading="lazy"
+                  decoding="async"
+                  @error="handleMediaImageError"
+                />
               </button>
             </div>
           </div>
@@ -309,37 +285,13 @@
                 class="preview-media-trigger"
                 @click="openImagePreview(image, `处罚截图${index + 1}`)"
               >
-                <span class="preview-media-frame">
-                  <span v-if="imageLoadState[`ban-${index}`] !== 'loaded'" class="media-load-hint">
-                    <template v-if="imageLoadState[`ban-${index}`] === 'failed'">加载失败</template>
-                    <template v-else>
-                      <svg class="media-load-spinner" viewBox="0 0 50 50" width="26" height="26" aria-hidden="true">
-                        <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" style="stroke: var(--border-strong)" />
-                        <circle
-                          class="media-load-arc"
-                          cx="25"
-                          cy="25"
-                          r="20"
-                          fill="none"
-                          stroke-width="4"
-                          stroke-dasharray="90 31.4"
-                          stroke-linecap="round"
-                          style="stroke: var(--info-strong)"
-                        />
-                      </svg>
-                      <i>图片加载中…</i>
-                    </template>
-                  </span>
-                  <img
-                    v-show="imageLoadState[`ban-${index}`] === 'loaded'"
-                    :src="getBanImageSource(image)"
-                    :alt="`处罚截图${index + 1}`"
-                    loading="lazy"
-                    decoding="async"
-                    @load="setImageLoadState(`ban-${index}`, 'loaded')"
-                    @error="handleGridImageError(`ban-${index}`, $event)"
-                  />
-                </span>
+                <img
+                  :src="getBanImageSource(image)"
+                  :alt="`处罚截图${index + 1}`"
+                  loading="lazy"
+                  decoding="async"
+                  @error="handleMediaImageError"
+                />
               </button>
             </div>
           </div>
@@ -579,8 +531,6 @@ export default {
       previewMediaType: 'image',
       previewMediaUrl: '',
       previewMediaName: '',
-      // 网格缩略图加载状态：key -> 'loading' | 'loaded' | 'failed'
-      imageLoadState: {},
       previewImageLoaded: false,
       previewImageFailed: false,
       previewVideoFailed: false,
@@ -723,17 +673,6 @@ export default {
       this.previewMediaUrl = targetUrl
       this.previewMediaName = String(videoName || '').trim()
     },
-    setImageLoadState(key, state) {
-      this.imageLoadState[key] = state
-    },
-    // 缩略图出错：先走变体回退重试一次，回退后仍失败才标记为加载失败
-    handleGridImageError(key, event) {
-      const hadFallbackTried = event?.target?.dataset?.mediaVariantFallback === '1'
-      handleMediaImageError(event)
-      if (hadFallbackTried) {
-        this.setImageLoadState(key, 'failed')
-      }
-    },
     handlePreviewImageError(event) {
       const hadFallbackTried = event?.target?.dataset?.mediaVariantFallback === '1'
       handleMediaImageError(event)
@@ -751,13 +690,7 @@ export default {
       this.previewMediaName = ''
     },
     async applyDetail(detail) {
-      // 仅在切换商品时重置缩略图加载状态；同一商品重复应用（prefetched 深监听）
-      // 不能重置，否则已加载图片被 v-show 隐藏且不再触发 @load，占位永远转圈
-      const listingChanged = Number(detail?.id || 0) !== Number(this.detail?.id || 0)
       this.detail = detail
-      if (listingChanged) {
-        this.imageLoadState = {}
-      }
       this.agreementState = {
         acceptPaymentAgreement: false,
         acceptBuyerAgreement: false
@@ -1375,38 +1308,11 @@ export default {
   cursor: zoom-in;
 }
 
-/* 缩略图占位框：加载中/失败状态下也保持 1:1 占位，避免网格跳动 */
-.preview-media-frame {
-  position: relative;
-  display: block;
+.preview-card img {
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--bg-page);
-}
-
-.preview-media-frame img {
-  width: 100%;
-  height: 100%;
   object-fit: fill;
   border-radius: 6px;
-}
-
-.media-load-hint {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.media-load-hint i {
-  font-style: normal;
 }
 
 @keyframes media-spin {
