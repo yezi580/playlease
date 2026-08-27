@@ -56,6 +56,7 @@ import {
   buildManagedFileReadUrl,
   buildManagedUploadUrl,
   deleteManagedFileByUrl,
+  getCosRedirectMaxAgeSeconds,
   getCosRuntimeConfig,
   uploadManagedFileToCos
 } from './infrastructure/cos.js'
@@ -1190,6 +1191,7 @@ registerUploadRoutes({
   isSafeUploadFileName,
   toUploadFileUrl,
   buildManagedFileReadUrl: USE_COS_STORAGE ? buildManagedFileReadUrl : null,
+  getCosRedirectMaxAgeSeconds: USE_COS_STORAGE ? getCosRedirectMaxAgeSeconds : null,
   uploadManagedFileToCos: USE_COS_STORAGE ? uploadManagedFileToCos : null,
   deleteManagedFileByUrl: USE_COS_STORAGE ? deleteManagedFileByUrl : null,
   storageDriver: FILE_STORAGE_DRIVER,

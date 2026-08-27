@@ -15,7 +15,7 @@
           <div v-if="!processing && !awaitingPaymentResult && !payResult" class="payment-modal-body">
             <div class="payment-order-summary">
               <div v-if="coverImage" class="payment-cover-wrap">
-                <img :src="coverImage" alt="商品封面" class="payment-cover-img" />
+                <img :src="coverImage" alt="商品封面" class="payment-cover-img" loading="lazy" decoding="async" @error="handleMediaImageError" />
               </div>
               <div class="payment-product-info">
                 <span class="payment-product-name">{{ orderTitle || '商品租赁' }}</span>
@@ -109,6 +109,7 @@
 import { apiFetch } from '../utils/api.js'
 import { formatMoneyPrecise } from '../utils/money'
 import { fetchBusinessSettings, getBuyerRentLabel, getCachedBusinessSettings } from '../utils/businessSettings.js'
+import { handleMediaImageError } from '../utils/media.js'
 
 const PAYMENT_RETURN_CONTEXT_KEY = 'latest_payment_return_context'
 
@@ -224,6 +225,7 @@ export default {
     this.clearTimers()
   },
   methods: {
+    handleMediaImageError,
     resetState() {
       this.selectedMethod = this.defaultMethod
       this.processing = false

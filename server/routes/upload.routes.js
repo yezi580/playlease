@@ -13,6 +13,7 @@ export function registerUploadRoutes(deps) {
     isSafeUploadFileName,
     toUploadFileUrl,
     buildManagedFileReadUrl,
+    getCosRedirectMaxAgeSeconds,
     uploadManagedFileToCos,
     deleteManagedFileByUrl,
     storageDriver,
@@ -204,20 +205,61 @@ export function registerUploadRoutes(deps) {
     return true
   }
 
-  async function redirectToCosFile(res, mediaUrl) {
-    const signedUrl = await buildManagedFileReadUrl(mediaUrl)
+  // 内网端点探测:运行环境与桶不在同地域时内网域名无法解析,
+  // 首次失败即降级公网并记忆,避免每次请求都白等一次 DNS 失败
+  let internalCosEndpointDisabled = false
+
+  function releaseUpstreamBody(upstreamResponse) {
+    try {
+      void upstreamResponse?.body?.cancel?.()
+    } catch (_error) {
+      // 忽略连接释放异常
+    }
+  }
+
+  async function fetchCosUpstream(mediaUrl, variant, upstreamHeaders) {
+    const endpointKinds = internalCosEndpointDisabled ? ['public'] : ['internal', 'public']
+    let lastNetworkError = null
+
+    for (const endpointKind of endpointKinds) {
+      const signedUrl = await buildManagedFileReadUrl(mediaUrl, { variant, endpointKind })
+      if (!signedUrl) {
+        return null
+      }
+      try {
+        return await fetch(signedUrl, {
+          method: 'GET',
+          headers: upstreamHeaders
+        })
+      } catch (error) {
+        lastNetworkError = error
+        if (endpointKind === 'internal') {
+          internalCosEndpointDisabled = true
+          console.warn('[cos] 内网端点不可用,降级公网拉取:', error?.message || error)
+          continue
+        }
+        throw error
+      }
+    }
+    throw lastNetworkError || new Error('cos upstream unavailable')
+  }
+
+  async function redirectToCosFile(res, mediaUrl, variant = '') {
+    const signedUrl = await buildManagedFileReadUrl(mediaUrl, { variant })
     if (!signedUrl) {
       return res.status(404).json({ message: '文件不存在或无法访问' })
+    }
+
+    // 窗口内签名 URL 确定,302 本身也允许浏览器缓存:
+    // 重复浏览连回源询问都省掉,且缓存期内签名始终有效(见 cos.js 注释)
+    const redirectMaxAge = getCosRedirectMaxAgeSeconds ? getCosRedirectMaxAgeSeconds() : 0
+    if (redirectMaxAge > 0) {
+      res.setHeader('Cache-Control', `public, max-age=${redirectMaxAge}`)
     }
     return res.redirect(signedUrl)
   }
 
-  async function proxyCosFile(req, res, mediaUrl) {
-    const signedUrl = await buildManagedFileReadUrl(mediaUrl)
-    if (!signedUrl) {
-      return res.status(404).json({ message: '文件不存在或无法访问' })
-    }
-
+  async function proxyCosFile(req, res, mediaUrl, variant = '') {
     const upstreamHeaders = new Headers()
     const headerNames = ['range', 'if-none-match', 'if-modified-since', 'if-range']
     headerNames.forEach((headerName) => {
@@ -227,12 +269,31 @@ export function registerUploadRoutes(deps) {
       }
     })
 
-    const upstreamResponse = await fetch(signedUrl, {
-      method: 'GET',
-      headers: upstreamHeaders
-    })
+    let upstreamResponse
+    try {
+      upstreamResponse = await fetchCosUpstream(mediaUrl, variant, upstreamHeaders)
+    } catch (_error) {
+      return res.status(502).json({ message: '文件读取失败' })
+    }
+    if (!upstreamResponse) {
+      return res.status(404).json({ message: '文件不存在或无法访问' })
+    }
+
+    // 图片变体处理失败(如桶未开通数据万象)时回退原图,避免前台图片裂掉
+    if (variant && !upstreamResponse.ok && upstreamResponse.status !== 304) {
+      releaseUpstreamBody(upstreamResponse)
+      try {
+        upstreamResponse = await fetchCosUpstream(mediaUrl, '', upstreamHeaders)
+      } catch (_error) {
+        return res.status(502).json({ message: '文件读取失败' })
+      }
+      if (!upstreamResponse) {
+        return res.status(404).json({ message: '文件不存在或无法访问' })
+      }
+    }
 
     if (!upstreamResponse.ok && upstreamResponse.status !== 304) {
+      releaseUpstreamBody(upstreamResponse)
       return res.status(upstreamResponse.status || 502).json({ message: '文件不存在或无法访问' })
     }
 
@@ -251,6 +312,11 @@ export function registerUploadRoutes(deps) {
         res.setHeader(headerName, headerValue)
       }
     })
+
+    // 上游对象缺缓存头时兜底:代理 URL 稳定 + immutable,浏览器磁盘缓存才能真正生效
+    if (!res.getHeader('Cache-Control')) {
+      res.setHeader('Cache-Control', 'private, max-age=31536000, immutable')
+    }
 
     res.status(upstreamResponse.status)
     if (!upstreamResponse.body) {
@@ -357,7 +423,7 @@ export function registerUploadRoutes(deps) {
       return sendLocalManagedFile(res, 'listing-images', fileName)
     }
 
-    return redirectToCosFile(res, toUploadFileUrl('listing-images', fileName))
+    return redirectToCosFile(res, toUploadFileUrl('listing-images', fileName), String(req.query?.variant || '').trim())
   })
 
   app.get('/api/uploads/files/ban-images/:fileName', uploadReadLimiter, async (req, res) => {
@@ -384,7 +450,7 @@ export function registerUploadRoutes(deps) {
         return sendLocalManagedFile(res, 'ban-images', fileName)
       }
 
-      return proxyCosFile(req, res, mediaUrl)
+      return proxyCosFile(req, res, mediaUrl, String(req.query?.variant || '').trim())
     } catch (_error) {
       return res.status(404).json({ message: '文件不存在或无法访问' })
     }
@@ -414,7 +480,7 @@ export function registerUploadRoutes(deps) {
         return sendLocalManagedFile(res, 'ban-videos', fileName)
       }
 
-      return proxyCosFile(req, res, mediaUrl)
+      return proxyCosFile(req, res, mediaUrl, String(req.query?.variant || '').trim())
     } catch (_error) {
       return res.status(404).json({ message: '文件不存在或无法访问' })
     }
@@ -444,7 +510,7 @@ export function registerUploadRoutes(deps) {
         return sendLocalManagedFile(res, 'chat-images', fileName)
       }
 
-      return proxyCosFile(req, res, mediaUrl)
+      return proxyCosFile(req, res, mediaUrl, String(req.query?.variant || '').trim())
     } catch (_error) {
       return res.status(404).json({ message: '文件不存在或无法访问' })
     }

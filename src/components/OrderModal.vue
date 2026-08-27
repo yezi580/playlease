@@ -10,7 +10,7 @@
         <div class="modal-body">
           <div class="listing-summary">
             <div class="summary-cover">
-              <img v-if="coverImageUrl" :src="coverImageUrl" alt="商品封面" class="cover-img" />
+              <img v-if="coverImageUrl" :src="coverImageUrl" alt="商品封面" class="cover-img" loading="lazy" decoding="async" @error="handleMediaImageError" />
               <div v-else class="cover-placeholder">暂无封面</div>
             </div>
             <div class="summary-info">
@@ -57,6 +57,7 @@
 import { apiFetch } from '../utils/api'
 import { calculateBuyerRentFromSellerRent, formatMoneyPrecise, parseAmount } from '../utils/money'
 import { fetchBusinessSettings, getBuyerRentLabel, getCachedBusinessSettings } from '../utils/businessSettings.js'
+import { handleMediaImageError, withMediaVariant } from '../utils/media.js'
 import { showErrorToast, showSuccessToast } from '../utils/toast.js'
 import CopyTextButton from './CopyTextButton.vue'
 
@@ -110,7 +111,8 @@ export default {
     },
     coverImageUrl() {
       const images = Array.isArray(this.listing?.images) ? this.listing.images : []
-      return typeof images[0] === 'string' ? images[0] : ''
+      const rawCover = typeof images[0] === 'string' ? images[0] : ''
+      return withMediaVariant(rawCover, 'thumb')
     },
     totalPrice() {
       const deposit = parseAmount(this.listing?.deposit)
@@ -133,6 +135,7 @@ export default {
     window.removeEventListener('keydown', this.handleEsc)
   },
   methods: {
+    handleMediaImageError,
     handleClose() {
       this.$emit('close')
     },

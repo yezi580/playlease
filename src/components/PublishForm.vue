@@ -115,9 +115,9 @@
               <button
                 type="button"
                 class="preview-media-trigger"
-                @click="openImagePreview(img.url, img.name || `处罚截图${index + 1}`)"
+                @click="openImagePreview(img.serverUrl || img.url, img.name || `处罚截图${index + 1}`)"
               >
-                <img :src="img.url" :alt="img.name || `处罚截图${index + 1}`" />
+                <img :src="withMediaVariant(img.url, 'mid')" :alt="img.name || `处罚截图${index + 1}`" loading="lazy" decoding="async" @error="handleMediaImageError" />
               </button>
               <button type="button" class="preview-remove-btn" @click.stop="removeBanImage(index)">移除</button>
             </div>
@@ -406,7 +406,7 @@
               class="preview-media-trigger"
               @click="openImagePreview(img.url, img.name || `图片${index + 1}`)"
             >
-              <img :src="img.url" :alt="img.name || `图片${index + 1}`" />
+              <img :src="withMediaVariant(img.url, 'mid')" :alt="img.name || `图片${index + 1}`" loading="lazy" decoding="async" @error="handleMediaImageError" />
             </button>
             <button type="button" class="preview-sort-btn preview-sort-btn-left" :disabled="index === 0" @click.stop="moveImage(index, -1)">‹</button>
             <button type="button" class="preview-sort-btn preview-sort-btn-right" :disabled="index === publishForm.images.length - 1" @click.stop="moveImage(index, 1)">›</button>
@@ -526,7 +526,8 @@
 
 <script>
 import AnimatedSelect from './AnimatedSelect.vue'
-import { apiFetch, clearAuth, createAuthorizedObjectUrl } from '../utils/api.js'
+import { apiFetch, clearAuth } from '../utils/api.js'
+import { compressImageForUpload, handleMediaImageError, withMediaVariant } from '../utils/media.js'
 import { REGION_OPTIONS, getCitiesByProvince, buildRegionText, isProvinceWithoutCityRequired, resolveRegionSelection } from '../constants/regionData.js'
 import { VIRTUAL_ASSET_AGREEMENT, OWNER_AGREEMENT } from '../constants/agreements.js'
 import {
@@ -803,6 +804,8 @@ export default {
     this.cleanupObjectUrls()
   },
   methods: {
+    handleMediaImageError,
+    withMediaVariant,
     async ensureBusinessSettingsLoaded() {
       const settings = await fetchBusinessSettings()
       this.applyBusinessSettings(settings)
@@ -848,7 +851,7 @@ export default {
       this.showingAgreement = null
     },
     openImagePreview(imageUrl, imageName = '') {
-      const targetUrl = String(imageUrl || '').trim()
+      const targetUrl = withMediaVariant(String(imageUrl || '').trim(), 'full')
       if (!targetUrl) return
       this.previewMediaType = 'image'
       this.previewMediaUrl = targetUrl
@@ -892,34 +895,32 @@ export default {
         await this.loadEditingListing()
       }
     },
-    async buildProtectedBanImagePreviewItem(url, index) {
-      const previewUrl = await createAuthorizedObjectUrl(url)
+    // 编辑模式处罚素材直连代理 URL(同源 Cookie 认证 + 1000px WebP 变体),
+    // 不再 blob 预取原图;视频点击才流式加载
+    buildProtectedBanImagePreviewItem(url, index) {
       return {
         name: `处罚截图${index + 1}`,
-        url: previewUrl,
+        url: withMediaVariant(String(url || ''), 'mid'),
         serverUrl: String(url || ''),
         uploaded: true,
-        localPreview: true
+        localPreview: false
       }
     },
-    async buildProtectedBanVideoPreviewItem(url) {
-      const previewUrl = await createAuthorizedObjectUrl(url)
+    buildProtectedBanVideoPreviewItem(url) {
       return {
         name: '封禁记录视频',
-        url: previewUrl,
+        url: String(url || ''),
         serverUrl: String(url || ''),
         uploaded: true,
-        localPreview: true
+        localPreview: false
       }
     },
-    async hydrateProtectedBanMedia(detail) {
+    hydrateProtectedBanMedia(detail) {
       const banImages = Array.isArray(detail?.banImages) ? detail.banImages.filter(Boolean) : []
-      const hydratedBanImages = await Promise.all(
-        banImages.map((url, index) => this.buildProtectedBanImagePreviewItem(url, index))
-      )
+      const hydratedBanImages = banImages.map((url, index) => this.buildProtectedBanImagePreviewItem(url, index))
       let hydratedBanVideo = null
       if (detail?.banVideo) {
-        hydratedBanVideo = await this.buildProtectedBanVideoPreviewItem(detail.banVideo)
+        hydratedBanVideo = this.buildProtectedBanVideoPreviewItem(detail.banVideo)
       }
       return {
         ...detail,
@@ -1305,7 +1306,9 @@ export default {
       let uploadedBanVideoUrl = ''
 
       if (this.publishForm.banRecord === '有') {
-        const pendingImageFiles = this.publishForm.banImages.filter((item) => item?.file instanceof File && !item?.uploaded).map((item) => item.file)
+        // JPEG 照片先降采样再上传(PNG 截图/GIF 原样保留)
+        const pendingBanItems = this.publishForm.banImages.filter((item) => item?.file instanceof File && !item?.uploaded)
+        const pendingImageFiles = await Promise.all(pendingBanItems.map((item) => compressImageForUpload(item.file)))
         if (pendingImageFiles.length) {
           const formData = new FormData()
           pendingImageFiles.forEach((file) => formData.append('images', file))
@@ -1348,7 +1351,9 @@ export default {
     },
     async uploadListingImagesForSubmit() {
       const uploadedListingImageUrls = []
-      const pendingImageFiles = this.publishForm.images.filter((item) => item?.file instanceof File && !item?.uploaded).map((item) => item.file)
+      // 商品图以手机 JPEG 照片为主,上传前统一降采样到 2560px,从源头控制原图体积
+      const pendingItems = this.publishForm.images.filter((item) => item?.file instanceof File && !item?.uploaded)
+      const pendingImageFiles = await Promise.all(pendingItems.map((item) => compressImageForUpload(item.file)))
 
       if (pendingImageFiles.length) {
         const formData = new FormData()

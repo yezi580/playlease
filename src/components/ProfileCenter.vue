@@ -94,7 +94,14 @@
           <div v-else class="order-list">
             <article v-for="order in orderList" :key="order.id" class="order-item" @click="handleOrderCardClick($event, order)">
               <div class="order-cover">
-                <img v-if="order.cover_image" :src="order.cover_image" :alt="order.listing_title" />
+                <img
+                  v-if="order.cover_image"
+                  :src="withMediaVariant(order.cover_image, 'thumb')"
+                  :alt="order.listing_title"
+                  loading="lazy"
+                  decoding="async"
+                  @error="handleMediaImageError"
+                />
                 <div v-else class="order-cover-placeholder">订单</div>
               </div>
 
@@ -214,7 +221,14 @@
             >
               <template v-if="item.record_type === 'seller_order'">
                 <div class="order-cover" @click="handlePublishedRecordClick($event, item)">
-                  <img v-if="item.cover_image" :src="item.cover_image" :alt="item.listing_title" />
+                  <img
+                    v-if="item.cover_image"
+                    :src="withMediaVariant(item.cover_image, 'thumb')"
+                    :alt="item.listing_title"
+                    loading="lazy"
+                    decoding="async"
+                    @error="handleMediaImageError"
+                  />
                   <div v-else class="order-cover-placeholder">订单</div>
                 </div>
 
@@ -261,7 +275,14 @@
 
               <template v-else>
                 <div class="listing-cover" @click="handlePublishedRecordClick($event, item)">
-                  <img v-if="item.cover_image" :src="item.cover_image" :alt="item.listing_title" />
+                  <img
+                    v-if="item.cover_image"
+                    :src="withMediaVariant(item.cover_image, 'thumb')"
+                    :alt="item.listing_title"
+                    loading="lazy"
+                    decoding="async"
+                    @error="handleMediaImageError"
+                  />
                   <div v-else class="order-cover-placeholder">商品</div>
                 </div>
 
@@ -525,7 +546,7 @@
       :visible="showPaymentModal"
       :order-id="selectedPaymentOrder?.id"
       :order-title="selectedPaymentOrder?.listing_title"
-      :cover-image="selectedPaymentOrder?.cover_image"
+      :cover-image="withMediaVariant(selectedPaymentOrder?.cover_image, 'thumb')"
       :listing-no="selectedPaymentOrder?.listing_no || ''"
       :listing-id="selectedPaymentOrder?.listing_id || ''"
       :amount="selectedPaymentOrder?.amount"
@@ -548,6 +569,7 @@
 
 <script>
 import { apiFetch } from '../utils/api.js'
+import { handleMediaImageError, withMediaVariant } from '../utils/media.js'
 import { calculateSellerIncomeRent, formatMoneyFixed } from '../utils/money'
 import {
   calculateCompensationFeeAmount,
@@ -848,6 +870,8 @@ export default {
     this.stopCountdownTicker()
   },
   methods: {
+    handleMediaImageError,
+    withMediaVariant,
     checkMobileView() {
       this.isMobileView = window.innerWidth <= 960
       if (this.isMobileView) {

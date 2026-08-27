@@ -261,9 +261,9 @@
                           :key="`image-${index}`"
                           type="button"
                           class="image-card"
-                          @click="openMediaPreview({ type: 'image', src: image, title: `商品图片${index + 1}` })"
+                          @click="openMediaPreview({ type: 'image', src: withMediaVariant(image, 'full'), title: `商品图片${index + 1}` })"
                         >
-                          <img :src="image" :alt="`商品图片${index + 1}`">
+                          <img :src="withMediaVariant(image, 'mid')" :alt="`商品图片${index + 1}`" loading="lazy" decoding="async" @error="handleMediaImageError">
                         </button>
                       </div>
                       <div v-else class="state-card state-card--inner">暂无商品图片</div>
@@ -277,9 +277,9 @@
                           :key="`ban-${index}`"
                           type="button"
                           class="image-card"
-                          @click="openMediaPreview({ type: 'image', src: getBanImageSource(image, index), title: `封禁图片${index + 1}` })"
+                          @click="openMediaPreview({ type: 'image', src: withMediaVariant(image, 'full'), title: `封禁图片${index + 1}` })"
                         >
-                          <img :src="getBanImageSource(image, index)" :alt="`封禁图片${index + 1}`">
+                          <img :src="getBanImageSource(image)" :alt="`封禁图片${index + 1}`" loading="lazy" decoding="async" @error="handleMediaImageError">
                         </button>
                       </div>
                       <div v-else class="state-card state-card--inner">暂无封禁图片</div>
@@ -383,6 +383,7 @@
             class="media-preview-image"
             :src="mediaPreview.src"
             :alt="mediaPreview.title || '图片预览'"
+            @error="handleMediaImageError"
           >
           <video
             v-else-if="mediaPreview.type === 'video'"
@@ -401,12 +402,13 @@
 <script>
 import {
   apiFetch,
-  createAuthorizedObjectUrl,
   getStepUpRequirementMessage,
   getStepUpRequirementReason,
   isStepUpRequiredError,
   performAdminStepUp
 } from '../utils/api.js'
+// 媒体变体工具与买家端共用同一份,避免两处规则漂移
+import { handleMediaImageError, withMediaVariant } from '../../src/utils/media.js'
 import AdminConfirmDialog from './AdminConfirmDialog.vue'
 
 const REVIEW_STATUS_LABELS = Object.freeze({
@@ -446,9 +448,6 @@ export default {
       detail: null,
       detailLoading: false,
       detailError: '',
-      protectedBanImages: [],
-      protectedBanVideo: '',
-      protectedMediaRequestId: 0,
       detailRequestId: 0,
       listRequestId: 0,
       listTransitionKey: 0,
@@ -500,50 +499,10 @@ export default {
   },
   beforeUnmount() {
     this.closeMediaPreview()
-    this.revokeProtectedBanMedia()
   },
   methods: {
-    revokeProtectedBanMedia() {
-      this.protectedBanImages.forEach((url) => {
-        if (url) URL.revokeObjectURL(url)
-      })
-      if (this.protectedBanVideo) {
-        URL.revokeObjectURL(this.protectedBanVideo)
-      }
-      this.protectedBanImages = []
-      this.protectedBanVideo = ''
-    },
-    async hydrateProtectedBanMedia(detail) {
-      const requestId = this.protectedMediaRequestId + 1
-      this.protectedMediaRequestId = requestId
-      this.revokeProtectedBanMedia()
-
-      const banImages = Array.isArray(detail?.banImages) ? detail.banImages.filter(Boolean) : []
-      const banVideo = String(detail?.banVideo || '').trim()
-      if (!banImages.length && !banVideo) return
-
-      try {
-        const nextBanImages = await Promise.all(
-          banImages.map((url) => createAuthorizedObjectUrl(url))
-        )
-        const nextBanVideo = banVideo ? await createAuthorizedObjectUrl(banVideo) : ''
-        if (requestId !== this.protectedMediaRequestId) {
-          nextBanImages.forEach((url) => {
-            if (url) URL.revokeObjectURL(url)
-          })
-          if (nextBanVideo) URL.revokeObjectURL(nextBanVideo)
-          return
-        }
-        this.protectedBanImages = nextBanImages
-        this.protectedBanVideo = nextBanVideo
-      } catch (error) {
-        if (requestId === this.protectedMediaRequestId) {
-          this.revokeProtectedBanMedia()
-          this.messageType = 'error'
-          this.message = error.message || '加载受保护素材失败'
-        }
-      }
-    },
+    handleMediaImageError,
+    withMediaVariant,
     async loadList() {
       const requestId = this.listRequestId + 1
       this.listRequestId = requestId
@@ -568,7 +527,6 @@ export default {
           const exists = this.list.some((item) => Number(item.id) === Number(this.selectedId))
           if (!exists) {
             this.closeMediaPreview()
-            this.revokeProtectedBanMedia()
             this.detail = null
             this.detailError = ''
             this.selectedId = 0
@@ -613,14 +571,12 @@ export default {
         this.detail = data || null
         this.detailPageIndex = 0
         this.auditRemark = String(data?.review_reason || '').trim()
-        await this.hydrateProtectedBanMedia(data)
       } catch (error) {
         if (requestId !== this.detailRequestId) return
         if (hasExistingDetail) {
           this.messageType = 'error'
           this.message = error.message || '加载商品详情失败'
         } else {
-          this.revokeProtectedBanMedia()
           this.detail = null
           this.detailError = error.message || '加载商品详情失败'
         }
@@ -779,11 +735,12 @@ export default {
       if (value === undefined || value === null || String(value).trim() === '') return fallback
       return String(value)
     },
-    getBanImageSource(image, index) {
-      return this.protectedBanImages[index] || image
+    // 封禁素材直连代理 URL(同源 Cookie 认证 + 变体缩略),浏览器缓存生效
+    getBanImageSource(image) {
+      return withMediaVariant(image, 'mid')
     },
     getBanVideoSource() {
-      return this.protectedBanVideo || this.detail?.banVideo || ''
+      return this.detail?.banVideo || ''
     },
     openMediaPreview(payload = {}) {
       const src = String(payload.src || '').trim()

@@ -54,7 +54,7 @@
             </button>
           </div>
           <div class="product">
-            <img v-if="productCoverImage" :src="productCoverImage" :alt="order.listing_title" class="product-cover">
+            <img v-if="productCoverImage" :src="productCoverImage" :alt="order.listing_title" class="product-cover" loading="lazy" decoding="async" @error="handleMediaImageError">
             <div v-else class="product-cover product-cover--empty">暂无封面</div>
             <div class="product-main">
               <h4>{{ order.listing_title }}</h4>
@@ -256,6 +256,7 @@
 
 <script>
 import { apiFetch } from '../utils/api.js'
+import { handleMediaImageError, withMediaVariant } from '../utils/media.js'
 import { calculateSellerIncomeRent, calculateServiceFeeFromSellerRent, formatMoneyPrecise } from '../utils/money'
 import CopyTextButton from './CopyTextButton.vue'
 import {
@@ -314,11 +315,14 @@ export default {
   },
   computed: {
     productCoverImage() {
+      let cover = null
       if (this.order?.images?.length) {
         const first = this.order.images[0]
-        return typeof first === 'string' ? first : (first?.image_url || null)
+        cover = typeof first === 'string' ? first : (first?.image_url || null)
+      } else {
+        cover = this.order?.listing?.cover_image || null
       }
-      return this.order?.listing?.cover_image || null
+      return cover ? withMediaVariant(cover, 'thumb') : null
     },
     saleItems() {
       return (Array.isArray(this.order?.items) ? this.order.items : []).filter((item) => item.item_mode === 'sale')
@@ -537,6 +541,7 @@ export default {
     this.stopCountdownTicker()
   },
   methods: {
+    handleMediaImageError,
     async loadBusinessSettings() {
       this.businessSettings = await fetchBusinessSettings()
     },

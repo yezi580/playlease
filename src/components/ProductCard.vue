@@ -6,13 +6,14 @@
     <!-- 左侧：商品封面图 -->
     <div class="cover-wrap">
       <template v-if="cardImages.length">
-        <div v-for="(image, index) in cardImages" :key="`cover-${item.id || 'item'}-${index}`" class="cover-frame">
+        <div v-for="(image, index) in cardImageSrcList" :key="`cover-${item.id || 'item'}-${index}`" class="cover-frame">
           <img
             :src="image"
             :alt="`商品图片${index + 1}`"
             class="cover-img"
             loading="lazy"
             decoding="async"
+            @error="handleMediaImageError"
           />
         </div>
       </template>
@@ -129,6 +130,7 @@
 <script>
 import { calculateBuyerRentFromSellerRent, formatMoneyInteger, parseAmount } from '../utils/money'
 import { fetchBusinessSettings, getCachedBusinessSettings } from '../utils/businessSettings.js'
+import { handleMediaImageError, withMediaVariant } from '../utils/media.js'
 import CopyTextButton from './CopyTextButton.vue'
 import ProductIcon from './ProductIcon.vue'
 import ShareListingButton from './ShareListingButton.vue'
@@ -175,6 +177,10 @@ export default {
 
       return uniqueImages.slice(0, 1)
     },
+    // 列表封面走 500px WebP 缩略变体,失败自动回退原图
+    cardImageSrcList() {
+      return this.cardImages.map((image) => withMediaVariant(image, 'thumb'))
+    },
     computedRentPrice() {
       const sellerRent = parseAmount(this.item.rent_price)
       return calculateBuyerRentFromSellerRent(
@@ -198,6 +204,7 @@ export default {
     formatMoney(value) {
       return formatMoneyInteger(value)
     },
+    handleMediaImageError,
     handleViewDetail() {
       this.$emit('view-detail', this.item.listing_no || this.item.id)
     },

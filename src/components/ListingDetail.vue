@@ -263,7 +263,13 @@
                 class="preview-media-trigger"
                 @click="openImagePreview(image, `商品图片${index + 1}`)"
               >
-                <img :src="image" :alt="`商品图片${index + 1}`" />
+                <img
+                  :src="withMediaVariant(image, 'mid')"
+                  :alt="`商品图片${index + 1}`"
+                  loading="lazy"
+                  decoding="async"
+                  @error="handleMediaImageError"
+                />
               </button>
             </div>
           </div>
@@ -277,9 +283,15 @@
               <button
                 type="button"
                 class="preview-media-trigger"
-                @click="openImagePreview(getBanImageSource(image, index), `处罚截图${index + 1}`)"
+                @click="openImagePreview(image, `处罚截图${index + 1}`)"
               >
-                <img :src="getBanImageSource(image, index)" :alt="`处罚截图${index + 1}`" />
+                <img
+                  :src="getBanImageSource(image)"
+                  :alt="`处罚截图${index + 1}`"
+                  loading="lazy"
+                  decoding="async"
+                  @error="handleMediaImageError"
+                />
               </button>
             </div>
           </div>
@@ -287,10 +299,9 @@
             v-if="detail.banVideo"
             type="button"
             class="video-link"
-            :disabled="loadingBanVideoPreview"
             @click="openBanVideoPreview"
           >
-            {{ loadingBanVideoPreview ? '封禁记录视频加载中...' : '查看封禁记录视频' }}
+            查看封禁记录视频
           </button>
           <div v-if="!detail.banImages?.length && !detail.banVideo" class="status-box inner">暂无封禁凭证</div>
         </div>
@@ -406,7 +417,8 @@
 </template>
 
 <script>
-import { apiFetch, createAuthorizedObjectUrl, getStoredUser } from '../utils/api'
+import { apiFetch, getStoredUser } from '../utils/api'
+import { handleMediaImageError, withMediaVariant } from '../utils/media.js'
 import { BUYER_AGREEMENT, BUYER_AGREEMENT_VERSION, PAYMENT_AGREEMENT, PAYMENT_AGREEMENT_VERSION } from '../constants/rentalAgreements.js'
 import { resolveRegionSelection } from '../constants/regionData'
 import { calculateBuyerRentFromSellerRent, calculateServiceFeeFromSellerRent, formatMoneyPrecise, parseAmount } from '../utils/money'
@@ -479,10 +491,6 @@ export default {
       isMobile: window.innerWidth <= 1200,
       businessSettings: getCachedBusinessSettings(),
       saleItems: buildSaleItemsView(getCachedBusinessSettings()),
-      protectedBanImages: [],
-      protectedBanVideo: '',
-      protectedMediaRequestId: 0,
-      loadingBanVideoPreview: false,
       paymentAgreement: PAYMENT_AGREEMENT,
       buyerAgreement: BUYER_AGREEMENT,
       activeAgreement: null,
@@ -599,7 +607,6 @@ export default {
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize)
     window.removeEventListener('keydown', this.handlePreviewKeydown)
-    this.revokeProtectedBanMedia()
   },
   methods: {
     handleResize() {
@@ -610,8 +617,10 @@ export default {
         this.closeMediaPreview()
       }
     },
+    handleMediaImageError,
+    withMediaVariant,
     openImagePreview(imageUrl, imageName = '') {
-      const targetUrl = String(imageUrl || '').trim()
+      const targetUrl = withMediaVariant(String(imageUrl || '').trim(), 'full')
       if (!targetUrl) return
       this.previewMediaType = 'image'
       this.previewMediaUrl = targetUrl
@@ -629,42 +638,6 @@ export default {
       this.previewMediaUrl = ''
       this.previewMediaName = ''
     },
-    revokeProtectedBanMedia() {
-      this.protectedBanImages.forEach((url) => {
-        if (url) URL.revokeObjectURL(url)
-      })
-      if (this.protectedBanVideo) {
-        URL.revokeObjectURL(this.protectedBanVideo)
-      }
-      this.protectedBanImages = []
-      this.protectedBanVideo = ''
-    },
-    async hydrateProtectedBanMedia(detail) {
-      const requestId = this.protectedMediaRequestId + 1
-      this.protectedMediaRequestId = requestId
-      this.revokeProtectedBanMedia()
-      this.loadingBanVideoPreview = false
-
-      const banImages = Array.isArray(detail?.banImages) ? detail.banImages.filter(Boolean) : []
-      if (!banImages.length) return
-
-      try {
-        const nextBanImages = await Promise.all(
-          banImages.map((url) => createAuthorizedObjectUrl(url))
-        )
-        if (requestId !== this.protectedMediaRequestId) {
-          nextBanImages.forEach((url) => {
-            if (url) URL.revokeObjectURL(url)
-          })
-          return
-        }
-        this.protectedBanImages = nextBanImages
-      } catch (_error) {
-        if (requestId === this.protectedMediaRequestId) {
-          this.revokeProtectedBanMedia()
-        }
-      }
-    },
     async applyDetail(detail) {
       this.detail = detail
       this.agreementState = {
@@ -672,7 +645,6 @@ export default {
         acceptBuyerAgreement: false
       }
       this.activeAgreement = null
-      await this.hydrateProtectedBanMedia(detail)
     },
     shouldReportListingClick(detail) {
       const listingId = Number(detail?.id || 0)
@@ -711,7 +683,6 @@ export default {
       this.loading = true
       this.errorMsg = ''
       this.detail = null
-      this.revokeProtectedBanMedia()
       try {
         const data = await apiFetch(`/api/listings/${this.listingId}`)
         await this.applyDetail(data)
@@ -799,29 +770,16 @@ export default {
       const item = this.getItemByKey(itemKey)
       return item?.item_mode === 'gift' ? '赠送' : '出售'
     },
-    getBanImageSource(image, index) {
-      return this.protectedBanImages[index] || image
+    // 处罚截图直连代理 URL(同源 Cookie 认证):网格出 1000px WebP 变体,
+    // 浏览器磁盘缓存生效;不再 blob 预取整组原图
+    getBanImageSource(image) {
+      return withMediaVariant(image, 'mid')
     },
-    async openBanVideoPreview() {
-      if (this.loadingBanVideoPreview) return
+    openBanVideoPreview() {
       const rawVideoUrl = String(this.detail?.banVideo || '').trim()
       if (!rawVideoUrl) return
-
-      if (this.protectedBanVideo) {
-        this.openVideoPreview(this.protectedBanVideo, '封禁记录视频')
-        return
-      }
-
-      this.loadingBanVideoPreview = true
-      try {
-        const objectUrl = await createAuthorizedObjectUrl(rawVideoUrl)
-        this.protectedBanVideo = objectUrl
-        this.openVideoPreview(objectUrl, '封禁记录视频')
-      } catch (error) {
-        showWarningToast(error?.message || '封禁记录视频加载失败')
-      } finally {
-        this.loadingBanVideoPreview = false
-      }
+      // 直连流式播放(代理支持 Range),点击前零下载,关闭即停
+      this.openVideoPreview(rawVideoUrl, '封禁记录视频')
     },
     handleRentNow() {
       if (!this.detail) {

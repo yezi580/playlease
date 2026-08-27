@@ -42,9 +42,12 @@
                     @click="openImagePreview(message.media_url, message.media_name || '聊天图片')"
                   >
                     <img
-                      :src="message.media_url"
+                      :src="withMediaVariant(message.media_url, 'thumb')"
                       :alt="message.media_name || '聊天图片'"
                       class="conversation-message-image"
+                      loading="lazy"
+                      decoding="async"
+                      @error="handleMediaImageError"
                     />
                   </button>
                 </div>
@@ -159,6 +162,7 @@ import { nextTick } from 'vue'
 import { io } from 'socket.io-client'
 import { apiFetch } from '../utils/api.js'
 import { getSocketServerUrl } from '../utils/runtime.js'
+import { compressImageForUpload, handleMediaImageError, withMediaVariant } from '../utils/media.js'
 
 export default {
   name: 'ConversationPanel',
@@ -587,7 +591,9 @@ export default {
     },
     async uploadPendingImage(image) {
       const formData = new FormData()
-      formData.append('image', image.file)
+      // JPEG 照片先降采样再传,从源头控制原图体积(PNG/GIF 不动)
+      const uploadFile = await compressImageForUpload(image.file)
+      formData.append('image', uploadFile)
       formData.append('conversationId', String(Number(this.conversation?.id || 0)))
       const uploadResult = await apiFetch('/api/uploads/chat-images', {
         method: 'POST',
@@ -634,8 +640,10 @@ export default {
         // 回收失败不阻断聊天主流程
       }
     },
+    handleMediaImageError,
+    withMediaVariant,
     openImagePreview(imageUrl, imageName = '') {
-      const targetUrl = String(imageUrl || '').trim()
+      const targetUrl = withMediaVariant(String(imageUrl || '').trim(), 'full')
       if (!targetUrl) return
       this.previewImageUrl = targetUrl
       this.previewImageName = String(imageName || '').trim()
