@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>开发设计文档 · 天蓬商行（三角洲行动账号租赁平台）</title>
+<script src="./assets/mermaid.min.js"></script>
+<style>
+:root{--ink:#1f2328;--muted:#57606a;--line:#d8dee4;--head:#f6f8fa;--accent:#0f5fb8}
+*{box-sizing:border-box}
+body{font-family:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;color:var(--ink);margin:0;background:#eef1f4;line-height:1.75}
+.page{max-width:1020px;margin:0 auto;background:#fff;padding:48px 56px 72px;box-shadow:0 1px 8px rgba(0,0,0,.08)}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin:0 0 8px}
+h2{font-size:21px;margin-top:44px;border-left:5px solid var(--accent);padding-left:12px}
+h3{font-size:17px;margin-top:30px}
+h4{font-size:15px;margin-top:22px}
+p{margin:10px 0}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 11px;text-align:left;vertical-align:top}
+th{background:var(--head);white-space:nowrap}
+tbody tr:nth-child(even){background:#fafbfc}
+.tbl{overflow-x:auto;margin:14px 0}
+.tbl table{margin:0;min-width:560px}
+code{background:#f0f2f4;border-radius:4px;padding:1px 5px;font-family:Consolas,"Courier New",monospace;font-size:.92em;color:#b02a37}
+pre{background:#f6f8fa;border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;line-height:1.5}
+pre code{background:none;padding:0;color:var(--ink);font-size:13px}
+.mermaid{margin:20px auto;text-align:center;overflow-x:auto;padding:6px 0}
+blockquote{border-left:4px solid #d0d7de;background:var(--head);margin:14px 0;padding:8px 16px;color:var(--muted);border-radius:0 6px 6px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:26px;margin:10px 0}
+li{margin:4px 0}
+.toc{background:var(--head);border:1px solid var(--line);border-radius:10px;padding:18px 26px;margin:26px 0}
+.toc-title{font-weight:700;font-size:16px;margin-bottom:8px}
+.toc ol{margin:0;padding-left:22px}
+.toc a{color:var(--accent);text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.footer-note{margin-top:60px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px}
+@media print{
+  body{background:#fff}
+  .page{box-shadow:none;padding:0;max-width:none}
+  h2{page-break-after:avoid}
+  .tbl,table,tr{page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="page">
+<h1 id="天蓬商行-三角洲行动账号租赁平台-开发设计文档">天蓬商行（三角洲行动账号租赁平台）开发设计文档</h1>
+<div class="tbl"><table><thead><tr><th>项</th><th>内容</th></tr></thead><tbody><tr><td>产品</td><td>天蓬商行 —— 《三角洲行动》游戏账号 C2C 租赁平台（租号 / 出号 / 平台担保 / 资金托管结算）</td></tr><tr><td>站点</td><td>主站 <code>https://xysh88.com</code>，管理后台 <code>https://admin.xysh88.com</code></td></tr><tr><td>文档版本</td><td>v1.0（2026-08-28，基于生产代码勘察编写）</td></tr><tr><td>关联文档</td><td>《产品需求文档.md》、《freeze-funds-and-settlement.md》（资金冻结与结算设计）</td></tr></tbody></table></div>
+<h2 id="1-系统架构与部署架构">1. 系统架构与部署架构</h2>
+<h3 id="1-1-系统架构图">1.1 系统架构图</h3>
+<p>整体为「双 SPA 前端 + 单体 Node 服务（蓝绿双容器）+ MySQL/Redis + 4 个三方服务」的架构，无微服务、无 MQ。</p>
+<div class="mermaid">flowchart TB
+    subgraph CLIENT["客户端层"]
+        U["用户端 SPA&lt;br/&gt;Vue3 · xysh88.com&lt;br/&gt;买家 / 卖家 / 客服工作台"]
+        A["管理后台 SPA&lt;br/&gt;Vue3 · admin.xysh88.com&lt;br/&gt;IP 白名单 + Passkey"]
+    end
+
+    subgraph NGINX["接入层 · nginx:alpine（唯一公网入口）"]
+        ST["静态资源 dist&lt;br/&gt;gzip level5 · /assets 1年强缓存"]
+        PX["反向代理&lt;br/&gt;/api → upstream 蓝绿可切&lt;br/&gt;/socket.io WebSocket Upgrade"]
+        RL["CC 限流&lt;br/&gt;api_cc 20r/s · sms_cc 2r/s&lt;br/&gt;支付回调不限流"]
+        SH["安全头&lt;br/&gt;HTTPS/HSTS/CSP/XFO&lt;br/&gt;主站封堵 /api/admin/*"]
+    end
+
+    subgraph APP["应用层 · Node 20 · Express 4 + Socket.IO（蓝绿双容器）"]
+        MW["中间件链&lt;br/&gt;helmet · CORS fail-closed 白名单&lt;br/&gt;JWT + Redis 会话鉴权&lt;br/&gt;express-rate-limit（Redis 存储）"]
+        MOD["业务模块 modules/&lt;br/&gt;auth · listing · order · payment&lt;br/&gt;chat · notification · audit&lt;br/&gt;business-settings"]
+        SOCK["Socket.IO 聊天&lt;br/&gt;会话房间 · 未读汇总 · 在线状态&lt;br/&gt;敏感词过滤 · 滑动窗口限流"]
+        JOB["定时任务 ×6&lt;br/&gt;setInterval + Redis 分布式锁&lt;br/&gt;超时关单 / 资金对账 / 结算仲裁&lt;br/&gt;热度预聚合 / 押金释放 / 在线快照"]
+    end
+
+    subgraph DATA["数据层（仅 Docker 内网，不暴露公网）"]
+        MY[("MySQL 8.0&lt;br/&gt;库 game_rental · 37 张表&lt;br/&gt;金额一律以分存储")]
+        RD[("Redis 7（AOF）&lt;br/&gt;会话 · 短信验证码 · 限流&lt;br/&gt;分布式锁 · 商品详情缓存")]
+    end
+
+    subgraph THIRD["三方服务"]
+        COS["腾讯云 COS&lt;br/&gt;图片/视频存储 · 数据万象 WebP&lt;br/&gt;生产备份存储"]
+        SMS["腾讯云短信&lt;br/&gt;验证码 · 卖家履约通知"]
+        CAP["腾讯云验证码（天御）&lt;br/&gt;短信发送前置人机验证"]
+        HF["汇付天下 Huifu&lt;br/&gt;托管支付 / 退款 / 分账打款&lt;br/&gt;卖家进件 / 取现"]
+    end
+
+    U --&gt;|"HTTPS 443"| ST
+    A --&gt;|"HTTPS 443 · IP 白名单"| ST
+    U --&gt; PX
+    A --&gt; PX
+    PX --&gt; MW
+    MW --&gt; MOD
+    PX --&gt; SOCK
+    MOD --&gt; MY
+    MOD --&gt; RD
+    SOCK --&gt; MY
+    SOCK --&gt; RD
+    JOB --&gt; MY
+    JOB --&gt; RD
+    MOD --&gt;|"上传 / 签名 URL / WebP"| COS
+    MOD --&gt;|"验证码 / 通知短信"| SMS
+    MOD --&gt;|"验票"| CAP
+    MOD --&gt;|"收银台预下单 / 进件 / 取现"| HF
+    JOB --&gt;|"查单 / 退款 / 打款"| HF
+    HF -.-&gt;|"支付异步通知 NOTIFY_URL&lt;br/&gt;RSA 验签"| PX</div>
+<p>架构要点：</p>
+<ul><li><strong>鉴权</strong>：JWT（HS256）+ Redis 服务端会话双轨。Token 经 httpOnly Cookie（<code>auth_token</code>）传递，每次请求校验 Redis 会话，支持改密 / 封禁 / 角色变更即时吊销；管理员与客服的高危操作叠加 Passkey（WebAuthn）二次校验（428 <code>STEP_UP_REQUIRED</code> 协议）。</li><li><strong>支付安全边界</strong>：订单置为已支付<strong>只</strong>由支付回调 / 主动查单驱动，不暴露任何「确认支付」HTTP 路由；回调只信任渠道侧 RSA 验签解析出的数据，且做金额一致性校验。</li><li><strong>可靠性替代 MQ</strong>：无消息队列。跨系统异步一致（退款到账、打款到账、订单收口）依赖「DB 状态机 + reason/remark 幂等键 + 120s 资金对账定时任务 + 汇付查单」实现最终一致（见 4.6）。</li><li><strong>多实例一致性</strong>：蓝绿双容器并存期间，定时任务用 Redis 分布式锁保证同轮只跑一次；限流计数走 Redis 共享。</li></ul>
+<h3 id="1-2-部署架构图">1.2 部署架构图</h3>
+<p>单机部署：1 台腾讯云 CVM，docker-compose 编排 5 个容器。</p>
+<div class="mermaid">flowchart TB
+    USER((公网用户)) --&gt;|"80 → 301 → 443 HTTPS"| NGINX
+
+    subgraph CVM["腾讯云 CVM · 49.235.59.19（内网 172.17.16.15）· 项目目录 /opt/my-app"]
+        subgraph DC["docker-compose.prod（默认 bridge 网络）"]
+            NGINX["nginx:alpine&lt;br/&gt;80/443 唯一公网端口&lt;br/&gt;双证书：主站 + admin 子域&lt;br/&gt;upstream-backend.conf 蓝绿状态文件"]
+
+            subgraph BG["蓝绿双容器（同一镜像 my-app-api:current）"]
+                BLUE["api-blue（活跃）&lt;br/&gt;127.0.0.1:3101 → 3000&lt;br/&gt;healthcheck /api/health"]
+                GREEN["api-green（热备/回滚目标）&lt;br/&gt;127.0.0.1:3102 → 3000"]
+            end
+
+            MY[("mysql:8.0&lt;br/&gt;仅内网 · 命名卷 mysql_data_prod&lt;br/&gt;业务账号与 root 分离")]
+            RD[("redis:7-alpine&lt;br/&gt;仅内网 · AOF · 命名卷 redis_data_prod")]
+        end
+
+        DIST["dist/ 前端构建产物&lt;br/&gt;bind-mount 进 nginx"]
+        UPLOADS["server/uploads&lt;br/&gt;bind-mount（local 存储驱动时）"]
+        CERTS["deploy/nginx/certs/prod&lt;br/&gt;bind-mount 双证书"]
+    end
+
+    NGINX --&gt;|"upstream api_backend&lt;br/&gt;（保 inode 原地重写切换）"| BLUE
+    NGINX -.-&gt;|"switch 一键回滚"| GREEN
+    NGINX --&gt; DIST
+    BLUE --&gt; MY
+    BLUE --&gt; RD
+    GREEN --&gt; MY
+    GREEN --&gt; RD
+    BLUE --&gt; UPLOADS
+    GREEN --&gt; UPLOADS
+    NGINX --&gt; CERTS</div>
+<p>部署事实清单：</p>
+<div class="tbl"><table><thead><tr><th>项</th><th>值</th></tr></thead><tbody><tr><td>服务器</td><td>腾讯云 CVM ×1，公网 49.235.59.19，内网 172.17.16.15</td></tr><tr><td>容器</td><td>nginx / api-blue / api-green / mysql:8.0 / redis:7-alpine，同一 compose bridge 网络</td></tr><tr><td>端口暴露</td><td>仅 nginx 80/443 对公网；api 双容器仅绑 127.0.0.1（3101/3102，调试用）；MySQL/Redis 无端口映射</td></tr><tr><td>持久化</td><td>命名卷 <code>mysql_data_prod</code>、<code>redis_data_prod</code>；bind-mount：<code>dist</code>（前端）、<code>server/uploads</code>、证书目录、nginx 配置</td></tr><tr><td>健康检查</td><td>api 容器 wget <code>/api/health</code>（start_period 60s，启动需先跑 schema 引导）；优雅停机时返回 503 <code>shutting_down</code></td></tr><tr><td>优雅停机</td><td><code>stop_grace_period: 30s</code>；应用内顺序：健康检查 503 → 停定时任务 → 断 WebSocket（3s 兜底）→ 排干在途 HTTP ≤15s</td></tr><tr><td>日志</td><td>json-file 轮转 10MB ×3；MySQL 慢查询阈值 0.5s</td></tr><tr><td>时区</td><td>全链路北京时间（TZ=Asia/Shanghai，MySQL +08:00）</td></tr></tbody></table></div>
+<h3 id="1-3-蓝绿发布与回滚">1.3 蓝绿发布与回滚</h3>
+<p>发布/回滚由 <code>deploy/scripts/blue-green-deploy.sh</code>（子命令 <code>deploy</code> / <code>switch</code> / <code>status</code>）驱动：</p>
+<div class="mermaid">flowchart TB
+    S(["blue-green-deploy.sh deploy"]) --&gt; J{"读取 upstream-backend.conf&lt;br/&gt;判断当前活跃色"}
+    J --&gt;|"blue 活跃"| B1["构建镜像 my-app-api:current"]
+    J --&gt;|"green 活跃"| B1
+    B1 --&gt; B2["只重建闲置色容器&lt;br/&gt;（活跃色流量全程不动）"]
+    B2 --&gt; B3{"轮询 healthcheck&lt;br/&gt;≤240s 变 healthy?"}
+    B3 --&gt;|"否"| ABRT["自动中止&lt;br/&gt;线上流量不受影响"]
+    B3 --&gt;|"是"| B4["原地重写 upstream-backend.conf&lt;br/&gt;交换 down 标记（必须保 inode：&lt;br/&gt;bind-mount 下 sed -i/rm+cp 会使容器读不到新内容）"]
+    B4 --&gt; B5{"nginx -t 校验"}
+    B5 --&gt;|"失败"| RB["自动回滚配置文件"]
+    B5 --&gt;|"通过"| B6["nginx -s reload 平滑切流&lt;br/&gt;3s 后确认 nginx 存活"]
+    B6 --&gt; B7["旧色保持运行 = 热备 + 回滚目标"]
+    B7 --&gt; SW(["switch 子命令 = 一键回切，不构建"])</div>
+<p>要点：</p>
+<ul><li>切换原子性在 nginx 配置层完成，应用零停机；<code>worker_shutdown_timeout 30s</code> 保证 reload 后旧 worker 最多存活 30s，避免 socket.io 长连接把旧 worker 无限留住。</li><li>部署脚本对 nginx 配置采用「保 inode 的原地重写」（<code>cat &gt;</code> 覆盖而非替换文件），这是 bind-mount 场景的硬约束。</li></ul>
+<h3 id="1-4-发布链路">1.4 发布链路</h3>
+<pre><code>本地 npm run build（vite build，产出 dist/）
+  → tar 精简发布包（排除 node_modules / uploads / .env / certs / 白名单 / upstream 状态）
+  → scp 上传服务器 /opt/my-app
+  → remote-deploy-extract.sh 解包（回填恢复 prod.env、certs、uploads、白名单、upstream，全程保目录 inode）
+  → blue-green-deploy.sh deploy（构建 → 起闲置色 → 健康检查 → 切流）</code></pre>
+<p>配套运维脚本（<code>deploy/scripts/</code>）：<code>backup-prod.sh</code>（MySQL dump + uploads 打包双上传 COS）、<code>check-prod-*</code>（主机指标/磁盘/MySQL 巡检）、<code>reset-prod-admin.sh</code>、<code>rotate-db-credentials.sh</code>（DB 密码轮换）、<code>update-admin-allowlist.sh</code> / <code>admin-allowlist-expire.sh</code>（后台 IP 白名单维护与到期收紧）。</p>
+<hr/>
+<h2 id="2-技术栈">2. 技术栈</h2>
+<h3 id="2-1-前端-src-用户端-src-admin-管理端">2.1 前端（src/ 用户端 + src-admin/ 管理端）</h3>
+<div class="tbl"><table><thead><tr><th>类别</th><th>选型</th><th>版本</th><th>说明</th></tr></thead><tbody><tr><td>框架</td><td>Vue</td><td>^3.5</td><td>Options API 为主，部分 <code>&lt;script setup&gt;</code></td></tr><tr><td>路由</td><td>vue-router</td><td>^4.6</td><td>用户端 history 模式（原生 App 壳内 hash）；管理端 hash 模式</td></tr><tr><td>构建</td><td>Vite</td><td>^8.0</td><td>多页入口：<code>index.html</code>（主站）+ <code>admin.html</code>（后台）</td></tr><tr><td>状态</td><td>—</td><td>—</td><td>无 Pinia/Vuex；composables 模块级 reactive 单例（<code>useSessionShell</code>、<code>useHomeListState</code> 等）</td></tr><tr><td>实时通信</td><td>socket.io-client</td><td>^4.8</td><td>聊天、未读红点、客服工单提醒</td></tr><tr><td>图表</td><td>echarts</td><td>^6.1</td><td>管理端数据看板（按需引入）</td></tr><tr><td>样式</td><td>手写 CSS</td><td>—</td><td>明暗主题（View Transitions）；PC ≥961px / 移动 ≤960px 双端适配</td></tr></tbody></table></div>
+<h3 id="2-2-后端-server-esm-单体">2.2 后端（server/，ESM 单体）</h3>
+<div class="tbl"><table><thead><tr><th>类别</th><th>选型</th><th>版本</th><th>说明</th></tr></thead><tbody><tr><td>运行时</td><td>Node.js</td><td>20（alpine 镜像）</td><td>单进程多容器（蓝绿）</td></tr><tr><td>Web 框架</td><td>express</td><td>^4.21</td><td>REST API；body 2MB 上限，保留 rawBody 供支付回调验签</td></tr><tr><td>数据库驱动</td><td>mysql2</td><td>^3.14</td><td>promise 连接池，手写 SQL（无 ORM）；库 <code>game_rental</code></td></tr><tr><td>缓存/锁</td><td>redis</td><td>^6.0</td><td>会话、验证码、限流、分布式锁、商品详情缓存；不可用时降级内存</td></tr><tr><td>实时</td><td>socket.io</td><td>^4.8</td><td>聊天房间、未读推送、在线状态</td></tr><tr><td>鉴权</td><td>jsonwebtoken</td><td>^9.0</td><td>HS256 + Redis 会话（可吊销）</td></tr><tr><td>密码</td><td>bcryptjs</td><td>^3.0</td><td>cost 10（占位密码/运维重置用，登录已全面转短信验证码）</td></tr><tr><td>WebAuthn</td><td>@simplewebauthn/server</td><td>^13.3</td><td>管理员/客服 Passkey 二次校验</td></tr><tr><td>限流</td><td>express-rate-limit + rate-limit-redis</td><td>^8.5 / ^5.0</td><td>Redis 共享计数；socket 消息走 ZSET 滑动窗口</td></tr><tr><td>安全头</td><td>helmet</td><td>^8.1</td><td>CSP、nosniff 等</td></tr><tr><td>上传</td><td>multer</td><td>^2.1</td><td>内存存储 + 文件名白名单校验 + 日配额</td></tr><tr><td>对象存储</td><td>cos-nodejs-sdk-v5</td><td>^2.15</td><td>上传/删除；读 URL 自研 HMAC-SHA1 窗口对齐签名</td></tr><tr><td>三方 SDK</td><td>tencentcloud-sdk-nodejs-sms / -captcha / -faceid</td><td>^4.1</td><td>短信、天御验证码（faceid 已从主链路移除）</td></tr><tr><td>配置</td><td>dotenv</td><td>^16</td><td>环境变量驱动，生产 <code>deploy/env/prod.env</code></td></tr></tbody></table></div>
+<h3 id="2-3-基础设施与工程化">2.3 基础设施与工程化</h3>
+<div class="tbl"><table><thead><tr><th>类别</th><th>选型</th><th>说明</th></tr></thead><tbody><tr><td>容器编排</td><td>docker-compose（prod/dev/test 三套）</td><td>5 服务；蓝绿发布脚本见 1.3</td></tr><tr><td>反向代理</td><td>nginx:alpine</td><td>TLS 终止、gzip、限流、静态资源、WebSocket</td></tr><tr><td>数据库</td><td>MySQL 8.0</td><td>utf8mb4_unicode_ci / InnoDB；时区 +08:00；慢查询 0.5s；max_connections 200</td></tr><tr><td>缓存</td><td>Redis 7-alpine（AOF）</td><td>见 4.5</td></tr><tr><td>消息队列</td><td><strong>无</strong></td><td>用「DB 状态机 + 定时任务对账 + 幂等键」替代，见 4.6</td></tr><tr><td>定时任务</td><td>Node 进程内 setInterval ×6</td><td>进程内重入保护 + Redis 跨实例分布式锁，见 4.6</td></tr><tr><td>部署</td><td>scp + blue-green-deploy.sh</td><td>零停机发布、一键回滚</td></tr><tr><td>版本管理</td><td>git（GitHub 私库）</td><td>main 单分支直发生产</td></tr></tbody></table></div>
+<hr/>
+<h2 id="3-前端页面结构">3. 前端页面结构</h2>
+<h3 id="3-1-工程与入口">3.1 工程与入口</h3>
+<p>单仓双 SPA，Vite 多页构建（<code>vite.config.js</code> rollupOptions.input）：</p>
+<div class="tbl"><table><thead><tr><th>应用</th><th>入口</th><th>源码</th><th>域名 / 访问</th><th>路由模式</th></tr></thead><tbody><tr><td>用户端</td><td><code>index.html</code></td><td><code>src/</code></td><td>xysh88.com / www.xysh88.com</td><td>history（原生 App 壳内自动降级 hash）</td></tr><tr><td>管理后台</td><td><code>admin.html</code></td><td><code>src-admin/</code></td><td>admin.xysh88.com（IP 白名单）</td><td>hash（<code>createWebHashHistory</code>）</td></tr></tbody></table></div>
+<p>两个 SPA 共用同一 API 集群与 Cookie 会话；客服工作台不在 admin 端，而在<strong>主站</strong> <code>/support-console</code>（role=support 可见），复用主站登录态。</p>
+<p>用户端布局壳 <code>AppShell.vue</code>（唯一布局）：PC（≥961px）左侧固定 SideBar 240px；移动端（≤960px）MobileTopBar + 底部五 Tab（首页/改枪码/发布/代肝/我的）。全局弹层 AppToast / AppConfirm；<strong>登录面板 <code>AuthPanel</code> 不是路由页</strong>，而是全屏替换主内容区（<code>showAuth</code> 状态驱动）。无全局路由守卫，鉴权由各页面 mounted 自查 + <code>apiFetch</code> 401 统一处理（清态 + 弹登录）。首页 KeepAlive 缓存 + <code>useHomeListState</code> 列表状态快照，实现「详情返回原位」。</p>
+<h3 id="3-2-用户端路由与页面结构">3.2 用户端路由与页面结构</h3>
+<div class="tbl"><table><thead><tr><th>路径</th><th>视图</th><th>页面功能</th></tr></thead><tbody><tr><td><code>/</code></td><td>HomePage</td><td>商品列表首页：10 维筛选、8 维排序、小额/特惠专区开关、编号搜索、无限滚动（10/页）</td></tr><tr><td><code>/listings/:listingNo</code></td><td>ListingDetailPage</td><td>商品详情：属性/额外物品/图片/封禁凭证；买家下单入口（协议勾选 + OrderModal）；带只读模式（个人中心/卖家视角复用）</td></tr><tr><td><code>/publish</code> · <code>/publish/:id/edit</code></td><td>PublishPage</td><td>发布 / 编辑出租表单（定价自动推导、额外物品、媒体上传、保险三档）</td></tr><tr><td><code>/profile</code></td><td>ProfilePage</td><td>个人中心，6 个 Section（query 驱动）：我发布的（含卖家订单 Tab）/ 我买到的 / 我的消息 / 邀新赚钱 / 收款账号 / 问题反馈</td></tr><tr><td><code>/orders/:id</code></td><td>OrderDetailPage</td><td>订单详情（`?role=buyer</td><td>seller` 双视角）：状态机操作、物品申报、押金保管卡、聊天入口、支付入口</td></tr><tr><td><code>/payment/result</code></td><td>PaymentResultPage</td><td>支付回跳结果页（3s×20 次轮询确认支付状态）</td></tr><tr><td><code>/support-console</code></td><td>SupportConsolePage</td><td>客服工作台（role=support）：售后/售前工单、商品审核、Passkey 安全设置</td></tr><tr><td><code>/gun</code></td><td>GunCodePage</td><td>改枪码静态分享页（按枪械分类一键复制，无需登录）</td></tr><tr><td><code>/boost</code></td><td>—</td><td>代肝板块占位（未上线，点击提示开发中）</td></tr></tbody></table></div>
+<pre><code>xysh88.com（AppShell 壳）
+├─ / 首页商品列表 ──点击卡片──▶ /listings/:listingNo 商品详情
+│                                   └─ OrderModal 下单 ──▶ /profile?section=orders（待付款）
+│                                          └─ PaymentModal ──▶ 汇付收银台 ──回跳──▶ /payment/result
+│                                                 └─▶ /orders/:id?role=buyer 订单详情
+├─ /publish（发布）/ /publish/:id/edit（编辑）
+├─ /profile（个人中心）
+│    ├─ Section=published  我发布的（商品管理 + 卖家订单 Tab）
+│    ├─ Section=orders     我买到的（买家订单）
+│    ├─ Section=messages   我的消息（会话 + 系统通知，开 ConversationPanel）
+│    ├─ Section=invite     邀新赚钱
+│    ├─ Section=wallet     收款账号（进件/绑卡/余额/提现/记录）
+│    └─ Section=feedback   问题反馈
+│    └─ 订单卡 ──▶ /orders/:id?role=buyer|seller
+├─ /support-console 客服工作台（support 角色）
+├─ /gun 改枪码 · /boost 代肝占位
+└─ 全局浮层：AuthPanel 登录 · ConversationPanel 聊天（订单/售前） · AppToast/AppConfirm</code></pre>
+<h3 id="3-3-用户端关键组件">3.3 用户端关键组件</h3>
+<div class="tbl"><table><thead><tr><th>组件</th><th>用途</th></tr></thead><tbody><tr><td>SideBar / MobileTopBar / BottomNav / AppFooter</td><td>导航壳（PC/移动）与备案页脚</td></tr><tr><td>AuthPanel</td><td>手机验证码登录面板（天御验证码前置、协议弹窗、邀请码绑定）</td></tr><tr><td>FilterBar / SortBar / ProductCard</td><td>首页列表套件（筛选 10 项、排序 8 项、商品卡含分享/复制编号）</td></tr><tr><td>ListingDetail + OrderModal</td><td>商品详情主体与确认下单弹窗（联系方式 + 价格明细）</td></tr><tr><td>PaymentModal</td><td>收银台弹窗（支付宝 PC 整页跳转 / H5；弹内轮询 + 到期自动关单）</td></tr><tr><td>OrderDetail</td><td>订单详情主体（双视角、状态机按钮区、物品申报表单、押金保管卡、时间线）</td></tr><tr><td>PublishForm</td><td>发布/编辑大表单（2530 行，含定价自动计算与媒体上传排序）</td></tr><tr><td>ProfileCenter + profile/ProfileMessagesPanel + profile/ProfileWalletPanel</td><td>个人中心各 Section 主体</td></tr><tr><td>ConversationPanel</td><td>抽屉式聊天面板（订单三方会话/售前咨询，socket 实时 + 多图上传 + 敏感词）</td></tr><tr><td>SupportConsole + support/ListingReviewDesk</td><td>客服工作台（工单台 + 审核台 + Passkey）</td></tr><tr><td>GunCode</td><td>改枪码静态页</td></tr></tbody></table></div>
+<h3 id="3-4-状态管理与数据流">3.4 状态管理与数据流</h3>
+<p>无 Pinia/Vuex，采用 composables 模块级单例：</p>
+<div class="tbl"><table><thead><tr><th>composable / util</th><th>职责</th></tr></thead><tbody><tr><td><code>useSessionShell</code></td><td>登录态核心：currentUser/isLoggedIn/showAuth、401 统一处理、登出</td></tr><tr><td><code>useUnreadSocket</code></td><td>全局 socket.io 连接：message/notification 事件族驱动全局未读红点</td></tr><tr><td><code>useHomeListState</code></td><td>首页列表筛选/页码/滚动位置快照与还原</td></tr><tr><td><code>useRouteShellUi</code> / <code>useTheme</code></td><td>导航高亮与返回逻辑 / 明暗主题（View Transitions）</td></tr><tr><td><code>utils/api.js</code></td><td>统一请求（Cookie credentials、30s 超时、非 2xx 抛错）</td></tr><tr><td><code>utils/businessSettings.js</code></td><td>后台业务参数镜像（佣金/阈值/选项/价目下发前端，含默认值兜底）</td></tr><tr><td><code>utils/media.js</code></td><td>图片变体 `?variant=thumb</td><td>mid</td><td>full`（数据万象 WebP）、失败回退、JPEG 压缩上传</td></tr><tr><td><code>utils/money.js</code></td><td>分↔元换算、买家租金（卖家租金×(1+买家服务费率)）、卖家到手估算</td></tr><tr><td><code>utils/supportPasskey.js</code>（主站）/ <code>utils/api.js</code>（admin）</td><td>WebAuthn Passkey 注册与 step-up 428 自动补验封装</td></tr></tbody></table></div>
+<h3 id="3-5-管理后台页面结构-src-admin">3.5 管理后台页面结构（src-admin）</h3>
+<p>侧边栏导航与路由表由同一 <code>adminSections</code> 数组驱动，页面 KeepAlive。登录页（手机号短信 scene=admin_login + 前置天御验证码）校验 <code>role=admin</code> 后进入；启动拉取 <code>/api/admin/health</code> 展示服务状态。</p>
+<div class="tbl"><table><thead><tr><th>路径</th><th>视图</th><th>功能</th></tr></thead><tbody><tr><td><code>/overview</code></td><td>AdminOverview</td><td>运营概览卡（用户/商品/订单/售后数）、echarts 趋势看板（销量/注册/在线，日/月/年/自定义）、收益明细（平台抽成/卖家入账/订单维度）</td></tr><tr><td><code>/users</code></td><td>AdminUsersCenter</td><td>用户管理：搜索、角色变更（user/support/admin）、封禁（1-3650 天）/解封、客服改名（快照审计）</td></tr><tr><td><code>/orders</code></td><td>AdminOrdersCenter</td><td>订单管理：搜索/日期筛选、30s 静默刷新、关闭订单（已付款→原路退款；资金在途场景禁用按钮）</td></tr><tr><td><code>/listings</code></td><td>AdminListingsCenter</td><td>商品管理：搜索/分页、下架商品</td></tr><tr><td><code>/listing-reviews</code></td><td>ListingReviewCenter</td><td>商品审核：三页签详情（属性/额外物品/凭证媒体）、通过/驳回（驳回必填原因）</td></tr><tr><td><code>/feedback</code></td><td>AdminFeedbackCenter</td><td>问题反馈：状态流转（处理中/已解决/驳回）+ 处理备注</td></tr><tr><td><code>/business-settings</code></td><td>AdminBusinessSettingsCenter</td><td>平台参数配置三页签：业务规则（比例/押金/佣金/邀新/冷静期/阈值/安全限流）、保险赔付方案、额外物品双边定价</td></tr><tr><td><code>/operation-logs</code></td><td>OperationLogCenter</td><td>操作日志审计（模块/动作/对象/前后快照 JSON）</td></tr><tr><td><code>/security</code></td><td>AdminSecurityCenter</td><td>安全设置：Passkey 管理（绑定需短信验证）、受信任设备（30 天）、step-up 策略说明</td></tr></tbody></table></div>
+<p>高危操作（改角色/封禁/关单/下架/审核/改参数/Passkey 删除等）统一走 step-up：后端返回 428 → 前端自动拉起 Passkey WebAuthn 验证后重放请求（<code>runProtectedAction</code> 模式）。</p>
+<hr/>
+<h2 id="4-数据库设计">4. 数据库设计</h2>
+<h3 id="4-1-总览">4.1 总览</h3>
+<p>数据库 <code>game_rental</code>，共 <strong>37 张表</strong>，InnoDB / utf8mb4_unicode_ci。<strong>所有金额字段以「分」为单位的 BIGINT 存储</strong>（序列化层输出元）。商品/订单大量使用快照字段（卖家名、标题、租金、物品单价），保证历史可追溯。</p>
+<p>表结构由两处共同定义：<code>server/schema.sql</code>（初始建库）+ 启动时幂等迁移（<code>app.js</code> 的 <code>ensure*Schema()</code> 系列，顺序见 <code>bootstrap/schema.js</code>；SQL 迁移文件在 <code>server/migrations/</code>，执行记录入 <code>schema_migrations</code> 账本）。</p>
+<div class="tbl"><table><thead><tr><th>域</th><th>表</th></tr></thead><tbody><tr><td>用户域（3）</td><td>users、admin_passkeys、admin_trusted_devices</td></tr><tr><td>商品域（6）</td><td>listings、listing_items、listing_images、listing_ban_images、listing_click_users、listing_hot_stats</td></tr><tr><td>订单/支付/结算域（13）</td><td>orders、order_item_snapshots、order_item_usage_reports、order_settlements、order_deposit_holds、payment_transactions、payment_refunds、settlement_payouts、encashments、wallet_accounts、wallet_ledger、user_settlement_accounts、invite_rewards</td></tr><tr><td>纠纷/客服域（3）</td><td>support_order_events、presale_consultations、user_feedback</td></tr><tr><td>消息域（4）</td><td>conversations、conversation_participants、conversation_messages、conversation_message_uploads</td></tr><tr><td>通知域（1）</td><td>user_notifications</td></tr><tr><td>配置/运营/风控域（7）</td><td>admin_business_settings、admin_operation_logs、admin_online_snapshots、sms_send_daily_stats、sms_send_ip_daily_stats、user_upload_daily_stats、schema_migrations</td></tr></tbody></table></div>
+<h3 id="4-2-er-图">4.2 ER 图</h3>
+<h4 id="4-2-1-全表关系总图-物理-fk-逻辑引用">4.2.1 全表关系总图（物理 FK + 逻辑引用）</h4>
+<div class="mermaid">erDiagram
+    users ||--o{ listings : "owner_user_id 发布"
+    users ||--o{ orders : "buyer_id 买入"
+    users |o--o{ orders : "seller_id 卖出"
+    users |o--o{ users : "inviter_user_id 邀请(自关联)"
+    listings ||--o{ orders : "被下单"
+    listings ||--o{ listing_items : "额外物品"
+    listings ||--o{ listing_images : "展示图"
+    listings ||--o{ listing_ban_images : "处罚截图"
+    listings ||--o{ listing_click_users : "点击去重"
+    listings ||--|| listing_hot_stats : "7日热度(1:1)"
+    users ||--o{ listing_click_users : "点击"
+
+    orders ||--o{ order_item_snapshots : "物品快照"
+    orders ||--o{ order_item_usage_reports : "物品使用申报"
+    orders ||--|| order_settlements : "结算单(1:1)"
+    orders ||--o| order_deposit_holds : "押金保管(1:1)"
+    orders ||--o| invite_rewards : "邀新返现(1:1)"
+    orders ||--o{ support_order_events : "工单时间线"
+    orders ||--o{ settlement_payouts : "打款单"
+    orders ||--o{ payment_transactions : "支付流水"
+    orders ||--o{ payment_refunds : "退款单"
+    orders ||--o{ wallet_ledger : "钱包流水"
+    payment_transactions ||--o{ payment_refunds : "transaction_no 原路退"
+
+    users ||--|| wallet_accounts : "钱包(1:1)"
+    users ||--|| user_settlement_accounts : "汇付收款账户(1:1)"
+    users ||--o{ wallet_ledger : "钱包流水"
+    users ||--o{ payment_transactions : "支付"
+    users ||--o{ payment_refunds : "退款"
+    users ||--o{ encashments : "取现"
+    users ||--o{ invite_rewards : "inviter/invitee"
+    users ||--o{ admin_passkeys : "Passkey凭证"
+    users ||--o{ admin_trusted_devices : "受信任设备"
+    users ||--o{ presale_consultations : "发起咨询"
+    users ||--o{ user_feedback : "问题反馈"
+    users ||--o{ user_notifications : "站内通知"
+
+    conversations ||--o{ conversation_participants : "参与人"
+    conversations ||--o{ conversation_messages : "消息"
+    conversations ||--o{ conversation_message_uploads : "图片暂存"
+    users ||--o{ conversation_participants : "参与"
+    presale_consultations ||--o| conversations : "咨询会话(逻辑ref_id)"
+
+    orders ||--o| conversations : "订单会话(逻辑 type+ref_id)"</div>
+<blockquote><p>实线为物理外键（InnoDB 约束）；标注「逻辑」的为代码层维护的引用（无 FK 约束）：<code>conversations.(type,ref_id)</code> → orders / presale_consultations、<code>listings.reviewed_by / review_assignee_id</code>、<code>orders.support_assignee_id</code> 等客服派单字段、<code>order_settlements.executed_by_support_id</code>、<code>payment_refunds.transaction_no</code>、多态引用 <code>user_notifications.(related_type,related_id)</code> 等。</p></blockquote>
+<h4 id="4-2-2-用户域-商品域-核心字段">4.2.2 用户域 + 商品域（核心字段）</h4>
+<div class="mermaid">erDiagram
+    users {
+        int id PK
+        varchar phone UK "登录标识(唯一)"
+        varchar username "掩码手机号自动生成"
+        varchar password_hash "bcrypt 占位"
+        enum role "user|support|admin"
+        datetime banned_until "封禁截止,空=未封"
+        varchar invite_code UK "专属邀请码"
+        int inviter_user_id "邀请人(自关联)"
+        varchar bound_invite_code "已绑定邀请码快照"
+    }
+    admin_passkeys {
+        bigint id PK
+        int user_id FK
+        varchar credential_id UK "WebAuthn credential id"
+        text public_key
+        bigint sign_count "克隆检测"
+        tinyint is_active
+    }
+    admin_trusted_devices {
+        bigint id PK
+        int user_id FK
+        char token_hash UK "SHA-256 设备令牌"
+        datetime expires_at "30天"
+        datetime revoked_at
+    }
+    listings {
+        int id PK
+        varchar listing_no UK "编号=年月日+随机"
+        int owner_user_id FK "发布者"
+        enum listing_status "active|inactive|pending_review|sold_out|rented"
+        enum review_status "pending|approved|rejected"
+        varchar compensation_plan "premium|medium|basic"
+        bigint deposit "押金(分)"
+        bigint rent_price "租金(分,卖家侧)"
+        bigint base_ratio "基础比例(万哈夫币/元)"
+        bigint hafu_coin "哈夫币余额(M)"
+        tinyint rent_days "出租天数"
+        varchar login_method "上号方式"
+        int review_assignee_id "审核派单客服(逻辑)"
+    }
+    listing_items {
+        int id PK
+        int listing_id FK
+        varchar item_key "道具标识(topCard/awmBullet...)"
+        enum item_mode "sale|gift"
+        int quantity
+        bigint unit_price "卖家侧单价(分)"
+        bigint buyer_unit_price "买家侧结算单价(分)"
+    }
+    listing_images {
+        int id PK
+        int listing_id FK
+        longtext image_url
+        int sort_order
+    }
+    listing_ban_images {
+        int id PK
+        int listing_id FK
+        varchar image_url
+        int sort_order
+    }
+    listing_click_users {
+        bigint id PK
+        int listing_id FK
+        int user_id FK
+    }
+    listing_hot_stats {
+        int listing_id PK "与listings 1:1"
+        int unique_click_7d "近7天独立点击(预聚合)"
+    }
+
+    users ||--o{ listings : "发布"
+    users ||--o{ admin_passkeys : ""
+    users ||--o{ admin_trusted_devices : ""
+    listings ||--o{ listing_items : ""
+    listings ||--o{ listing_images : ""
+    listings ||--o{ listing_ban_images : ""
+    listings ||--o{ listing_click_users : ""
+    listings ||--|| listing_hot_stats : ""</div>
+<h4 id="4-2-3-订单-支付-结算域-核心字段">4.2.3 订单 / 支付 / 结算域（核心字段）</h4>
+<div class="mermaid">erDiagram
+    orders {
+        int id PK
+        varchar order_no UK
+        int buyer_id FK
+        int seller_id FK "删卖家置NULL"
+        int listing_id FK
+        bigint seller_rent_amount "卖家租金快照(分)"
+        bigint amount "买家租金(分,含买家服务费)"
+        bigint deposit_amount "押金(分)"
+        enum status "7态,见4.3"
+        enum settlement_status "none|buyer_reported|seller_confirmed|executed"
+        varchar support_scene "none|cancel_request|settlement_dispute|fund_frozen|deposit_dispute|*processing"
+        enum support_status "none|pending|handling|resolved"
+        int support_assignee_id "负责客服(逻辑)"
+        varchar support_origin_status "冻结前原状态快照"
+        datetime paid_at
+        datetime verified_at "买家确认账号"
+    }
+    order_item_snapshots {
+        int id PK
+        int order_id FK
+        varchar item_key UK "uk(order_id,item_key)"
+        enum item_mode "sale|gift"
+        bigint unit_price "卖家侧快照(分)"
+        bigint buyer_unit_price "买家侧快照(分)"
+    }
+    order_item_usage_reports {
+        int id PK
+        int order_id FK
+        varchar item_key UK
+        int snapshot_quantity "快照数量"
+        int reported_quantity "买家填报使用量"
+        bigint buyer_total_price "买家侧扣款(分)"
+        tinyint seller_confirmed "卖家确认"
+    }
+    order_settlements {
+        int id PK
+        int order_id FK "UNIQUE 1:1"
+        bigint platform_fee_amount "平台抽成(分)"
+        bigint seller_income_amount "卖家入账(分)"
+        bigint buyer_refund_amount "买家退款(分)"
+        enum payout_mode "huifu|manual 手动结单"
+        enum frozen_liable_party "seller|buyer 冻结裁决责任方"
+        enum status "draft|executed"
+        varchar manual_payout_note "线下收款留痕"
+    }
+    order_deposit_holds {
+        bigint id PK
+        int order_id FK "UNIQUE 1:1"
+        bigint hold_amount "保管押金(分)"
+        enum status "holding|disputed|releasing|released|confiscating|confiscated"
+        int hold_days "冷静期天数快照"
+        datetime release_at "预计退回"
+        enum verdict "refund|confiscate 裁决"
+        varchar refund_reason "退款幂等键"
+        varchar payout_remark "打款幂等键"
+    }
+    payment_transactions {
+        bigint id PK
+        varchar transaction_no UK "PAY+日期+随机"
+        int user_id FK
+        int order_id FK "删订单置NULL"
+        bigint amount "金额(分)"
+        enum status "created|pending|paid|failed|cancelled|closed"
+        enum business_sync_status "pending|synced|failed"
+        varchar provider_trade_no "汇付交易号"
+        datetime expires_at
+    }
+    payment_refunds {
+        bigint id PK
+        varchar refund_no UK "RFD+日期+随机"
+        varchar transaction_no "原支付流水(逻辑)"
+        int order_id FK
+        enum refund_type "full|partial"
+        bigint amount
+        varchar reason "幂等键(场景固定文案)"
+        enum status "pending|processing|success|failed|cancelled"
+    }
+    settlement_payouts {
+        bigint id PK
+        varchar payout_no UK "POT+..."
+        int order_id FK
+        int payee_user_id FK "收款卖家"
+        bigint amount
+        enum status "pending|processing|success|failed|cancelled"
+        varchar payee_huifu_id "卖家汇付ID"
+        varchar remark "幂等键"
+    }
+    encashments {
+        bigint id PK
+        varchar encashment_no UK "取现请求号"
+        int user_id FK
+        bigint amount
+        enum status "pending|processing|success|failed|cancelled"
+        varchar into_acct_date_type "D1|T1|TS"
+        varchar trans_stat "汇付原始 P|S|F|C"
+    }
+    user_settlement_accounts {
+        int user_id PK "FK=users 1:1"
+        enum account_type "person|enterprise"
+        enum bind_status "unbound|pending|active|disabled"
+        varchar huifu_id "汇付用户ID"
+        varchar acct_id "绑卡token_no"
+        varchar id_card_masked "脱敏证件"
+    }
+    invite_rewards {
+        bigint id PK
+        int order_id FK "UNIQUE 1单1条"
+        int inviter_user_id FK "邀请人"
+        int invitee_user_id FK "下单买家"
+        decimal reward_rate_percent "默认30%"
+        bigint reward_amount "返现(分)"
+        enum payout_status "pending|paid|failed|wallet_credited"
+    }
+
+    orders ||--o{ order_item_snapshots : ""
+    orders ||--o{ order_item_usage_reports : ""
+    orders ||--|| order_settlements : ""
+    orders ||--o| order_deposit_holds : ""
+    orders ||--o| invite_rewards : ""
+    orders ||--o{ payment_transactions : ""
+    payment_transactions ||--o{ payment_refunds : "原路退"
+    orders ||--o{ payment_refunds : ""
+    orders ||--o{ settlement_payouts : ""
+    users ||--o{ encashments : ""
+    users ||--|| user_settlement_accounts : ""</div>
+<p>（钱包两表 <code>wallet_accounts</code>（user_id 主键 1:1，balance/frozen_balance）、<code>wallet_ledger</code>（流水分账前/后余额快照）结构简单，见总图关系。）</p>
+<h4 id="4-2-4-消息域-配置域-核心字段">4.2.4 消息域 + 配置域（核心字段）</h4>
+<div class="mermaid">erDiagram
+    conversations {
+        int id PK
+        enum type "order|presale"
+        int ref_id "订单ID或咨询单ID(逻辑)"
+        varchar title
+        enum status "active|closed"
+        varchar last_message_preview
+    }
+    conversation_participants {
+        int id PK
+        int conversation_id FK
+        int user_id FK
+        enum role "buyer|seller|support"
+        int last_read_message_id
+        int unread_message_count "冗余未读计数"
+    }
+    conversation_messages {
+        int id PK
+        int conversation_id FK
+        int sender_user_id FK
+        enum message_type "text|image|system"
+        text content
+        varchar media_url
+    }
+    admin_business_settings {
+        tinyint id PK "单例"
+        longtext settings_json "全部业务参数JSON"
+        int updated_by_user_id "逻辑"
+    }
+    admin_operation_logs {
+        bigint id PK
+        int operator_user_id "逻辑"
+        varchar module "user|order|listing|review|security|config|feedback|wallet"
+        varchar action
+        varchar target_type "多态对象"
+        longtext before_snapshot "变更前JSON"
+        longtext after_snapshot "变更后JSON"
+    }
+
+    conversations ||--o{ conversation_participants : ""
+    conversations ||--o{ conversation_messages : ""
+    users ||--o{ conversation_participants : ""</div>
+<h3 id="4-3-关键状态机">4.3 关键状态机</h3>
+<p><strong>orders.status（7 态主状态机）</strong>：</p>
+<pre><code>pending_payment 待支付 → paid 已支付(履约中) → settlement_pending 待结算 → deposit_holding 押金保管 → completed 已完成
+                                    ↘ support_handling 客服处理中（旁路态，可回主流程或转 cancelled）
+        pending_payment 超时 → cancelled（商品恢复上架）</code></pre>
+<div class="tbl"><table><thead><tr><th>字段</th><th>枚举与含义</th></tr></thead><tbody><tr><td>orders.status</td><td>pending_payment 待支付 / paid 已支付·履约中 / support_handling 客服处理中 / settlement_pending 待结算 / deposit_holding 押金保管·冷静期 / completed 已完成 / cancelled 已取消</td></tr><tr><td>orders.settlement_status</td><td>none 未结算 / buyer_reported 买家已申报物品 / seller_confirmed 卖家已确认 / executed 已分账</td></tr><tr><td>orders.support_scene</td><td>none / cancel_request 取消请求 / settlement_dispute 结算争议 / fund_frozen 资金冻结 / deposit_dispute 押金举报 / cancel_refund_processing、settlement_funds_processing、frozen_funds_processing、admin_close_refund_processing、deposit_funds_processing（资金在途中间态，由对账任务收口）</td></tr><tr><td>orders.support_status</td><td>none / pending 待领取 / handling 处理中 / resolved 已解决</td></tr><tr><td>listings.listing_status</td><td>active 上架 / inactive 下架 / pending_review 审核中 / sold_out 已售出 / rented 已租出（有进行中订单；取消/完成后恢复）</td></tr><tr><td>listings.review_status</td><td>pending 待审 / approved 通过 / rejected 驳回</td></tr><tr><td>order_deposit_holds.status</td><td>holding 保管中 / disputed 已举报待裁决 / releasing 退款中 / released 已退买家 / confiscating 赔付中 / confiscated 已赔卖家</td></tr><tr><td>order_settlements.status / payout_mode / frozen_liable_party</td><td>draft / executed；huifu 汇付打款 / manual 客服线下收款；冻结裁决责任方 seller / buyer</td></tr><tr><td>payment_transactions.status</td><td>created / pending / paid / failed / cancelled / closed</td></tr><tr><td>payment_refunds / settlement_payouts / encashments.status</td><td>pending / processing / success / failed / cancelled</td></tr></tbody></table></div>
+<h3 id="4-4-库内预聚合与冗余计数-mysql-侧-缓存表">4.4 库内预聚合与冗余计数（MySQL 侧「缓存表」）</h3>
+<div class="tbl"><table><thead><tr><th>表/列</th><th>作用</th><th>刷新方式</th></tr></thead><tbody><tr><td>listing_hot_stats</td><td>商品 7 日独立点击预聚合，列表页直接 JOIN 免实时 GROUP BY</td><td>定时任务 60s 重算</td></tr><tr><td>listing_click_users</td><td>热度统计的点击去重明细（源数据）</td><td>写入时 UPSERT</td></tr><tr><td>admin_online_snapshots</td><td>在线人数时序快照（趋势图数据源）</td><td>定时任务 60s 追加</td></tr><tr><td>sms_send_daily_stats / sms_send_ip_daily_stats</td><td>短信按手机号/按 IP 日频控计数</td><td>UNIQUE 键 + 计数累加</td></tr><tr><td>user_upload_daily_stats</td><td>用户日上传配额（默认 100MB/天）</td><td>同上，失败回滚</td></tr><tr><td>conversation_participants.unread_message_count</td><td>会话未读数冗余列</td><td>收发消息/已读时重算</td></tr><tr><td>orders/listings 快照字段</td><td>卖家名/标题/租金/物品单价等，历史不随源变</td><td>下单/发布时写入</td></tr></tbody></table></div>
+<h3 id="4-5-redis-缓存-key-设计">4.5 Redis 缓存 key 设计</h3>
+<p>Redis（<code>REDIS_KEY_PREFIX</code> 统一前缀，AOF 持久化），不可用时全部降级内存实现（限流降级为单实例计数）：</p>
+<div class="tbl"><table><thead><tr><th>用途</th><th>键模式（功能名）</th><th>TTL / 配置项</th><th>说明</th></tr></thead><tbody><tr><td>登录会话</td><td><code>login_sessions:{sid}</code></td><td>user 会话 7 天·空闲 12h；admin 24 天内·空闲 30min（<code>USER/ADMIN_LOGIN_SESSION_TTL_SECONDS</code>、<code>*_SESSION_IDLE_TIMEOUT</code>）</td><td>JWT 内 sid 的服务端状态；支持吊销/续签（续签窗口 15min）</td></tr><tr><td>短信验证码</td><td>验证码状态键（手机号+scene）</td><td><code>SMS_CODE_TTL_SECONDS</code>；发送间隔 <code>SMS_CODE_SEND_INTERVAL_SECONDS</code>；校验错误锁定 <code>SMS_CODE_VERIFY_LOCK_SECONDS</code></td><td>与 DB 日限额表双层防刷</td></tr><tr><td>HTTP 限流</td><td><code>RATE_LIMIT_REDIS_PREFIX</code> 前缀的计数键（express-rate-limit + rate-limit-redis）</td><td>各窗口见 5.x 限流表</td><td>蓝绿双实例共享计数</td></tr><tr><td>Socket 滑动窗口限流</td><td>ZSET 键（consume/rollback）</td><td>消息 10s/50 次；聊天图 60s/5 次</td><td>rate-limit-store.js 自研 ZSET 实现</td></tr><tr><td>分布式锁·订单</td><td>订单锁</td><td><code>ORDER_LOCK_TTL_MS</code></td><td>支付回调入账、结算执行等互斥；Redis 不可用 fail-open</td></tr><tr><td>分布式锁·任务</td><td>任务锁</td><td><code>JOB_LOCK_TTL_MS</code> / <code>JOBS_LOCK_TTL_MS</code>（默认 300s）</td><td>蓝绿双容器同轮任务只跑一次</td></tr><tr><td>商品详情缓存</td><td>商品 ID 维度缓存键</td><td><code>LISTING_DETAIL_CACHE_TTL_SECONDS</code>（默认 180s）</td><td>公开商品详情读缓存；后台改配置/审核后失效</td></tr><tr><td>用户信息缓存</td><td>进程内 Map（非 Redis）</td><td><code>AUTH_USER_CACHE_TTL_MS</code>（默认 30s）</td><td>角色/封禁以 DB 为准的短缓存</td></tr><tr><td>在线状态</td><td>用户在线心跳键</td><td><code>CHAT_ONLINE_TTL_SECONDS</code>（默认 120s，心跳 ≥15s）</td><td>在线人数统计、客服在线列表</td></tr></tbody></table></div>
+<h3 id="4-6-中间件说明-为什么没有-mq">4.6 中间件说明（为什么没有 MQ）</h3>
+<p>系统未引入 RabbitMQ / Kafka。跨系统（汇付）异步结果驱动的最终一致性由以下机制等效实现：</p>
+<div class="tbl"><table><thead><tr><th>常规 MQ 方案</th><th>本系统等效实现</th></tr></thead><tbody><tr><td>支付成功消息</td><td>汇付异步回调（验签入账）+ 前端回站轮询触发主动查单 + 60s 超时任务兜底查单</td></tr><tr><td>退款/打款结果消息</td><td>120s 资金对账任务（<code>reconcileProcessingFundsOrders</code>）扫「资金在途」场景订单，逐单调汇付退款查单/打款查单推进状态；客服亦可手动触发「同步资金结果」</td></tr><tr><td>延迟队列（订单超时关闭）</td><td>60s 轮询扫描 + 状态条件 UPDATE（<code>WHERE status IN (...)</code> 防并发），关单前强制先查单防误杀</td></tr><tr><td>幂等消费</td><td>业务幂等键：退款按 <code>payment_refunds.reason</code>、打款按 <code>settlement_payouts.remark</code> 唯一防重发；订单状态流转全部带 WHERE 守卫</td></tr><tr><td>死信/人工干预</td><td>查单失败留痕（<code>provider_query_status='failed'</code>、support_note「请人工核对资金状态」），客服工作台可见</td></tr></tbody></table></div>
+<p>代价与取舍：轮询有秒级延迟（对账 120s），但资金类操作低频（日均订单量级小），轮询 + 幂等 + 对账在当前容量下最简可靠；若订单量上两个数量级，优先引入延迟队列与退款/打款结果 webhook 的独立消费。</p>
+<hr/>
+<h2 id="5-接口设计">5. 接口设计</h2>
+<h3 id="5-1-通用约定">5.1 通用约定</h3>
+<div class="tbl"><table><thead><tr><th>项</th><th>约定</th></tr></thead><tbody><tr><td>Base URL</td><td><code>/api</code>（nginx 反代至 Node；支付回调 <code>/api/pay/callback/:channel</code> 不限流，应用层验签）</td></tr><tr><td>认证</td><td>httpOnly Cookie <code>auth_token</code>（JWT HS256，payload 含 userId/role/sid/amr），亦接受 <code>Authorization: Bearer</code>；每次请求校验 Redis 会话，可即时吊销</td></tr><tr><td>请求体</td><td>JSON，上限 2MB（保留 rawBody 供支付回调验签）；multipart 上传见 5.14</td></tr><tr><td>金额单位</td><td><strong>存储与绝大多数响应为「分」（整数）</strong>；发布/编辑商品的 <code>deposit</code> 等<strong>入参以「元」提交</strong>，后端 <code>yuanToCent</code> 换算；前端 <code>utils/money.js</code> 展示层换算</td></tr><tr><td>分页约定</td><td>响应 <code>{ list, total, page, pageSize }</code>；page 从 1 起，pageSize 各接口有上限（商品 50、订单/会话 20、通知 100、工单 100）</td></tr><tr><td>时间</td><td>北京时间（UTC+8）</td></tr><tr><td>错误响应</td><td>非 2xx，JSON <code>{ message, code? }</code>；关键状态码：401 未登录/会话失效、403 无权或封禁或来源不受信、409 并发冲突（如双审）、428 需二次校验、429 限流（含 <code>retry_after_seconds</code>）</td></tr><tr><td>写来源校验</td><td>非幂等写请求校验 Origin/Host 一致（<code>isTrustedWriteOrigin</code>），跨源伪造拒绝</td></tr></tbody></table></div>
+<h3 id="5-2-角色与鉴权中间件">5.2 角色与鉴权中间件</h3>
+<div class="tbl"><table><thead><tr><th>角色</th><th>值</th><th>能力面</th></tr></thead><tbody><tr><td>普通用户</td><td><code>user</code></td><td>买家/卖家一体（发布即卖家、下单即买家）</td></tr><tr><td>客服</td><td><code>support</code></td><td>主站 <code>/support-console</code>：售后/售前工单、商品审核、资金强操作（step-up）</td></tr><tr><td>管理员</td><td><code>admin</code></td><td><code>admin.xysh88.com</code>：用户/订单/商品/参数/日志/反馈</td></tr></tbody></table></div>
+<p>中间件链：<code>authRequired</code>（登录）→ <code>supportOnly</code> / <code>adminOnly</code> → <code>requireStepUpAuth(policy)</code>（高危二次校验）。</p>
+<p><strong>428 Step-up 协议</strong>：高危动作未满足策略时返回 <code>428 { code: 'STEP_UP_REQUIRED', reason: 'passkey_required' | 'step_up_expired' | 'trusted_device_required', action, policy }</code>；前端拉起 WebAuthn 挑战 <code>POST /api/admin/step-up/options</code> → <code>POST /api/admin/step-up/verify</code>（通过后会话 amr 刷新，5~15 分钟有效）后重放原请求。策略覆盖：用户角色/封禁/关单/下架/商品审核/业务参数/Passkey 与受信任设备管理/批量操作（admin），以及客服侧取消订单/执行结算/冻结与释放资金/资金对账（support）。开关 <code>ADMIN_PASSKEY_ENABLED</code>、<code>SUPPORT_MONEY_STEP_UP_ENABLED</code>。</p>
+<h3 id="5-3-限流矩阵-应用层-redis-共享计数">5.3 限流矩阵（应用层，Redis 共享计数）</h3>
+<div class="tbl"><table><thead><tr><th>限流器</th><th>窗口/阈值（默认）</th><th>键</th><th>覆盖范围</th></tr></thead><tbody><tr><td>authLimiter</td><td>5min / 10</td><td>手机号</td><td>登录验证码类</td></tr><tr><td>authIpLimiter</td><td>5min / 30</td><td>IP</td><td>认证类</td></tr><tr><td>publicReadLimiter</td><td>1min / 6000</td><td>IP</td><td>公开读（商品列表/详情）</td></tr><tr><td>authenticatedReadLimiter</td><td>1min / 1800</td><td>用户</td><td>登录读</td></tr><tr><td>authenticatedWriteLimiter</td><td>1min / 120</td><td>用户</td><td>登录写</td></tr><tr><td>orderWriteLimiter</td><td>1min / 60</td><td>用户</td><td>订单/客服写</td></tr><tr><td>publishLimiter</td><td>1h / 5</td><td>用户</td><td>发布商品</td></tr><tr><td>conversationApiLimiter</td><td>1min / 1800</td><td>用户</td><td>会话接口</td></tr><tr><td>uploadReadLimiter / uploadWriteLimiter</td><td>1min / 120、1min / 20</td><td>用户</td><td>文件读 / 上传</td></tr><tr><td>socket 消息</td><td>10s / 50</td><td>连接</td><td>聊天消息（ZSET 滑动窗口）</td></tr><tr><td>聊天图片</td><td>60s / 5</td><td>用户</td><td>聊天图上传</td></tr><tr><td>上传日配额</td><td>100MB/天</td><td>用户</td><td>DB 计数，失败回滚</td></tr></tbody></table></div>
+<p>（nginx 层另有兜底：api_cc 20r/s、sms_cc 2r/s、api_conn 并发 30。）</p>
+<h3 id="5-4-健康检查与公开配置">5.4 健康检查与公开配置</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/health</code></td><td>游客</td><td>健康检查（优雅停机时 503 <code>shutting_down</code>）</td></tr><tr><td>GET</td><td><code>/api/health/storage</code></td><td>管理员</td><td>存储驱动状态（local/cos、托管目录）</td></tr><tr><td>GET</td><td><code>/api/business-settings/public</code></td><td>游客</td><td>公开业务配置：比例推荐、外观选项、押金区间、佣金、赔付方案、道具价目（含买家侧升价）</td></tr></tbody></table></div>
+<h3 id="5-5-认证与账号">5.5 认证与账号</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能与关键字段</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/auth/captcha/config</code></td><td>游客</td><td>天御验证码前端配置（js_url、app_id）</td></tr><tr><td>POST</td><td><code>/api/auth/sms/send</code></td><td>游客</td><td>发短信验证码。入参 `phone, scene(login</td><td>admin_login), captcha_ticket, captcha_randstr<code>；前置验票 + 频控；429 返回 </code>retry_after_seconds/daily_limit/daily_count`</td></tr><tr><td>POST</td><td><code>/api/auth/sms/login</code></td><td>游客</td><td>验证码登录（新号自动注册，可携 <code>invite_code</code> 一次性绑定）；Set-Cookie <code>auth_token</code></td></tr><tr><td>POST</td><td><code>/api/admin/login</code></td><td>游客</td><td>管理员验证码登录（非 admin 角色 403；单号日限收紧）</td></tr><tr><td>POST</td><td><code>/api/logout</code></td><td>登录</td><td>注销会话并清 Cookie</td></tr><tr><td>GET</td><td><code>/api/profile</code></td><td>登录</td><td>当前用户信息（角色、邀请码）</td></tr><tr><td>GET</td><td><code>/api/invite/overview</code></td><td>登录</td><td>邀请返现总览（我的/已绑邀请码、双向返现明细，金额为分）</td></tr><tr><td>POST</td><td><code>/api/invite/bind</code></td><td>登录</td><td>绑定邀请码（仅一次，不可改，不可自绑）</td></tr><tr><td>POST</td><td><code>/api/register</code>、<code>/api/login</code>、<code>/api/auth/password/reset-by-sms</code></td><td>—</td><td><strong>已下线（410）</strong>：密码体系全面转短信验证码</td></tr></tbody></table></div>
+<h3 id="5-6-商品公开浏览">5.6 商品公开浏览</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能与关键参数</th></tr></thead><tbody><tr><td>POST</td><td><code>/api/listings</code></td><td>登录（5/h）</td><td>发布商品 → <code>pending_review</code> 自动派单最闲客服。入参含全部账号属性、定价（deposit 元）、额外物品 <code>{key:{quantity,itemMode}}</code>、图/凭证 URL；校验押金区间/覆盖率/比例区间/租期上限</td></tr><tr><td>GET</td><td><code>/api/listings</code></td><td>游客</td><td>商品列表：<code>page/pageSize≤50</code>、<code>sortBy</code>（hot/latest/rent/ratio/hafu/awm/helmet/armor 升降序 14 种）、筛选参数（保险/体力/负重/登录方式/刀皮/干员外观/编号/地区/小额专区/高比例专区/哈夫币/租金/押金/角色等级区间/道具）、响应含 7 日独立点击数</td></tr><tr><td>POST</td><td><code>/api/listings/:id/click</code></td><td>登录</td><td>点击埋点（热度统计去重 UPSERT）</td></tr><tr><td>GET</td><td><code>/api/listings/:id</code></td><td>游客</td><td>商品详情（支持 id 或 listing_no；Redis 缓存 180s）：全字段 + items + images + 凭证媒体（凭证需登录）</td></tr></tbody></table></div>
+<h3 id="5-7-我的商品-卖家">5.7 我的商品（卖家）</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/my-listings/stats</code></td><td>登录</td><td>我发布的商品状态统计</td></tr><tr><td>GET</td><td><code>/api/my-listings</code></td><td>登录</td><td>我的商品列表（status 筛选，pageSize≤20）</td></tr><tr><td>GET</td><td><code>/api/my-listings/:id</code></td><td>登录(本人)</td><td>商品详情（编辑回填，含卖家微信）</td></tr><tr><td>PUT</td><td><code>/api/my-listings/:id</code></td><td>登录(本人)</td><td>更新商品：重新进待审 + 重新派单 + 清理孤立媒体；pending_review/sold_out 不可改</td></tr><tr><td>PATCH</td><td><code>/api/my-listings/:id/status</code></td><td>登录(本人)</td><td>上/下架切换（未审通过不可上架）</td></tr></tbody></table></div>
+<h3 id="5-8-订单-买家-卖家">5.8 订单（买家/卖家）</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/orders/stats</code>、<code>/api/seller/orders/stats</code></td><td>登录</td><td>我的（买家/卖家）订单状态统计</td></tr><tr><td>GET</td><td><code>/api/orders</code>、<code>/api/seller/orders</code></td><td>登录</td><td>我的订单列表（status 筛选 + keyword + 分页）</td></tr><tr><td>POST</td><td><code>/api/orders</code></td><td>登录</td><td>创建订单：<code>listing_id, buyer_contact_wechat, accept_buyer_agreement, accept_payment_agreement</code>（协议版本 buyer-v1.1.0 / payment-v1.1.0）；锁商品行 + 快照；→ pending_payment</td></tr><tr><td>GET</td><td><code>/api/orders/:id</code></td><td>登录(参与方)</td><td>订单详情：完整订单 + 物品快照 + 使用申报 + 时间线</td></tr><tr><td>PUT</td><td><code>/api/orders/:id/cancel</code>、<code>/api/seller/orders/:id/cancel</code></td><td>登录(本人)</td><td>取消订单（待付款可直接取消）</td></tr><tr><td>PUT</td><td><code>/api/orders/:id/verify</code></td><td>登录(买家)</td><td>确认账号正常继续履约（此后不可直接取消）</td></tr><tr><td>PUT</td><td><code>/api/orders/:id/complete</code></td><td>登录</td><td>申请结算/完成订单 → settlement_pending</td></tr><tr><td>PUT</td><td><code>/api/orders/:id/item-usage</code></td><td>登录(买家)</td><td>填报额外物品使用 <code>items:[{item_key,reported_quantity}], note≤500</code></td></tr><tr><td>PUT</td><td><code>/api/orders/:id/item-usage/confirm</code></td><td>登录(卖家)</td><td>确认物品申报（→ 可分账）</td></tr><tr><td>PUT</td><td><code>/api/orders/:id/item-usage/reject</code></td><td>登录(卖家)</td><td>不同意申报 → 结算争议转客服</td></tr><tr><td>PUT</td><td><code>/api/orders/:id/request-cancel</code></td><td>登录</td><td>发起取消申请（填原因，转客服）</td></tr><tr><td>PUT</td><td><code>/api/orders/:id/respond-cancel</code></td><td>登录</td><td>响应对方取消申请 <code>agree:bool</code></td></tr><tr><td>PUT</td><td><code>/api/orders/:id/report-mismatch</code></td><td>登录(买家)</td><td>上报账号不符/异常，转客服</td></tr><tr><td>GET</td><td><code>/api/orders/:id/settlement-preview</code></td><td>登录(参与方/被分配客服)</td><td>结算预览：<strong>金额按角色过滤</strong>（买家见 buyer_refund_amount；卖家见 seller_income_amount；仅客服见 platform_fee_amount 与双边物品金额）；<code>mode=frozen&amp;liableParty=</code> 冻结裁决预览</td></tr><tr><td>POST</td><td><code>/api/orders/:id/deposit-hold/report</code></td><td>登录(卖家)</td><td>押金冷静期举报买家违规（转客服裁决）</td></tr></tbody></table></div>
+<blockquote><p>设计约束：<strong>不存在「确认支付」路由</strong>——订单置 paid 只由支付回调/主动查单驱动（防免费下单）。</p></blockquote>
+<h3 id="5-9-客服工单-support">5.9 客服工单（support）</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/support/orders</code></td><td>客服</td><td>我的售后工单：handling/resolved 桶 + 计数、<strong>告警</strong>（冻结≥48h <code>frozen_timeout</code>、押金举报≥48h）、工作量统计</td></tr><tr><td>GET</td><td><code>/api/support/orders/:id/timeline</code></td><td>客服(被分配)</td><td>工单处理时间线（support_order_events）</td></tr><tr><td>PUT</td><td><code>/api/support/orders/:id/note</code></td><td>客服(被分配)</td><td>保存内部备注（500 字）</td></tr><tr><td>PUT</td><td><code>/api/support/orders/:id/continue</code></td><td>客服</td><td>继续履约（cancel_request 场景恢复原状态）</td></tr><tr><td>PUT</td><td><code>/api/support/orders/:id/return-to-settlement</code></td><td>客服</td><td>回结算中（settlement_dispute 场景）</td></tr><tr><td>PUT</td><td><code>/api/support/orders/:id/cancel</code></td><td>客服 + StepUp</td><td>取消订单（全额原路退款）</td></tr><tr><td>PUT</td><td><code>/api/support/orders/:id/freeze-funds</code></td><td>客服 + StepUp</td><td>冻结资金（填原因；仅 paid/settlement_pending）</td></tr><tr><td>PUT</td><td><code>/api/support/orders/:id/release-funds</code></td><td>客服 + StepUp</td><td>解除冻结（恢复原状态）</td></tr><tr><td>POST</td><td><code>/api/support/orders/:id/reconcile-funds</code></td><td>客服 + StepUp</td><td>手动资金对账（查退款/打款结果并收口）</td></tr><tr><td>PUT</td><td><code>/api/support/orders/:id/execute-settlement</code></td><td>客服 + StepUp</td><td>执行分账：`payoutMode(huifu</td><td>manual)、manualNote、liableParty(seller</td><td>buyer)`；冻结裁决/手动结单同入口</td></tr><tr><td>PUT</td><td><code>/api/support/orders/:id/deposit-verdict</code></td><td>客服 + StepUp</td><td>押金举报裁决：`verdict(confiscate</td><td>reject)`</td></tr><tr><td>GET</td><td><code>/api/support/presale-consultations</code></td><td>客服</td><td>售前咨询工单列表</td></tr><tr><td>PUT</td><td><code>/api/support/presale-consultations/:id/note</code> / <code>.../resolve</code></td><td>客服(被分配)</td><td>售前备注 / 完成咨询（自动发系统消息）</td></tr></tbody></table></div>
+<h3 id="5-10-客服商品审核-support">5.10 客服商品审核（support）</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/support/listing-reviews</code></td><td>客服</td><td>我的审核工单列表（status/keyword/分页 + 工作量统计）</td></tr><tr><td>GET</td><td><code>/api/support/listing-reviews/:id</code></td><td>客服(被分配)</td><td>审核详情（全量属性 + 凭证媒体）</td></tr><tr><td>PUT</td><td><code>/api/support/listing-reviews/:id/approve</code></td><td>客服(被分配)</td><td>通过（原子更新防双审，409 冲突）</td></tr><tr><td>PUT</td><td><code>/api/support/listing-reviews/:id/reject</code></td><td>客服(被分配)</td><td>驳回（原因必填；商品转 inactive + 站内通知卖家）</td></tr></tbody></table></div>
+<h3 id="5-11-支付与结算">5.11 支付与结算</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>POST</td><td><code>/api/pay/create</code></td><td>登录(买家)</td><td>创建支付：<code>order_id, channel, scene, return_url</code>；返回 <code>transaction{ transaction_no, amount, jump_url, expires_at }</code>；超支付截止时间拒绝；pending 流水幂等复用</td></tr><tr><td>GET</td><td><code>/api/pay/transactions/:no</code></td><td>登录(本人)</td><td>查流水（pending 时自动触发汇付查单收单）</td></tr><tr><td>POST</td><td><code>/api/pay/transactions/:no/close</code></td><td>登录(本人)</td><td>关单（先查单，刚支付成功则 409 引导走退款）</td></tr><tr><td>POST</td><td><code>/api/pay/callback/:channel</code></td><td>渠道（RSA 验签）</td><td>支付异步通知：只信任验签解析结果 + 金额一致性校验 + 状态守卫 UPDATE</td></tr><tr><td>GET</td><td><code>/api/settlement-account</code></td><td>登录</td><td>我的收款账户 + 余额 + 商户门户地址</td></tr><tr><td>PUT</td><td><code>/api/settlement-account</code></td><td>登录</td><td>保存收款账户配置</td></tr><tr><td>POST</td><td><code>/api/settlement-account/register</code></td><td>登录</td><td>汇付个人开户（姓名/证件号/手机号/有效期）</td></tr><tr><td>POST</td><td><code>/api/settlement-account/bind-card</code></td><td>登录</td><td>汇付绑卡入驻（持卡人/卡号/省市/证件）</td></tr><tr><td>GET</td><td><code>/api/settlement-account/query-huifu</code></td><td>登录</td><td>查询汇付用户信息补全 token_no</td></tr><tr><td>POST</td><td><code>/api/settlement-account/encashment</code></td><td>登录</td><td>发起取现（D1；单笔上限/每日 5 笔/余额校验）</td></tr><tr><td>GET</td><td><code>/api/settlement-account/encashments</code></td><td>登录</td><td>取现记录</td></tr><tr><td>POST</td><td><code>/api/settlement-account/encashments/:no/sync</code></td><td>登录</td><td>取现查单同步</td></tr><tr><td>GET</td><td><code>/api/settlement/payouts</code></td><td>登录</td><td>我的结算打款记录</td></tr></tbody></table></div>
+<h3 id="5-12-会话-聊天-http-部分">5.12 会话/聊天（HTTP 部分）</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>POST</td><td><code>/api/conversations/order/:orderId</code></td><td>登录(参与方)</td><td>获取/创建订单三方会话</td></tr><tr><td>POST</td><td><code>/api/conversations/presale</code></td><td>登录(非客服)</td><td>获取/创建我的售前咨询会话（自动派单客服）</td></tr><tr><td>GET</td><td><code>/api/conversations</code></td><td>登录</td><td>我的会话列表（分页）</td></tr><tr><td>GET</td><td><code>/api/conversations/unread-summary</code></td><td>登录</td><td>未读汇总（总数 + 售前/售后/客服分项）</td></tr><tr><td>GET</td><td><code>/api/conversations/:id/messages</code></td><td>登录(参与方)</td><td>拉取消息（分页，默认 50）</td></tr><tr><td>PUT</td><td><code>/api/conversations/:id/read</code></td><td>登录(参与方)</td><td>标记已读（并 socket 推送 message:read）</td></tr></tbody></table></div>
+<h3 id="5-13-通知与反馈">5.13 通知与反馈</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/notifications</code>（+ <code>/unread-summary</code>）</td><td>登录</td><td>通知列表 / 未读统计</td></tr><tr><td>PUT</td><td><code>/api/notifications/:id/read</code></td><td>登录(本人)</td><td>标记已读</td></tr><tr><td>GET</td><td><code>/api/feedback/categories</code></td><td>登录(非admin)</td><td>反馈分类（6 类）</td></tr><tr><td>POST</td><td><code>/api/feedback</code></td><td>登录(非admin)</td><td>提交反馈（≥5 字 ≤1000；每日限额）</td></tr><tr><td>GET</td><td><code>/api/feedback/my</code></td><td>登录(非admin)</td><td>我的反馈记录</td></tr></tbody></table></div>
+<h3 id="5-14-文件上传与读取">5.14 文件上传与读取</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能与约束</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/uploads/files/listing-images/:name</code></td><td>游客</td><td>商品图（local 直发 / COS 307 签名重定向，`?variant=thumb</td><td>mid</td><td>full`）</td></tr><tr><td>GET</td><td><code>/api/uploads/files/ban-images/:name</code>、<code>/ban-videos/:name</code></td><td>登录+属主策略</td><td>处罚截图/封禁视频（admin/support/商品主/该商品买家可读）</td></tr><tr><td>GET</td><td><code>/api/uploads/files/chat-images/:name</code></td><td>登录+会话参与</td><td>聊天图片</td></tr><tr><td>POST</td><td><code>/api/uploads/listing-images</code></td><td>登录</td><td>商品图上传：≤10 张、单张 ≤5MB、jpg/png/webp/gif</td></tr><tr><td>POST</td><td><code>/api/uploads/ban-images</code></td><td>登录</td><td>处罚截图：≤5 张、单张 ≤5MB</td></tr><tr><td>POST</td><td><code>/api/uploads/ban-video</code></td><td>登录</td><td>封禁记录视频：≤100MB、mp4/webm/ogg/mov</td></tr><tr><td>POST</td><td><code>/api/uploads/chat-images</code></td><td>登录+会话参与</td><td>聊天图：≤5MB + 60s/5 次频控</td></tr><tr><td>POST</td><td><code>/api/uploads/recycle-temp</code></td><td>登录</td><td>回收未引用临时媒体</td></tr></tbody></table></div>
+<p>文件名白名单 <code>[A-Za-z0-9._-]+</code>；multer 内存存储；所有上传共享用户日配额（默认 100MB/天，DB 统计失败回滚）；存储驱动 <code>FILE_STORAGE_DRIVER=local|cos</code>。</p>
+<h3 id="5-15-管理后台-admin">5.15 管理后台（admin）</h3>
+<div class="tbl"><table><thead><tr><th>方法</th><th>路径</th><th>认证</th><th>功能</th></tr></thead><tbody><tr><td>GET</td><td><code>/api/admin/health</code> / <code>/api/admin/profile</code></td><td>游客 / 管理员</td><td>后端健康 / 管理员信息 + Passkey 开关</td></tr><tr><td>GET/POST/DELETE</td><td><code>/api/admin/passkeys*</code></td><td>登录(admin/support)</td><td>Passkey 列表/注册（短信验证+WebAuthn 挑战）/删除（StepUp）</td></tr><tr><td>GET/POST/DELETE</td><td><code>/api/admin/trusted-devices*</code></td><td>管理员</td><td>受信任设备列表/信任当前设备 30 天/移除（StepUp）</td></tr><tr><td>POST</td><td><code>/api/admin/step-up/options</code> / <code>/verify</code></td><td>登录</td><td>二次校验挑战 / 验证（刷新会话 amr）</td></tr><tr><td>GET</td><td><code>/api/admin/overview</code></td><td>管理员</td><td>总览指标（用户/商品/订单/售后数）</td></tr><tr><td>GET</td><td><code>/api/admin/dashboard/trends</code></td><td>管理员</td><td>趋势分桶（销量/注册/在线 × 日/月/年/自定义）</td></tr><tr><td>GET</td><td><code>/api/admin/revenue</code></td><td>管理员</td><td>收益报表（平台抽成/卖家入账/物品金额汇总 + 明细分页）</td></tr><tr><td>GET</td><td><code>/api/admin/users</code></td><td>管理员</td><td>用户列表（keyword + 角色排序）</td></tr><tr><td>PUT</td><td><code>/api/admin/users/:id/role</code></td><td>管理员 + StepUp</td><td>变更角色（吊销其全部会话）</td></tr><tr><td>PUT</td><td><code>/api/admin/users/:id/username</code></td><td>管理员</td><td>修改客服用户名（违禁词/重名校验）</td></tr><tr><td>PUT/DELETE</td><td><code>/api/admin/users/:id/ban</code></td><td>管理员 + StepUp</td><td>封禁（1-3650 天）/解封</td></tr><tr><td>GET</td><td><code>/api/admin/orders</code></td><td>管理员</td><td>订单列表（keyword/date）</td></tr><tr><td>PUT</td><td><code>/api/admin/orders/:id/close</code></td><td>管理员 + StepUp</td><td>关闭订单（未付款→汇付关单；已付款→原路退款；资金在途场景拒绝）</td></tr><tr><td>GET</td><td><code>/api/admin/listings</code></td><td>管理员</td><td>商品列表</td></tr><tr><td>PUT</td><td><code>/api/admin/listings/:id/deactivate</code></td><td>管理员 + StepUp</td><td>后台下架</td></tr><tr><td>GET</td><td><code>/api/admin/review/listings(/:id)</code></td><td>管理员</td><td>审核列表/详情</td></tr><tr><td>PUT</td><td><code>/api/admin/review/listings/:id/approve</code> / <code>/reject</code></td><td>管理员 + StepUp</td><td>通过 / 驳回（原因必填）</td></tr><tr><td>GET/PUT</td><td><code>/api/admin/business-settings</code></td><td>管理员（PUT + StepUp）</td><td>业务参数读取/保存（归一化 + 审计 + 缓存失效）</td></tr><tr><td>GET</td><td><code>/api/admin/operation-logs</code></td><td>管理员</td><td>操作日志（module/keyword/date + 快照）</td></tr><tr><td>GET/PUT</td><td><code>/api/admin/feedback(/:id)</code></td><td>管理员</td><td>反馈处理（状态 + 备注，写审计）</td></tr></tbody></table></div>
+<h3 id="5-16-websocket-socket-io">5.16 WebSocket（Socket.IO）</h3>
+<p><strong>连接鉴权</strong>：握手中间件校验 JWT（<code>handshake.auth.token</code> / Bearer / Cookie）+ Redis 会话 + 未封禁，失败拒绝连接。<strong>房间</strong>：<code>user:{userId}</code>（连接即入）、<code>conversation:{conversationId}</code>（显式 join）。</p>
+<p>客户端 → 服务端：</p>
+<div class="tbl"><table><thead><tr><th>事件</th><th>payload</th><th>说明</th></tr></thead><tbody><tr><td><code>conversation:join</code> / <code>leave</code></td><td><code>{conversationId}</code></td><td>加入/离开会话房间（校验参与权，ack 返回会话）</td></tr><tr><td><code>message:send</code></td><td><code>{conversationId, content, messageType, mediaUrl, mediaName, mediaSize}</code></td><td>发消息（10s/50 次滑动窗口限流；自动已读并广播；ack 回执）</td></tr><tr><td><code>disconnect</code></td><td>—</td><td>清除在线状态</td></tr></tbody></table></div>
+<p>服务端 → 客户端：</p>
+<div class="tbl"><table><thead><tr><th>事件</th><th>目标</th><th>说明</th></tr></thead><tbody><tr><td><code>message:new</code></td><td>conversation:{id}</td><td>会话新消息（含系统消息）</td></tr><tr><td><code>message:notify</code></td><td>user:{id}</td><td>不在会话内的参与者未读提醒（含 unread_summary 分项）</td></tr><tr><td><code>message:read</code></td><td>user:{id}</td><td>已读同步（HTTP read 与 socket 发送后均触发）</td></tr><tr><td><code>support:desk:update</code></td><td>user:{supportId}</td><td>客服工单变更提醒（desk: aftersale/presale + reason）</td></tr><tr><td><code>notification:notify</code> / <code>notification:read</code></td><td>user:{id}</td><td>站内通知新增/已读（含未读总数）</td></tr></tbody></table></div>
+<hr/>
+<h2 id="6-关键流程图">6. 关键流程图</h2>
+<h3 id="6-1-登录流程-用户短信验证码登录">6.1 登录流程（用户短信验证码登录）</h3>
+<div class="mermaid">sequenceDiagram
+    autonumber
+    participant FE as 用户端 SPA
+    participant API as API 服务
+    participant R as Redis
+    participant CAP as 腾讯云验证码
+    participant SMS as 腾讯云短信
+
+    FE-&gt;&gt;API: GET /api/auth/captcha/config
+    API--&gt;&gt;FE: 天御 Captcha 配置（js_url, app_id）
+    FE-&gt;&gt;CAP: 前端拉起行为验证
+    CAP--&gt;&gt;FE: ticket + randstr
+    FE-&gt;&gt;API: POST /api/auth/sms/send {phone, scene:login, ticket, randstr}
+    API-&gt;&gt;CAP: DescribeCaptchaResult 验票
+    API-&gt;&gt;R: 校验发送间隔 / 日限额（手机号+IP）
+    API-&gt;&gt;SMS: 发送验证码（模板 2665830）
+    API-&gt;&gt;R: 存验证码（TTL）+ 计数
+    SMS--&gt;&gt;FE: 短信到达用户手机
+    FE-&gt;&gt;API: POST /api/auth/sms/login {phone, code, invite_code?}
+    API-&gt;&gt;R: 取码比对（限错误次数，超限锁定）
+    alt 新手机号
+        API-&gt;&gt;API: 自动注册（用户名=掩码手机号，绑定邀请码一次性）
+    end
+    API-&gt;&gt;R: 创建登录会话 login_sessions:{sid}
+    API--&gt;&gt;FE: Set-Cookie auth_token（httpOnly, JWT含sid/role/amr）
+    FE-&gt;&gt;API: GET /api/profile（校验登录态）
+    API--&gt;&gt;FE: 用户信息（角色/邀请码）</div>
+<p>管理员/客服登录差异：<code>POST /api/admin/login</code>（scene=admin_login，单号日限收紧），非 admin 角色 403；登录后高危操作触发 <strong>Passkey 二次校验</strong>（428 <code>STEP_UP_REQUIRED</code> → 前端 <code>/api/admin/step-up/options</code> 发起 WebAuthn 挑战 → <code>/api/admin/step-up/verify</code> 通过后会话 amr 刷新，5~15 分钟有效；受信任设备 30 天内可豁免部分动作）。</p>
+<h3 id="6-2-支付流程-下单-汇付收银台-回调入账-履约启动">6.2 支付流程（下单 → 汇付收银台 → 回调入账 → 履约启动）</h3>
+<div class="mermaid">sequenceDiagram
+    autonumber
+    participant FE as 买家 SPA
+    participant API as API 服务
+    participant DB as MySQL
+    participant R as Redis
+    participant HF as 汇付天下
+
+    FE-&gt;&gt;API: POST /api/orders（勾选两份协议+联系方式）
+    API-&gt;&gt;DB: 事务：锁商品行+快照（租金/押金/物品买卖双侧价）&lt;br&gt;orders→pending_payment, listing→rented
+    API--&gt;&gt;FE: 订单号（待付款倒计时）
+    FE-&gt;&gt;API: POST /api/pay/create {order_id}
+    API-&gt;&gt;DB: 校验状态+支付截止时间；已有pending流水幂等复用
+    API-&gt;&gt;HF: 托管预下单（trans_amt=租金+押金, time_expire, notify_url）
+    HF--&gt;&gt;API: jump_url（统一收银台）
+    API-&gt;&gt;DB: payment_transactions → pending
+    API--&gt;&gt;FE: jump_url（整页跳转收银台）
+    Note over FE,HF: 用户在汇付收银台完成付款
+
+    rect rgb(240, 248, 255)
+        note right of HF: 入账路径一：异步回调
+        HF-&gt;&gt;API: POST /api/pay/callback/:channel
+        API-&gt;&gt;API: RSA-SHA256 验签（失败即拒绝）&lt;br&gt;只信任渠道解析结果；金额一致性校验
+        API-&gt;&gt;DB: UPDATE 流水 WHERE status IN(created,pending)（状态守卫防并发）
+        API--&gt;&gt;HF: RECV_ORD_ID 确认
+    end
+    rect rgb(240, 255, 240)
+        note right of FE: 入账路径二：回站轮询兜底
+        FE-&gt;&gt;API: GET /api/pay/transactions/:no（支付结果页 3s 轮询）
+        API-&gt;&gt;HF: queryPaymentOrder 主动查单
+        HF--&gt;&gt;API: trans_stat=S
+        API-&gt;&gt;API: 复用回调入账逻辑
+    end
+    rect rgb(255, 248, 240)
+        note right of API: 入账路径三：超时任务兜底
+        API-&gt;&gt;HF: 60s 任务扫描 pending_payment 超时单→先查单&lt;br/&gt;（远端已付则入账跳过取消；未付则关单）
+    end
+
+    API-&gt;&gt;R: 获取订单分布式锁
+    API-&gt;&gt;DB: 事务：orders→paid（必须存在渠道paid流水）&lt;br&gt;分配最闲客服、建三方聊天室、系统消息
+    API--&gt;&gt;FE: SMS 通知卖家（fire-and-forget）
+    FE-&gt;&gt;API: PUT /api/orders/:id/verify（买家确认账号正常）
+    API-&gt;&gt;DB: verified_at（此后不可直接取消）</div>
+<h3 id="6-3-退款流程-客服取消全额退-结算押金退-同一退款引擎">6.3 退款流程（客服取消全额退 &amp; 结算押金退，同一退款引擎）</h3>
+<p>退款统一走 <code>paymentService.createOrderRefund</code>：以 <code>reason</code> 为幂等键（同单同场景只发一笔）、累计退款 ≤ 原支付金额、汇付 <code>htRefund</code> 原路退回、受理后异步查单确认。</p>
+<div class="mermaid">sequenceDiagram
+    autonumber
+    participant B as 买家
+    participant SUP as 客服工作台
+    participant API as API 服务
+    participant DB as MySQL
+    participant HF as 汇付天下
+
+    B-&gt;&gt;API: PUT /api/orders/:id/request-cancel（填原因）
+    API-&gt;&gt;DB: orders→support_handling + cancel_request（分配客服）
+
+    SUP-&gt;&gt;API: PUT /api/support/orders/:id/cancel（Passkey step-up）
+    API-&gt;&gt;DB: 结算单落 draft；orders→cancel_refund_processing
+    API-&gt;&gt;DB: INSERT payment_refunds（reason='客服取消订单-原路退款', 幂等键）
+    API-&gt;&gt;HF: 托管退款 htRefund（org_req_seq_id=原支付单）
+    HF--&gt;&gt;API: 受理 trans_stat（S=即时成功/F=失败/其他=处理中）
+    API-&gt;&gt;DB: refund → success / processing
+
+    alt 受理即时成功
+        API-&gt;&gt;DB: orders→cancelled（关单收口）
+    else 处理中（异步到账）
+        rect rgb(255, 250, 240)
+            note right of API: 120s 资金对账任务（或客服手动「同步资金结果」）
+            API-&gt;&gt;HF: queryRefundInfo 退款查单（端点大小写敏感）
+            HF--&gt;&gt;API: 退款成功
+            API-&gt;&gt;DB: refund→success；orders→cancelled
+        end
+    end
+    HF--&gt;&gt;B: 资金原路退回买家支付渠道</div>
+<p>押金/结算类退款同引擎，仅幂等键（reason）与触发方不同：</p>
+<div class="tbl"><table><thead><tr><th>场景</th><th>reason（幂等键）</th><th>触发方</th></tr></thead><tbody><tr><td>客服取消订单（全额=租金+押金）</td><td>客服取消订单-原路退款</td><td>客服 step-up</td></tr><tr><td>管理员后台关单（全额）</td><td>管理员后台关单-原路退款</td><td>管理员 step-up</td></tr><tr><td>普通结算：押金余额退买家</td><td>客服执行结算-押金原路退回</td><td>客服执行分账</td></tr><tr><td>冻结结算：押金余额退买家</td><td>客服执行冻结资金结算-押金原路退回</td><td>客服裁决（卖家责任时）</td></tr><tr><td>押金冷静期到期自动退</td><td>押金保管到期-自动退回买家</td><td>60s 定时任务</td></tr><tr><td>押金举报驳回退买家</td><td>押金举报驳回-退回买家</td><td>客服裁决</td></tr></tbody></table></div>
+<h3 id="6-4-结算与冻结裁决流程-资金出口-补充">6.4 结算与冻结裁决流程（资金出口，补充）</h3>
+<div class="mermaid">flowchart TB
+    subgraph NORMAL["普通结算（settlement_pending）"]
+        N1["买家申报额外物品使用&lt;br/&gt;（24h 未申报 → 任务自动转客服仲裁）"] --&gt; N2["卖家确认（48h 未处理 → 任务视为确认）&lt;br/&gt;或卖家不同意 → 转客服 settlement_dispute"]
+        N2 --&gt; N3["客服执行分账 execute-settlement&lt;br/&gt;（Passkey step-up，预览金额按角色过滤）"]
+    end
+    subgraph FROZEN["冻结结算（fund_frozen，客服已冻结资金）"]
+        F1["客服裁决责任方 liableParty"]
+        F1 --&gt;|"卖家责任（默认）"| F2["平台抽成=买家付租+物品差价&lt;br/&gt;卖家只得物品款&lt;br/&gt;押金余额退买家"]
+        F1 --&gt;|"买家责任"| F3["押金余额归平台&lt;br/&gt;租金全额归卖家&lt;br/&gt;买家退款=0"]
+    end
+    N3 --&gt; E["落结算草稿 → orders 转资金处理中场景"]
+    F2 --&gt; E
+    F3 --&gt; E
+    E --&gt; R1["汇付余额支付 acctpayment/pay&lt;br/&gt;打款卖家（需卖家已进件绑卡）"]
+    E --&gt; R2["汇付退款 htRefund&lt;br/&gt;退买家押金余额"]
+    E -.-&gt;|"卖家无法进件 payout_mode=manual"| M["手动结单：客服线下收款&lt;br/&gt;押金仍线上退，备注强制留痕"]
+    R1 --&gt; OK{"即时全部成功?"}
+    R2 --&gt; OK
+    OK --&gt;|"是"| C1["结算单 executed&lt;br/&gt;orders→completed 或 deposit_holding（冷静期）&lt;br/&gt;listing→sold_out"]
+    OK --&gt;|"否/在途"| C2["停资金处理中场景&lt;br/&gt;120s 对账任务查单收口"]
+    C1 --&gt; H["押金冷静期（默认3天，可配）&lt;br/&gt;到期自动原路退 / 卖家举报→客服裁决&lt;br/&gt;没收赔付卖家 或 驳回退买家"]</div>
+<hr/>
+<h2 id="7-三方依赖">7. 三方依赖</h2>
+<h3 id="7-1-依赖总表">7.1 依赖总表</h3>
+<div class="tbl"><table><thead><tr><th>服务商</th><th>服务</th><th>用途</th><th>关键配置项（名称）</th></tr></thead><tbody><tr><td>腾讯云</td><td>COS 对象存储</td><td>商品图/处罚截图/封禁视频/聊天图存储；数据万象 imageMogr2 WebP 变体（thumb 500x / mid 1000x / full 1920x）；生产备份存储</td><td><code>COS_SECRET_ID/KEY</code>、<code>COS_BUCKET/REGION/KEY_PREFIX</code>、<code>COS_SIGNED_URL_EXPIRES/TTL/WINDOW_SECONDS</code>、<code>COS_IMAGE_VARIANTS_ENABLED</code>、`FILE_STORAGE_DRIVER=cos</td><td>local`</td></tr><tr><td>腾讯云</td><td>短信 SMS</td><td>登录验证码（模板 2665830）、管理员登录、Passkey 绑定验证（2694515）、卖家收款通知（模板 2717710，审核通过后配置自动生效；当前 prod.env 未填则静默跳过）</td><td><code>TENCENT_SMS_SECRET_ID/KEY/SDK_APP_ID/SIGN_NAME</code>、<code>TENCENT_SMS_TEMPLATE_ID_*</code>、频控 <code>SMS_CODE_*</code></td></tr><tr><td>腾讯云</td><td>验证码（天御）</td><td>短信发送前置人机验证（CaptchaType=9）</td><td><code>TENCENT_CAPTCHA_APP_ID/APP_SECRET_KEY/BUSINESS_ID/SCENE_ID/JS_URL</code></td></tr><tr><td>汇付天下</td><td>资金托管支付</td><td>全站唯一支付通道：收银台、退款、余额分账打款、卖家进件、取现（详见 7.2）</td><td><code>HUIFU_GATEWAY_URL/SYS_ID/PRODUCT_ID/HUIFU_ID</code>、商户私钥/平台公钥、<code>HUIFU_HOSTING_PROJECT_ID_PC/H5</code> 等、<code>HUIFU_NOTIFY_URL</code></td></tr><tr><td>（无）</td><td>微信</td><td><strong>无真实集成</strong>。微信仅作为业务字段（上号方式枚举、买卖家联系方式、聊天敏感词屏蔽「加微信/微信转账」）；<code>WECHAT_PAY_NOTIFY_URL</code> 为历史遗留配置</td><td>—</td></tr><tr><td>（已移除）</td><td>腾讯云 FaceID</td><td>SDK 仍在依赖中，KYC 已从主链路移除</td><td><code>KYC_*</code> 无需维护</td></tr></tbody></table></div>
+<h3 id="7-2-汇付天下-api-调用点-13-个端点">7.2 汇付天下 API 调用点（13 个端点）</h3>
+<div class="tbl"><table><thead><tr><th>#</th><th>端点</th><th>用途</th><th>调用时机</th></tr></thead><tbody><tr><td>1</td><td>托管预下单（<code>HUIFU_HOSTING_PREORDER_URL</code>，可配）</td><td>收银台下单返回 jump_url</td><td>买家发起支付</td></tr><tr><td>2</td><td><code>/v2/trade/hosting/payment/queryorderinfo</code></td><td>支付查单</td><td>回站轮询 / 超时取消前 / 关单前</td></tr><tr><td>3</td><td><code>/v2/trade/hosting/payment/close</code></td><td>托管关单</td><td>未支付流水关闭</td></tr><tr><td>4</td><td><code>/v2/trade/hosting/payment/htRefund</code></td><td>托管退款（原路退）</td><td>全额退 / 押金退 / 裁决退</td></tr><tr><td>5</td><td><code>/v2/trade/hosting/payment/queryRefundInfo</code></td><td>退款查单（<strong>大小写敏感</strong>，全小写会 404）</td><td>对账任务 / 手动同步</td></tr><tr><td>6</td><td><code>/v2/trade/acctpayment/pay</code></td><td>余额支付·分账打款（acct_split_bunch 指定卖家 huifu_id+acct_id）</td><td>结算 / 冻结赔付 / 邀新返现</td></tr><tr><td>7</td><td><code>/v2/trade/acctpayment/pay/query</code></td><td>打款查单</td><td>对账任务</td></tr><tr><td>8</td><td><code>/v2/user/basicdata/indv</code></td><td>个人用户开户（得 huifu_id）</td><td>卖家进件第一步</td></tr><tr><td>9</td><td><code>/v2/user/busi/open</code></td><td>用户业务入驻·绑卡（得 token_no=acct_id）</td><td>卖家进件第二步</td></tr><tr><td>10</td><td><code>/v2/user/basicdata/query</code></td><td>用户信息查询（补全 token_no）</td><td>进件补全</td></tr><tr><td>11</td><td><code>/v2/trade/acctpayment/balance/query</code></td><td>可用余额查询</td><td>钱包页 / 取现前校验</td></tr><tr><td>12</td><td><code>/v2/trade/settlement/encashment</code></td><td>取现（D1，默认单笔上限 5 万、每日 5 笔）</td><td>卖家提现</td></tr><tr><td>13</td><td><code>/v2/trade/settlement/query</code></td><td>取现查单</td><td>取现记录同步</td></tr></tbody></table></div>
+<p>通用机制：请求 <code>{sys_id, product_id, data, sign}</code>，商户私钥 RSA-SHA256 对 data 键排序 JSON 签名；响应验签（可关）；成功码 <code>00000000</code>/<code>10000</code>；<code>trans_stat</code>：S 成功 / F 失败 / C 关闭。异步通知 <code>HUIFU_NOTIFY_URL</code> → <code>POST /api/pay/callback/:channel</code>。</p>
+<p><strong>运维硬约束</strong>：汇付商户控台「自动结算」必须保持<strong>关闭</strong>——客服冻结资金依赖资金停留平台账户；开启后 D1/T1 划款会导致退款余额不足。<code>PAYMENT_PROVIDER_STRICT_STARTUP_CHECK=true</code> 时支付配置缺失直接阻止启动。开发环境用 <code>mock_payment</code> 模拟通道。</p>
+<h3 id="7-3-外呼流量与回源">7.3 外呼流量与回源</h3>
+<ul><li>COS 生产启用内网回源（<code>cos-internal</code> 同地域），媒体流量不经公网出口；签名 URL 采用「时间窗口对齐」生成（同一文件在窗口期内 URL 稳定，浏览器可缓存，窗口 24h / TTL 48h）。</li><li>短信、验证码、汇付调用均为低频；汇付退款/打款存在秒级异步延迟，由对账任务消化。</li></ul>
+<hr/>
+<h2 id="8-安全设计">8. 安全设计</h2>
+<h3 id="8-1-数据安全">8.1 数据安全</h3>
+<div class="tbl"><table><thead><tr><th>层面</th><th>措施</th></tr></thead><tbody><tr><td>传输</td><td>全站 HTTPS（TLS 1.2/1.3，双证书），HSTS max-age=31536000；CSP/XFO/nosniff/Referrer-Policy/Permissions-Policy 安全头（nginx + helmet 双层）</td></tr><tr><td>凭证与密钥</td><td>生产配置 <code>prod.env</code> 不入发布包（发布时回填恢复）；汇付商户私钥/平台公钥、腾讯云 SecretKey、JWT_SECRET 均环境变量注入；<code>PAYMENT_PROVIDER_STRICT_STARTUP_CHECK=true</code> 支付配置缺失阻止启动</td></tr><tr><td>数据库</td><td>root 与业务账号分离（最小权限）；<code>rotate-db-credentials.sh</code> 定期轮换；MySQL/Redis 仅容器内网，不暴露公网；慢查询日志 0.5s</td></tr><tr><td>敏感数据</td><td>证件号脱敏存储（<code>id_card_masked</code>）；手机号在展示层掩码（138****1234）；用户名默认掩码手机号；封禁凭证媒体走属主鉴权接口而非公开 URL</td></tr><tr><td>密码</td><td>bcryptjs cost 10（占位密码与运维重置）；登录体系已全面转短信验证码，密码不参与日常认证</td></tr><tr><td>备份</td><td><code>backup-prod.sh</code>：MySQL dump（gzip）+ uploads 打包，本地与 COS <code>backups/</code> 双保留，各自独立保留期清理</td></tr><tr><td>审计</td><td><code>admin_operation_logs</code> 全量高危动作留痕（模块/动作/多态对象/变更前后 JSON 快照）；工单事件时间线 <code>support_order_events</code></td></tr></tbody></table></div>
+<h3 id="8-2-业务安全">8.2 业务安全</h3>
+<p><strong>支付与资金（最高优先级）</strong>：</p>
+<div class="tbl"><table><thead><tr><th>风险</th><th>防护</th></tr></thead><tbody><tr><td>伪造支付回调白嫖</td><td>只信任渠道侧 RSA-SHA256 验签解析出的数据，解析为空一律拒绝；回调金额 ≠ 流水金额直接拒绝</td></tr><tr><td>免费下单漏洞</td><td>不存在任何「确认支付」HTTP 路由；订单置 paid 必须存在渠道侧 <code>status='paid'</code> 流水，仅回调/查单两条内部路径驱动</td></tr><tr><td>并发重复入账</td><td>状态守卫 <code>UPDATE ... WHERE status IN ('created','pending')</code>；订单级 Redis 分布式锁；affectedRows=0 且双方 paid 视为幂等成功，否则 409</td></tr><tr><td>重复退款/打款</td><td>幂等键：退款按 <code>payment_refunds.reason</code>、打款按 <code>settlement_payouts.remark</code> 唯一防重发；累计退款 ≤ 原支付金额</td></tr><tr><td>资金在途丢单</td><td>120s 资金对账任务 + 客服手动「同步资金结果」双通道收口；查单失败留痕 <code>provider_query_status='failed'</code> 供人工核对</td></tr><tr><td>平台账户余额被划空</td><td>汇付商户控台<strong>自动结算保持关闭</strong>（硬约束）；取现风控：单笔 ≤5 万、每日 5 笔</td></tr><tr><td>结算金额泄漏</td><td>结算预览接口按角色过滤金额字段（买家只见自己的退款、卖家只见自己的入账、平台抽成仅客服可见）；额外物品双边价格互不可见</td></tr></tbody></table></div>
+<p><strong>账户与后台</strong>：</p>
+<div class="tbl"><table><thead><tr><th>风险</th><th>防护</th></tr></thead><tbody><tr><td>账号盗用</td><td>JWT 短期 + Redis 服务端会话（可吊销）；改密/封禁/改角色即时吊销全部会话；空闲超时自动下线</td></tr><tr><td>后台爆破</td><td>管理域 IP 白名单（含到期自动收紧脚本）；admin 登录短信单号日限收紧；主站 nginx 层对 <code>/admin.html</code> 与 <code>/api/admin/*</code> 整段 404（仅放行 Passkey/step-up 供客服台复用）</td></tr><tr><td>高危操作冒用</td><td>Passkey（WebAuthn）二次校验，428 <code>STEP_UP_REQUIRED</code> 协议；受信任设备 30 天豁免可管理；策略级开关</td></tr><tr><td>短信轰炸 / 验证码爆破</td><td>天御行为验证前置；发送间隔/手机号日限/IP 日限/校验错误次数锁定（Redis + DB 计数表双层）；nginx 短信专用限流 2r/s</td></tr><tr><td>越权访问</td><td>全接口属主/参与方校验（商品本人、订单参与方、会话参与方、媒体属主策略）；写来源 Origin 校验；CORS fail-closed 白名单</td></tr><tr><td>聊天导流私单</td><td>敏感词屏蔽表（加微信/转账/扫码付款等）；系统消息提示「私下交易可冻结资金」；客服可冻结资金处置</td></tr></tbody></table></div>
+<h3 id="8-3-容量评估">8.3 容量评估</h3>
+<p><strong>当前量级与单机容量</strong>（单 CVM，5 容器）：</p>
+<div class="tbl"><table><thead><tr><th>资源</th><th>配置</th><th>估算上限</th></tr></thead><tbody><tr><td>API 并发</td><td>nginx api_conn 30 并发；Node 单进程×2（蓝绿）</td><td>常规 C2C 低频交易量级（日均订单数百内）充裕；公开读限流 6000/min/实例兜底</td></tr><tr><td>MySQL</td><td>max_connections 200；应用连接池 limit 40 / idle 20 / queue 100</td><td>池打满前队列排队拒绝；慢查询 0.5s 阈值监控</td></tr><tr><td>Redis</td><td>AOF；限流/会话/锁/缓存混合</td><td>内存型轻负载；商品详情缓存 180s 控制键量</td></tr><tr><td>媒体</td><td>COS 托管 + WebP 变体 + 内网回源</td><td>出口流量已与 COS 解耦；上传日配额 100MB/用户</td></tr><tr><td>定时任务</td><td>6 个 60s 级 + 对账 120s，单轮 ≤50 单</td><td>对账单轮上限 50 单，资金在途积压时自动跨轮消化</td></tr></tbody></table></div>
+<p><strong>扩容路径</strong>（按压力出现顺序）：</p>
+<ol><li>API 水平扩容：限流计数与任务锁已在 Redis 共享，直接加容器/改 nginx upstream 即可，无代码改造。</li><li>MySQL：读多写少 → 只读副本分担列表/看板查询；连接池与 max_connections 同步上调。</li><li>静态与媒体：dist 上 CDN；COS 已具备公网签名 URL 能力（当前内网回源，切换配置即可）。</li><li>对账/超时任务：订单量级上升后由轮询改为延迟队列 + 汇付结果通知独立消费（见 4.6 取舍说明）。</li></ol>
+<hr/>
+<h2 id="附-文档维护说明">附：文档维护说明</h2>
+<ul><li>本文档基于 2026-08-28 生产代码勘察编写；后续结构性变更（新表/新端点/新三方）请同步更新对应章节。</li><li>业务参数（佣金比例、冷静期天数、各类阈值）以后台「参数配置」实际值为准，本文仅记录默认值与可配范围。</li></ul>
+<nav class="toc"><div class="toc-title">目录</div><ol><li><a href="#1-系统架构与部署架构">1. 系统架构与部署架构</a></li><li><a href="#2-技术栈">2. 技术栈</a></li><li><a href="#3-前端页面结构">3. 前端页面结构</a></li><li><a href="#4-数据库设计">4. 数据库设计</a></li><li><a href="#5-接口设计">5. 接口设计</a></li><li><a href="#6-关键流程图">6. 关键流程图</a></li><li><a href="#7-三方依赖">7. 三方依赖</a></li><li><a href="#8-安全设计">8. 安全设计</a></li><li><a href="#附-文档维护说明">附：文档维护说明</a></li></ol></nav>
+<div class="footer-note">本文档由 docs/ 下的 Markdown 源文件生成（node docs/build-html.cjs）。浏览器中 Ctrl+P 可导出 PDF。</div>
+</div>
+<script>
+(function () {
+  function boot() {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'neutral',
+      fontFamily: '"Microsoft YaHei","PingFang SC",sans-serif',
+      flowchart: { useMaxWidth: true },
+      sequence: { useMaxWidth: true },
+      er: { useMaxWidth: true }
+    })
+    mermaid.run({ querySelector: '.mermaid' })
+  }
+  if (window.mermaid) { boot() }
+  else {
+    var s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js'
+    s.onload = boot
+    document.head.appendChild(s)
+  }
+})()
+</script>
+</body>
+</html>
