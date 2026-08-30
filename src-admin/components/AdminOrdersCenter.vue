@@ -2,7 +2,8 @@
   <section class="page">
     <div class="panel">
       <div class="panel-head">
-        <span>共 {{ orders.length }} 条</span>
+        <span>共 {{ total }} 条</span>
+        <span v-if="totalPages > 1">第 {{ page }} / {{ totalPages }} 页</span>
       </div>
 
       <div class="toolbar">
@@ -12,15 +13,15 @@
           maxlength="50"
           class="toolbar-input"
           placeholder="搜索订单号、买家、卖家或商品标题"
-          @keydown.enter.prevent="loadOrders"
+          @keydown.enter.prevent="searchOrders"
         >
         <input
           v-model="date"
           type="date"
           class="toolbar-date"
-          @keydown.enter.prevent="loadOrders"
+          @keydown.enter.prevent="searchOrders"
         >
-        <button type="button" class="row-btn" :disabled="loading" @click="loadOrders">
+        <button type="button" class="row-btn" :disabled="loading" @click="searchOrders">
           {{ loading ? '搜索中...' : '搜索' }}
         </button>
         <button type="button" class="row-btn" :disabled="loading || !(keyword || date)" @click="resetSearch">
@@ -74,6 +75,52 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div v-if="totalPages > 1" class="pager">
+        <button
+          type="button"
+          class="row-btn"
+          :disabled="loading || page <= 1"
+          @click="goPage(1)"
+        >
+          第一页
+        </button>
+        <button
+          type="button"
+          class="row-btn"
+          :disabled="loading || page <= 1"
+          @click="goPage(page - 1)"
+        >
+          上一页
+        </button>
+        <button
+          v-for="p in pageButtons"
+          :key="p"
+          type="button"
+          class="row-btn pager-num"
+          :class="{ 'pager-num--active': p === page }"
+          :disabled="loading"
+          @click="goPage(p)"
+        >
+          {{ p }}
+        </button>
+        <button
+          type="button"
+          class="row-btn"
+          :disabled="loading || page >= totalPages"
+          @click="goPage(page + 1)"
+        >
+          下一页
+        </button>
+        <button
+          type="button"
+          class="row-btn"
+          :disabled="loading || page >= totalPages"
+          @click="goPage(totalPages)"
+        >
+          末页
+        </button>
       </div>
 
       <p v-if="actionMessage" class="inline-message" :class="{ 'inline-message--error': actionMessageType === 'error' }">
@@ -140,6 +187,9 @@ export default {
       error: '',
       keyword: '',
       date: '',
+      page: 1,
+      pageSize: 20,
+      total: 0,
       orders: [],
       pendingCloseOrder: null,
       orderSubmittingMap: {},
@@ -166,6 +216,22 @@ export default {
         return `确认关闭订单 ${order.order_no || '--'} 吗？该订单已支付，关闭后将原路退款给买家（退款通常 1-2 个工作日到账），商品将转为已下架；若退款仍在处理中，订单将在到账后自动完成关闭。`
       }
       return `确认关闭订单 ${order.order_no || '--'} 吗？关闭后将通知汇付关闭未支付的支付单，商品将转为已下架。`
+    },
+    totalPages() {
+      return Math.max(1, Math.ceil(Number(this.total || 0) / this.pageSize))
+    },
+    pageButtons() {
+      const current = this.page
+      const last = this.totalPages
+      // 以当前页为中心取最多 5 个连续页码，收边不越界
+      let start = Math.max(1, Math.min(current - 2, last - 4))
+      const end = Math.min(last, start + 4)
+      start = Math.max(1, end - 4)
+      const buttons = []
+      for (let p = start; p <= end; p += 1) {
+        buttons.push(p)
+      }
+      return buttons
     }
   },
   methods: {
@@ -181,14 +247,18 @@ export default {
       }
       try {
         const params = new URLSearchParams({
-          page: '1',
-          pageSize: '20',
+          page: String(this.page),
+          pageSize: String(this.pageSize),
           keyword: this.keyword
         })
         if (this.date) {
           params.set('date', this.date)
         }
         const data = await apiFetch(`/api/admin/orders?${params.toString()}`)
+        this.total = Number(data.total || 0)
+        if (Number(data.page)) {
+          this.page = Number(data.page)
+        }
         this.orders = Array.isArray(data.list) ? data.list : []
         if (silent) {
           // 同步后刷新确认弹窗里的订单快照，避免用旧状态提交
@@ -224,9 +294,21 @@ export default {
         this.handleWindowFocus = null
       }
     },
+    searchOrders() {
+      // 换搜索词后结果集变化，回到第一页
+      this.page = 1
+      this.loadOrders()
+    },
+    goPage(target) {
+      const next = Math.min(Math.max(1, Number(target) || 1), this.totalPages)
+      if (next === this.page) return
+      this.page = next
+      this.loadOrders()
+    },
     resetSearch() {
       this.keyword = ''
       this.date = ''
+      this.page = 1
       this.loadOrders()
     },
     getRefundProcessingSceneLabel(item) {
@@ -420,6 +502,25 @@ export default {
   border-color: #fecaca;
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.pager-num {
+  min-width: 40px;
+  padding: 0 10px;
+}
+
+.pager-num--active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
 }
 
 .inline-message {
