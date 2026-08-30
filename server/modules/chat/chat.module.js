@@ -385,6 +385,15 @@ function buildSupportEventContent(eventType, {
     }
   }
 
+  if (eventType === 'reassigned') {
+    // 管理员改派属客服内部调度，不向买卖双方会话推送（publicMessage 留空）
+    return {
+      title: '改派客服',
+      description: `工单已改派给其他客服跟进。${safeNote ? `改派说明：${safeNote}` : ''}`.trim(),
+      publicMessage: ''
+    }
+  }
+
   return {
     title: '处理记录',
     description: safeNote || '客服已更新工单状态。',
@@ -1063,7 +1072,7 @@ async function ensureSupportEventSchema() {
     `CREATE TABLE IF NOT EXISTS support_order_events (
       id INT AUTO_INCREMENT PRIMARY KEY COMMENT '客服工单事件ID',
       order_id INT NOT NULL COMMENT '关联订单ID',
-      event_type ENUM('requested', 'claimed', 'note_updated', 'resolved', 'abnormal_reported', 'cancelled', 'funds_frozen', 'funds_released', 'deposit_dispute', 'deposit_verdict', 'deposit_resolved') NOT NULL COMMENT '事件类型',
+      event_type ENUM('requested', 'claimed', 'note_updated', 'resolved', 'abnormal_reported', 'cancelled', 'funds_frozen', 'funds_released', 'deposit_dispute', 'deposit_verdict', 'deposit_resolved', 'reassigned') NOT NULL COMMENT '事件类型',
       operator_user_id INT DEFAULT NULL COMMENT '操作人用户ID',
       operator_role ENUM('buyer', 'seller', 'support', 'system') NOT NULL DEFAULT 'system' COMMENT '操作人角色',
       operator_name VARCHAR(100) NOT NULL DEFAULT '' COMMENT '操作人展示名',
@@ -1090,11 +1099,12 @@ async function ensureSupportEventSchema() {
       || !currentColumnType.includes("'deposit_dispute'")
       || !currentColumnType.includes("'deposit_verdict'")
       || !currentColumnType.includes("'deposit_resolved'")
+      || !currentColumnType.includes("'reassigned'")
     )
   ) {
     await pool.execute(
       `ALTER TABLE support_order_events
-       MODIFY COLUMN event_type ENUM('requested', 'claimed', 'note_updated', 'resolved', 'abnormal_reported', 'cancelled', 'funds_frozen', 'funds_released', 'deposit_dispute', 'deposit_verdict', 'deposit_resolved') NOT NULL COMMENT '事件类型'`
+       MODIFY COLUMN event_type ENUM('requested', 'claimed', 'note_updated', 'resolved', 'abnormal_reported', 'cancelled', 'funds_frozen', 'funds_released', 'deposit_dispute', 'deposit_verdict', 'deposit_resolved', 'reassigned') NOT NULL COMMENT '事件类型'`
     )
   }
 }

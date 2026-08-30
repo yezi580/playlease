@@ -2223,6 +2223,89 @@ export function createOrderLifecycleService({
     )
   }
 
+  async function reassignOrderSupport({ orderId, targetSupportUserId, operatorUserId, operatorName = '', note = '' }) {
+    return runWithDistributedLock(
+      typeof buildOrderLockKey === 'function' ? buildOrderLockKey(orderId) : '',
+      '当前订单正在处理中，请稍后再试',
+      async () => {
+        const conn = await pool.getConnection()
+        let order = null
+        let targetUser = null
+        try {
+          await conn.beginTransaction()
+          const [orders] = await conn.execute(
+            `SELECT id, order_no, status, support_status, support_assignee_id
+             FROM orders
+             WHERE id = ?
+             LIMIT 1
+             FOR UPDATE`,
+            [orderId]
+          )
+          if (!orders.length) fail(404, { message: '订单不存在' })
+          order = orders[0]
+          if (['completed', 'cancelled'].includes(String(order.status || ''))) {
+            fail(400, { message: '订单已完结，无需改派' })
+          }
+          if (Number(order.support_assignee_id || 0) === Number(targetSupportUserId)) {
+            fail(400, { message: '该订单已由此客服负责' })
+          }
+          const [targets] = await conn.execute(
+            `SELECT id, username, role, banned_until
+             FROM users
+             WHERE id = ?
+             LIMIT 1`,
+            [targetSupportUserId]
+          )
+          targetUser = targets[0] || null
+          if (!targetUser || String(targetUser.role || '').trim() !== 'support') {
+            fail(400, { message: '目标账号不是客服角色，无法接单' })
+          }
+          if (targetUser.banned_until && new Date(targetUser.banned_until).getTime() > Date.now()) {
+            fail(400, { message: '目标客服账号已被封禁，无法接单' })
+          }
+          await conn.execute(
+            `UPDATE orders
+             SET support_assignee_id = ?
+             WHERE id = ?`,
+            [targetSupportUserId, orderId]
+          )
+          await conn.commit()
+        } catch (error) {
+          await conn.rollback()
+          throw error
+        } finally {
+          conn.release()
+        }
+
+        // 事务外副作用：工单时间线留痕 + 刷新新旧客服工作台；失败只记日志，不影响改派结果
+        const previousAssigneeId = Number(order?.support_assignee_id || 0)
+        try {
+          await emitSupportEvent({
+            orderId,
+            actorUserId: operatorUserId,
+            actorRole: 'system',
+            actorName: `管理员${operatorName ? ` ${operatorName}` : ''}`.trim(),
+            eventType: 'reassigned',
+            note: String(note || `工单已改派给 ${targetUser?.username || '客服'} 跟进`).slice(0, 500)
+          })
+        } catch (error) {
+          console.error('[order] emit reassigned support event failed', error)
+        }
+        emitSupportDeskUpdate({ supportUserId: Number(targetSupportUserId || 0), desk: 'aftersale', resourceId: orderId, reason: 'assigned' })
+        if (previousAssigneeId && previousAssigneeId !== Number(targetSupportUserId || 0)) {
+          emitSupportDeskUpdate({ supportUserId: previousAssigneeId, desk: 'aftersale', resourceId: orderId, reason: 'updated' })
+        }
+
+        return {
+          order: await fetchOrderById(pool, orderId),
+          previousAssigneeId,
+          targetSupportUserId: Number(targetSupportUserId || 0),
+          targetSupportName: targetUser?.username || '客服'
+        }
+      }
+    )
+  }
+
   async function continueOrderBySupport({ orderId, supportUserId, note = '' }) {
     const conn = await pool.getConnection()
     try {
@@ -2939,6 +3022,7 @@ export function createOrderLifecycleService({
     closeOrderAsAdmin,
     finalizeAdminCloseRefund,
     continueOrderBySupport,
+    reassignOrderSupport,
     returnToSettlementBySupport,
     freezeFundsBySupport,
     releaseFrozenFundsBySupport,

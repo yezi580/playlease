@@ -200,6 +200,16 @@
       @confirm="confirmBanUser"
     />
     <AdminConfirmDialog
+      :open="Boolean(pendingRoleChange)"
+      title="确认变更客服角色"
+      :message="roleChangeConfirmMessage"
+      confirm-text="确认变更"
+      :loading="Boolean(pendingRoleChange && roleSubmittingMap[pendingRoleChange.id])"
+      danger
+      @cancel="pendingRoleChange = null"
+      @confirm="confirmRoleChange"
+    />
+    <AdminConfirmDialog
       :open="stepUpDialog.open"
       :title="stepUpDialog.title"
       :message="stepUpDialog.message"
@@ -255,6 +265,7 @@ export default {
       roleOptions: ROLE_OPTIONS,
       roleDrafts: {},
       roleSubmittingMap: {},
+      pendingRoleChange: null,
       banDaysDrafts: {},
       banSubmittingMap: {},
       pendingBanUser: null,
@@ -281,6 +292,12 @@ export default {
       if (!this.pendingBanUser) return ''
       const days = Number(this.banDaysDrafts[this.pendingBanUser.id] || 0)
       return `确认将 ${this.pendingBanUser.username || '--'} 封禁 ${days} 天吗？此操作会立即影响该用户的后台与前台使用。`
+    },
+    roleChangeConfirmMessage() {
+      if (!this.pendingRoleChange) return ''
+      const item = this.pendingRoleChange
+      const nextRoleLabel = this.getRoleLabel(item.nextRole)
+      return `确认将客服 ${item.username || '--'} 的角色变更为「${nextRoleLabel}」吗？TA 名下所有未结订单与进行中的售前咨询将自动改派给其他在线客服（按负载均衡分配），且该账号会被强制下线。若系统没有其他在线客服，本次变更将被拒绝。`
     },
     totalPages() {
       return Math.max(1, Math.ceil(Number(this.total || 0) / this.pageSize))
@@ -387,6 +404,21 @@ export default {
       const nextRole = String(this.roleDrafts[item.id] || '').trim()
       if (!nextRole || nextRole === String(item.role || '')) return
 
+      // 客服转出（降级/转岗）会影响名下工单归属，先弹窗说明自动改派与强制下线后果
+      if (String(item.role || '') === 'support' && nextRole !== 'support') {
+        this.pendingRoleChange = { ...item, nextRole }
+        return
+      }
+      await this.submitUserRole(item, nextRole)
+    },
+    async confirmRoleChange() {
+      const pending = this.pendingRoleChange
+      if (!pending) return
+      await this.submitUserRole(pending, pending.nextRole)
+      // 提交结束（无论成败）都关闭弹窗；失败信息走 inline-message 展示
+      this.pendingRoleChange = null
+    },
+    async submitUserRole(item, nextRole) {
       this.roleSubmittingMap = {
         ...this.roleSubmittingMap,
         [item.id]: true
@@ -401,7 +433,13 @@ export default {
         const updatedUser = data.user || {}
         this.applyUpdatedUser(updatedUser)
         this.userRoleMessageType = 'success'
+        const reassignedOrderCount = Number(data.reassignedOrderCount || 0)
+        const reassignedPresaleCount = Number(data.reassignedPresaleCount || 0)
+        const reassignParts = []
+        if (reassignedOrderCount > 0) reassignParts.push(`${reassignedOrderCount} 个未结订单`)
+        if (reassignedPresaleCount > 0) reassignParts.push(`${reassignedPresaleCount} 个售前咨询`)
         this.userRoleMessage = `已将 ${updatedUser.username || item.username} 设置为 ${this.getRoleLabel(updatedUser.role || nextRole)}`
+          + (reassignParts.length ? `，名下${reassignParts.join('、')}已自动改派给其他客服` : '')
       } catch (error) {
         this.roleDrafts = {
           ...this.roleDrafts,

@@ -5,6 +5,7 @@ const STEP_UP_ACTION_LABELS = Object.freeze({
   ban_user: '用户封禁',
   unban_user: '用户解封',
   close_order: '关闭订单',
+  reassign_order_support: '订单改派',
   deactivate_listing: '下架商品',
   delete_passkey: '删除 Passkey',
   trust_current_device: '信任当前设备',

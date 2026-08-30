@@ -34,8 +34,15 @@ export function registerAdminRoutes(deps) {
     loadBusinessSettings,
     invalidateAuthUserCache,
     orderLifecycleService,
+    chatModule,
     chatBannedWords = []
   } = deps
+
+  // 改派/降级自动转派需要往工单时间线留痕并刷新客服工作台（Socket.IO）
+  const {
+    emitSupportEvent: emitChatSupportEvent = null,
+    emitSupportDeskUpdate: emitChatSupportDeskUpdate = null
+  } = chatModule || {}
   const {
     authRequired,
     adminOnly,
@@ -101,6 +108,14 @@ export function registerAdminRoutes(deps) {
 
   function canCurrentRoleUsePolicy(policy, role) {
     return resolvePolicyAllowedRoles(policy).has(String(role || '').trim())
+  }
+
+  // 业务校验失败时抛出带 HTTP 状态的错误，路由 catch 统一映射响应（与 OrderLifecycleError 同约定）
+  function failAdminRoute(status, message) {
+    const error = new Error(String(message || '操作失败'))
+    error.status = Number(status) || 400
+    error.body = { message: String(message || '操作失败') }
+    throw error
   }
 
 function sanitizeAdminKeyword(value) {
@@ -1648,12 +1663,22 @@ app.get('/api/admin/users', authRequired, adminOnly, async (req, res) => {
   const pageSize = Math.min(100, Math.max(1, Number(req.query?.pageSize || 20) || 20))
   const offset = (page - 1) * pageSize
   const keyword = sanitizeAdminKeyword(req.query?.keyword)
+  const roleFilter = ['user', 'support', 'admin'].includes(String(req.query?.role || '').trim())
+    ? String(req.query.role).trim()
+    : ''
 
   try {
-    const whereSql = keyword
-      ? 'WHERE username LIKE ? OR phone LIKE ?'
-      : ''
-    const params = keyword ? [`%${keyword}%`, `%${keyword}%`] : []
+    const whereParts = []
+    const params = []
+    if (keyword) {
+      whereParts.push('(username LIKE ? OR phone LIKE ?)')
+      params.push(`%${keyword}%`, `%${keyword}%`)
+    }
+    if (roleFilter) {
+      whereParts.push('role = ?')
+      params.push(roleFilter)
+    }
+    const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : ''
 
     const [[countRow]] = await pool.execute(
       `SELECT COUNT(*) AS total
@@ -1681,6 +1706,7 @@ app.get('/api/admin/users', authRequired, adminOnly, async (req, res) => {
       page,
       pageSize,
       keyword,
+      role: roleFilter,
       list: rows
     })
   } catch (error) {
@@ -1688,6 +1714,138 @@ app.get('/api/admin/users', authRequired, adminOnly, async (req, res) => {
     res.status(500).json({ message: '获取用户列表失败' })
   }
 })
+
+  // 客服降级自动转派：客服角色被移除时，名下未结订单与进行中的售前咨询必须在同一事务里
+  // 改派给其他在职客服（最小负载优先，与支付时自动分配同策略），否则工单会因 assignee
+  // 锁定而死锁——所有客服操作都校验 support_assignee_id 必须是本人。
+  // 没有其他可用客服时直接拒绝整个角色变更，让管理员先补客服再降级。
+  async function reassignWorkFromDemotedSupport({ userId, nextRole }) {
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      const [userRows] = await conn.execute(
+        `SELECT id, username, phone, role, banned_until, created_at, updated_at
+         FROM users
+         WHERE id = ?
+         LIMIT 1
+         FOR UPDATE`,
+        [userId]
+      )
+      if (!userRows.length) {
+        failAdminRoute(404, '用户不存在')
+      }
+      const beforeUser = userRows[0]
+      const leavingSupportDesk = String(beforeUser.role || '').trim() === 'support'
+        && String(nextRole || '').trim() !== 'support'
+
+      const reassignedOrders = []
+      const reassignedPresales = []
+
+      if (leavingSupportDesk) {
+        // 终态订单（completed/cancelled）保留原客服归属作为历史统计，不改派
+        const [orderRows] = await conn.execute(
+          `SELECT id, order_no
+           FROM orders
+           WHERE support_assignee_id = ?
+             AND status IN ('paid', 'support_handling', 'settlement_pending', 'deposit_holding')
+           ORDER BY id ASC
+           FOR UPDATE`,
+          [userId]
+        )
+        const [presaleRows] = await conn.execute(
+          `SELECT id
+           FROM presale_consultations
+           WHERE support_assignee_id = ?
+             AND support_status = 'handling'
+           ORDER BY id ASC
+           FOR UPDATE`,
+          [userId]
+        )
+
+        const pickOrderTarget = async () => {
+          const [rows] = await conn.execute(
+            `SELECT u.id, u.username,
+                    COUNT(o.id) AS active_order_count,
+                    MAX(COALESCE(o.paid_at, o.created_at)) AS last_assigned_at
+             FROM users u
+             LEFT JOIN orders o
+               ON o.support_assignee_id = u.id
+              AND o.status IN ('paid', 'support_handling', 'settlement_pending', 'deposit_holding')
+             WHERE u.role = 'support'
+               AND u.id <> ?
+               AND (u.banned_until IS NULL OR u.banned_until <= NOW())
+             GROUP BY u.id, u.username
+             ORDER BY active_order_count ASC, COALESCE(last_assigned_at, '1970-01-01 00:00:00') ASC, u.id ASC
+             LIMIT 1`,
+            [userId]
+          )
+          return rows[0] ? { id: Number(rows[0].id), username: rows[0].username || '客服' } : null
+        }
+        const pickPresaleTarget = async () => {
+          const [rows] = await conn.execute(
+            `SELECT u.id, u.username,
+                    COUNT(pc.id) AS active_consultation_count,
+                    MAX(pc.created_at) AS last_assigned_at
+             FROM users u
+             LEFT JOIN presale_consultations pc
+               ON pc.support_assignee_id = u.id
+              AND pc.support_status = 'handling'
+             WHERE u.role = 'support'
+               AND u.id <> ?
+               AND (u.banned_until IS NULL OR u.banned_until <= NOW())
+             GROUP BY u.id, u.username
+             ORDER BY active_consultation_count ASC, COALESCE(last_assigned_at, '1970-01-01 00:00:00') ASC, u.id ASC
+             LIMIT 1`,
+            [userId]
+          )
+          return rows[0] ? { id: Number(rows[0].id), username: rows[0].username || '客服' } : null
+        }
+
+        for (const row of orderRows) {
+          const target = await pickOrderTarget()
+          if (!target) {
+            failAdminRoute(400, `该客服名下有 ${orderRows.length} 个未结订单，且系统没有其他可用的在职客服。请先在用户管理中把其他账号设为客服，再执行本次降级。`)
+          }
+          await conn.execute(
+            'UPDATE orders SET support_assignee_id = ? WHERE id = ?',
+            [target.id, row.id]
+          )
+          reassignedOrders.push({ id: Number(row.id), orderNo: row.order_no, toSupportId: target.id, toSupportName: target.username })
+        }
+        for (const row of presaleRows) {
+          const target = await pickPresaleTarget()
+          if (!target) {
+            failAdminRoute(400, `该客服名下有 ${presaleRows.length} 个进行中的售前咨询，且系统没有其他可用的在职客服。请先在用户管理中把其他账号设为客服，再执行本次降级。`)
+          }
+          await conn.execute(
+            'UPDATE presale_consultations SET support_assignee_id = ? WHERE id = ?',
+            [target.id, row.id]
+          )
+          reassignedPresales.push({ id: Number(row.id), toSupportId: target.id, toSupportName: target.username })
+        }
+      }
+
+      await conn.execute(
+        'UPDATE users SET role = ? WHERE id = ?',
+        [nextRole, userId]
+      )
+      const [afterRows] = await conn.execute(
+        `SELECT id, username, phone, role, banned_until, created_at, updated_at
+         FROM users
+         WHERE id = ?
+         LIMIT 1`,
+        [userId]
+      )
+
+      await conn.commit()
+      return { beforeUser, afterUser: afterRows[0] || null, reassignedOrders, reassignedPresales }
+    } catch (error) {
+      await conn.rollback()
+      throw error
+    } finally {
+      conn.release()
+    }
+  }
 
 app.put(
   '/api/admin/users/:id/role',
@@ -1712,29 +1870,19 @@ app.put(
   }
 
   try {
-    const [rows] = await pool.execute(
-      'SELECT id, username, phone, role, banned_until, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
-      [userId]
-    )
-    if (!rows.length) {
+    // 事务内完成：名下工单改派 + 角色变更，整体成功或整体回滚
+    const result = await reassignWorkFromDemotedSupport({ userId, nextRole })
+    const { beforeUser, afterUser, reassignedOrders, reassignedPresales } = result
+    if (!beforeUser || !afterUser) {
       return res.status(404).json({ message: '用户不存在' })
     }
 
-    await pool.execute(
-      'UPDATE users SET role = ? WHERE id = ?',
-      [nextRole, userId]
-    )
     if (typeof invalidateAuthUserCache === 'function') {
       invalidateAuthUserCache(userId)
     }
     if (typeof revokeAllLoginSessionsByUserId === 'function') {
       await revokeAllLoginSessionsByUserId(userId)
     }
-
-    const [updatedRows] = await pool.execute(
-      'SELECT id, username, phone, role, banned_until, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
-      [userId]
-    )
 
     // 审计先写后响应：保证高危操作的日志先于响应落库
     await recordAdminOperationSafely({
@@ -1744,19 +1892,74 @@ app.put(
       action: 'update_role',
       targetType: 'user',
       targetId: userId,
-      targetLabel: `${updatedRows[0]?.username || rows[0]?.username || '用户'} (#${userId})`,
-      beforeSnapshot: rows[0],
-      afterSnapshot: updatedRows[0],
+      targetLabel: `${afterUser.username || beforeUser.username || '用户'} (#${userId})`,
+      beforeSnapshot: beforeUser,
+      afterSnapshot: afterUser,
       remark: `角色变更为 ${nextRole}`
     })
 
+    // 降级自动转派：每单写工单时间线留痕 + 刷新相关客服工作台（副作用失败不影响已提交的角色变更）
+    const demotedName = beforeUser.username || '客服'
+    for (const item of reassignedOrders) {
+      try {
+        if (typeof emitChatSupportEvent === 'function') {
+          await emitChatSupportEvent({
+            orderId: item.id,
+            actorUserId: req.auth?.userId,
+            actorRole: 'system',
+            actorName: `管理员${req.auth?.username ? ` ${req.auth.username}` : ''}`.trim(),
+            eventType: 'reassigned',
+            note: `客服降级自动转派：${demotedName} 不再担任客服，工单移交给 ${item.toSupportName}`
+          })
+        }
+      } catch (error) {
+        console.error('[admin] emit demoted reassigned event failed', error)
+      }
+      if (typeof emitChatSupportDeskUpdate === 'function') {
+        emitChatSupportDeskUpdate({ supportUserId: item.toSupportId, desk: 'aftersale', resourceId: item.id, reason: 'assigned' })
+      }
+    }
+    for (const item of reassignedPresales) {
+      if (typeof emitChatSupportDeskUpdate === 'function') {
+        emitChatSupportDeskUpdate({ supportUserId: item.toSupportId, desk: 'presale', resourceId: item.id, reason: 'assigned' })
+      }
+    }
+    if ((reassignedOrders.length || reassignedPresales.length) && typeof emitChatSupportDeskUpdate === 'function') {
+      emitChatSupportDeskUpdate({ supportUserId: userId, desk: 'aftersale', reason: 'updated' })
+      emitChatSupportDeskUpdate({ supportUserId: userId, desk: 'presale', reason: 'updated' })
+    }
+
+    if (reassignedOrders.length || reassignedPresales.length) {
+      await recordAdminOperationSafely({
+        operatorUserId: req.auth?.userId,
+        operatorName: req.auth?.username,
+        module: 'order',
+        action: 'reassign_support',
+        targetType: 'user',
+        targetId: userId,
+        targetLabel: `${demotedName} (#${userId})`,
+        beforeSnapshot: { order_count: reassignedOrders.length, presale_count: reassignedPresales.length },
+        afterSnapshot: {
+          orders: reassignedOrders.map((item) => ({ id: item.id, to: `${item.toSupportName} (#${item.toSupportId})` })),
+          presales: reassignedPresales.map((item) => ({ id: item.id, to: `${item.toSupportName} (#${item.toSupportId})` }))
+        },
+        remark: `降级客服自动转派：订单 ${reassignedOrders.length} 个、售前咨询 ${reassignedPresales.length} 个`
+      })
+    }
+
     res.json({
       message: '用户角色已更新',
-      user: updatedRows[0]
+      user: afterUser,
+      reassignedOrderCount: reassignedOrders.length,
+      reassignedPresaleCount: reassignedPresales.length
     })
   } catch (error) {
-    console.error('[admin] update user role failed', error)
-    res.status(500).json({ message: '更新用户角色失败' })
+    const errorStatus = Number(error?.status) || 500
+    const errorMessage = error?.body?.message || error?.message || '更新用户角色失败'
+    if (errorStatus >= 500) {
+      console.error('[admin] update user role failed', error)
+    }
+    res.status(errorStatus >= 400 && errorStatus < 600 ? errorStatus : 500).json({ message: errorMessage })
   }
   }
 )
@@ -2093,6 +2296,96 @@ app.put(
   }
 )
 
+app.put(
+  '/api/admin/orders/:id/reassign',
+  authRequired,
+  adminOnly,
+  requireStepUpAuth(ADMIN_STEP_UP_POLICIES.reassignOrderSupport),
+  async (req, res) => {
+  const orderId = Math.max(0, Number(req.params?.id || 0) || 0)
+  const targetSupportUserId = Math.max(0, Number(req.body?.supportUserId || 0) || 0)
+  const note = sanitizeAdminRemark(String(req.body?.note || '').trim().slice(0, 200))
+
+  if (!orderId) {
+    return res.status(400).json({ message: '无效的订单ID' })
+  }
+  if (!targetSupportUserId) {
+    return res.status(400).json({ message: '请选择接单客服' })
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      `SELECT
+         o.id,
+         o.order_no,
+         o.status,
+         o.support_scene,
+         o.support_assignee_id,
+         assignee.username AS assignee_name
+       FROM orders o
+       LEFT JOIN users assignee ON assignee.id = o.support_assignee_id
+       WHERE o.id = ?
+       LIMIT 1`,
+      [orderId]
+    )
+    if (!rows.length) {
+      return res.status(404).json({ message: '订单不存在' })
+    }
+    const beforeOrder = rows[0]
+
+    const result = await orderLifecycleService.reassignOrderSupport({
+      orderId,
+      targetSupportUserId,
+      operatorUserId: req.auth?.userId,
+      operatorName: req.auth?.username || '',
+      note
+    })
+
+    const [updatedRows] = await pool.execute(
+      `SELECT
+         o.id,
+         o.order_no,
+         o.status,
+         o.support_scene,
+         o.support_assignee_id,
+         assignee.username AS assignee_name
+       FROM orders o
+       LEFT JOIN users assignee ON assignee.id = o.support_assignee_id
+       WHERE o.id = ?
+       LIMIT 1`,
+      [orderId]
+    )
+
+    // 审计先写后响应：保证高危操作的日志先于响应落库
+    await recordAdminOperationSafely({
+      operatorUserId: req.auth?.userId,
+      operatorName: req.auth?.username,
+      module: 'order',
+      action: 'reassign_support',
+      targetType: 'order',
+      targetId: orderId,
+      targetLabel: beforeOrder.order_no || `订单 #${orderId}`,
+      beforeSnapshot: beforeOrder,
+      afterSnapshot: updatedRows[0] || null,
+      remark: note || `订单改派给 ${result?.targetSupportName || '客服'}`
+    })
+
+    res.json({
+      message: `订单已改派给 ${result?.targetSupportName || '客服'}`,
+      order: updatedRows[0] || null,
+      reassignedOrderCount: 1
+    })
+  } catch (error) {
+    const errorStatus = Number(error?.status) || 500
+    const errorMessage = error?.body?.message || error?.message || '改派失败'
+    if (errorStatus >= 500) {
+      console.error('[admin] reassign order support failed', error)
+    }
+    res.status(errorStatus >= 400 && errorStatus < 600 ? errorStatus : 500).json({ message: errorMessage })
+  }
+  }
+)
+
 app.get('/api/admin/orders', authRequired, adminOnly, async (req, res) => {
   const page = Math.max(1, Number(req.query?.page || 1) || 1)
   const pageSize = Math.min(100, Math.max(1, Number(req.query?.pageSize || 20) || 20))
@@ -2137,13 +2430,16 @@ app.get('/api/admin/orders', authRequired, adminOnly, async (req, res) => {
          o.order_no,
          o.status,
          o.support_scene,
+         o.support_assignee_id,
          o.amount,
          o.created_at,
          COALESCE(NULLIF(buyer.phone, ''), buyer.username) AS buyer_name,
-         COALESCE(NULLIF(seller.phone, ''), NULLIF(seller.username, ''), o.seller_name) AS seller_name
+         COALESCE(NULLIF(seller.phone, ''), NULLIF(seller.username, ''), o.seller_name) AS seller_name,
+         assignee.username AS assignee_name
        FROM orders o
        JOIN users buyer ON buyer.id = o.buyer_id
        LEFT JOIN users seller ON seller.id = o.seller_id
+       LEFT JOIN users assignee ON assignee.id = o.support_assignee_id
        ${whereSql}
        ORDER BY o.id DESC
        LIMIT ${pageSize} OFFSET ${offset}`,

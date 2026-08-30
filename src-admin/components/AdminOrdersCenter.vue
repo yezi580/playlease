@@ -40,6 +40,7 @@
               <th>买家</th>
               <th>卖家</th>
               <th>状态</th>
+              <th>客服</th>
               <th>金额</th>
               <th>操作</th>
               <th>创建时间</th>
@@ -52,24 +53,36 @@
               <td>{{ item.buyer_name }}</td>
               <td>{{ item.seller_name || '--' }}</td>
               <td>{{ formatOrderStatusLabel(item) }}</td>
+              <td>{{ item.assignee_name || '--' }}</td>
               <td>{{ formatMoney(item.amount) }}</td>
               <td>
-                <button
-                  v-if="canCloseOrder(item)"
-                  type="button"
-                  class="row-btn row-btn--danger"
-                  @click="closeOrder(item)"
-                >
-                  {{ orderSubmittingMap[item.id] ? '处理中...' : '关闭订单' }}
-                </button>
-                <button
-                  v-else-if="getRefundProcessingSceneLabel(item)"
-                  type="button"
-                  class="row-btn"
-                  disabled
-                >
-                  {{ getRefundProcessingSceneLabel(item) }}
-                </button>
+                <div class="row-action-group">
+                  <button
+                    v-if="canReassignOrder(item)"
+                    type="button"
+                    class="row-btn"
+                    :disabled="Boolean(orderSubmittingMap[item.id])"
+                    @click="openReassignDialog(item)"
+                  >
+                    改派
+                  </button>
+                  <button
+                    v-if="canCloseOrder(item)"
+                    type="button"
+                    class="row-btn row-btn--danger"
+                    @click="closeOrder(item)"
+                  >
+                    {{ orderSubmittingMap[item.id] ? '处理中...' : '关闭订单' }}
+                  </button>
+                  <button
+                    v-else-if="getRefundProcessingSceneLabel(item)"
+                    type="button"
+                    class="row-btn"
+                    disabled
+                  >
+                    {{ getRefundProcessingSceneLabel(item) }}
+                  </button>
+                </div>
               </td>
               <td>{{ formatDateTime(item.created_at) }}</td>
             </tr>
@@ -138,6 +151,32 @@
       @cancel="pendingCloseOrder = null"
       @confirm="confirmCloseOrder"
     />
+
+    <AdminConfirmDialog
+      :open="Boolean(pendingReassignOrder)"
+      title="改派订单客服"
+      :message="reassignConfirmMessage"
+      confirm-text="确认改派"
+      :loading="Boolean(pendingReassignOrder && orderSubmittingMap[pendingReassignOrder.id])"
+      @cancel="pendingReassignOrder = null"
+      @confirm="confirmReassignOrder"
+    >
+      <div class="reassign-picker">
+        <label class="reassign-picker__label">接单客服</label>
+        <select
+          v-model.number="reassignTargetId"
+          class="reassign-picker__select"
+          :disabled="supportLoading || Boolean(pendingReassignOrder && orderSubmittingMap[pendingReassignOrder.id])"
+        >
+          <option :value="0" disabled>
+            {{ supportLoading ? '正在加载客服列表...' : (reassignSupportOptions.length ? '请选择客服' : '暂无其他在职客服') }}
+          </option>
+          <option v-for="opt in reassignSupportOptions" :key="opt.id" :value="opt.id">
+            {{ opt.username }}（#{{ opt.id }}）
+          </option>
+        </select>
+      </div>
+    </AdminConfirmDialog>
   </section>
 </template>
 
@@ -192,6 +231,10 @@ export default {
       total: 0,
       orders: [],
       pendingCloseOrder: null,
+      pendingReassignOrder: null,
+      reassignTargetId: 0,
+      supportOptions: [],
+      supportLoading: false,
       orderSubmittingMap: {},
       actionMessage: '',
       actionMessageType: 'success',
@@ -216,6 +259,20 @@ export default {
         return `确认关闭订单 ${order.order_no || '--'} 吗？该订单已支付，关闭后将原路退款给买家（退款通常 1-2 个工作日到账），商品将转为已下架；若退款仍在处理中，订单将在到账后自动完成关闭。`
       }
       return `确认关闭订单 ${order.order_no || '--'} 吗？关闭后将通知汇付关闭未支付的支付单，商品将转为已下架。`
+    },
+    reassignConfirmMessage() {
+      const order = this.pendingReassignOrder
+      if (!order) return ''
+      const assigneeName = order.assignee_name || '原客服'
+      return `将订单 ${order.order_no || '--'} 的负责客服由 ${assigneeName} 改派给其他客服接管。改派后仅接单客服可执行该订单的客服操作（继续履约、取消、结算分账等），买卖双方不受影响。`
+    },
+    reassignSupportOptions() {
+      const currentAssigneeId = Number(this.pendingReassignOrder?.support_assignee_id || 0)
+      return this.supportOptions.filter((item) => (
+        Number(item.id) !== currentAssigneeId
+        && !item.banned_until
+        && String(item.role || '') === 'support'
+      ))
     },
     totalPages() {
       return Math.max(1, Math.ceil(Number(this.total || 0) / this.pageSize))
@@ -266,6 +323,11 @@ export default {
           if (pendingId) {
             const fresh = this.orders.find((order) => Number(order.id) === pendingId)
             if (fresh) this.pendingCloseOrder = fresh
+          }
+          const pendingReassignId = Number(this.pendingReassignOrder?.id || 0)
+          if (pendingReassignId) {
+            const fresh = this.orders.find((order) => Number(order.id) === pendingReassignId)
+            if (fresh) this.pendingReassignOrder = fresh
           }
         }
       } catch (error) {
@@ -318,6 +380,73 @@ export default {
       if (Boolean(this.orderSubmittingMap[item.id])) return false
       if (this.getRefundProcessingSceneLabel(item)) return false
       return !['cancelled', 'completed', 'refunded'].includes(String(item.status || ''))
+    },
+    // 终态订单保留原客服归属作历史统计；有负责客服的非终态订单才可改派
+    canReassignOrder(item) {
+      if (!Number(item.support_assignee_id || 0)) return false
+      return !['cancelled', 'completed', 'refunded'].includes(String(item.status || ''))
+    },
+    async openReassignDialog(item) {
+      if (!this.canReassignOrder(item)) return
+      this.pendingReassignOrder = item
+      this.reassignTargetId = 0
+      await this.loadSupportOptions()
+      const firstOption = this.reassignSupportOptions[0]
+      this.reassignTargetId = firstOption ? firstOption.id : 0
+    },
+    async loadSupportOptions() {
+      this.supportLoading = true
+      try {
+        const data = await apiFetch('/api/admin/users?role=support&page=1&pageSize=100')
+        this.supportOptions = Array.isArray(data.list) ? data.list : []
+      } catch (error) {
+        this.supportOptions = []
+        this.actionMessageType = 'error'
+        this.actionMessage = error.message || '获取客服列表失败'
+      } finally {
+        this.supportLoading = false
+      }
+    },
+    async confirmReassignOrder() {
+      const item = this.pendingReassignOrder
+      if (!item) return
+      if (!this.reassignTargetId) {
+        this.actionMessageType = 'error'
+        this.actionMessage = this.reassignSupportOptions.length
+          ? '请先选择接单客服'
+          : '暂无其他在职客服可接单，请先在用户管理中新增客服'
+        return
+      }
+
+      this.orderSubmittingMap = {
+        ...this.orderSubmittingMap,
+        [item.id]: true
+      }
+      this.actionMessage = ''
+
+      try {
+        const data = await this.runProtectedAction('reassign_order_support', () => apiFetch(`/api/admin/orders/${item.id}/reassign`, {
+          method: 'PUT',
+          body: JSON.stringify({ supportUserId: this.reassignTargetId })
+        }))
+        const updatedOrder = data.order || {}
+        this.orders = this.orders.map((order) => (
+          Number(order.id) === Number(item.id)
+            ? { ...order, ...updatedOrder }
+            : order
+        ))
+        this.actionMessageType = 'success'
+        this.actionMessage = data.message || `订单 ${item.order_no} 已改派`
+        this.pendingReassignOrder = null
+      } catch (error) {
+        this.actionMessageType = 'error'
+        this.actionMessage = error.message || '改派失败'
+      } finally {
+        this.orderSubmittingMap = {
+          ...this.orderSubmittingMap,
+          [item.id]: false
+        }
+      }
     },
     async closeOrder(item) {
       if (!this.canCloseOrder(item)) return
@@ -502,6 +631,39 @@ export default {
   border-color: #fecaca;
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.row-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reassign-picker {
+  margin-top: 16px;
+}
+
+.reassign-picker__label {
+  display: block;
+  margin-bottom: 8px;
+  color: #374151;
+  font-size: 14px;
+}
+
+.reassign-picker__select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+}
+
+.reassign-picker__select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .pager {

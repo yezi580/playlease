@@ -5,6 +5,7 @@
         <h3 :id="titleId">{{ title }}</h3>
         <p>{{ message }}</p>
       </div>
+      <slot />
       <div class="confirm-actions">
         <button type="button" class="confirm-btn confirm-btn--ghost" :disabled="loading" @click="handleCancel">
           取消

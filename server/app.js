@@ -284,6 +284,13 @@ const ADMIN_STEP_UP_POLICIES = Object.freeze({
     requirePasskey: true,
     requireTrustedDevice: false
   },
+  reassignOrderSupport: {
+    action: 'reassign_order_support',
+    message: '订单改派需要完成二次校验',
+    maxAgeMinutes: 15,
+    requirePasskey: true,
+    requireTrustedDevice: false
+  },
   deactivateListing: {
     action: 'deactivate_listing',
     message: '下架商品需要完成二次校验',
@@ -2734,6 +2741,7 @@ registerAdminRoutes({
   loadBusinessSettings,
   invalidateAuthUserCache,
   orderLifecycleService,
+  chatModule,
   chatBannedWords: CHAT_BANNED_WORDS
 })
 
