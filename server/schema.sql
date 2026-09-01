@@ -198,14 +198,13 @@ CREATE TABLE IF NOT EXISTS orders (
   deposit_amount BIGINT NOT NULL DEFAULT 0 COMMENT '押金金额（分为单位）',
   status ENUM(
     'pending_payment',
-    'in_progress',
+    'paid',
+    'support_handling',
+    'settlement_pending',
+    'deposit_holding',
     'completed',
-    'after_sale',
-    'cancelled',
-    'refund_pending',
-    'refunded',
-    'deposit_holding'
-  ) NOT NULL DEFAULT 'pending_payment' COMMENT '订单状态',
+    'cancelled'
+  ) NOT NULL DEFAULT 'pending_payment' COMMENT '订单状态：待付款/已支付/客服处理中/待结算/押金保管中/已完成/已取消（与生产一致，历史状态由 app.js 启动迁移归并）',
   after_sale_reason VARCHAR(500) DEFAULT NULL COMMENT '售后原因展示文案',
   after_sale_reason_code VARCHAR(50) DEFAULT NULL COMMENT '售后原因代码',
   after_sale_note VARCHAR(500) DEFAULT NULL COMMENT '售后补充说明',

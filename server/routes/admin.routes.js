@@ -1315,7 +1315,7 @@ app.get('/api/admin/overview', authRequired, adminOnly, async (_req, res) => {
     const [[ordersRow]] = await pool.execute(
       `SELECT
          COUNT(*) AS total_orders,
-         SUM(CASE WHEN status IN ('after_sale', 'refund_pending', 'refunded') THEN 1 ELSE 0 END) AS after_sale_orders
+         SUM(CASE WHEN status = 'support_handling' THEN 1 ELSE 0 END) AS support_handling_orders
        FROM orders`
     )
 
@@ -1323,7 +1323,7 @@ app.get('/api/admin/overview', authRequired, adminOnly, async (_req, res) => {
       totalUsers: Number(usersRow?.total_users || 0),
       totalListings: Number(listingsRow?.total_listings || 0),
       totalOrders: Number(ordersRow?.total_orders || 0),
-      afterSaleOrders: Number(ordersRow?.after_sale_orders || 0)
+      supportHandlingOrders: Number(ordersRow?.support_handling_orders || 0)
     })
   } catch (_error) {
     res.status(500).json({ message: '获取后台概览数据失败' })
@@ -2231,8 +2231,8 @@ app.put(
       })
     }
 
-    if (['completed', 'refunded'].includes(String(currentOrder.status || ''))) {
-      return res.status(400).json({ message: '已完成或已退款订单不支持后台关闭' })
+    if (String(currentOrder.status || '') === 'completed') {
+      return res.status(400).json({ message: '已完成订单不支持后台关闭' })
     }
 
     const result = await orderLifecycleService.closeOrderAsAdmin({
@@ -2386,19 +2386,17 @@ app.put(
   }
 )
 
+// 与生产库 orders.status ENUM 一致：app.js 启动迁移已归并历史状态
+// （after_sale→support_handling、refund_pending/refunded→cancelled、in_progress→paid）
 const ADMIN_ORDER_STATUS_FILTERS = [
   'all',
   'pending_payment',
   'paid',
-  'in_progress',
-  'completed',
-  'after_sale',
   'support_handling',
   'settlement_pending',
   'deposit_holding',
-  'cancelled',
-  'refund_pending',
-  'refunded'
+  'completed',
+  'cancelled'
 ]
 
 app.get('/api/admin/orders', authRequired, adminOnly, async (req, res) => {

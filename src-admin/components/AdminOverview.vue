@@ -19,8 +19,8 @@
               <strong>{{ overview.totalOrders }}</strong>
             </article>
             <article class="summary-card">
-              <span>售后订单</span>
-              <strong>{{ overview.afterSaleOrders }}</strong>
+              <span>客服处理中订单</span>
+              <strong>{{ overview.supportHandlingOrders }}</strong>
             </article>
           </div>
 
@@ -295,7 +295,7 @@ const EMPTY_OVERVIEW = Object.freeze({
   totalUsers: 0,
   totalListings: 0,
   totalOrders: 0,
-  afterSaleOrders: 0
+  supportHandlingOrders: 0
 })
 
 const EMPTY_REVENUE_STATS = Object.freeze({
@@ -316,17 +316,15 @@ const EMPTY_TREND_STATS = Object.freeze({
   avgOnlineUsers: 0
 })
 
+// 与生产库 orders.status ENUM 保持一致（历史状态由 app.js 启动迁移归并）
 const ORDER_STATUS_LABELS = Object.freeze({
   pending_payment: '待付款',
   paid: '已支付',
-  in_progress: '进行中',
-  completed: '已完成',
-  after_sale: '售后中',
   support_handling: '客服处理中',
   settlement_pending: '结算中',
-  cancelled: '已取消',
-  refund_pending: '退款处理中',
-  refunded: '已退款'
+  deposit_holding: '押金保管中',
+  completed: '已完成',
+  cancelled: '已取消'
 })
 
 const SETTLEMENT_STATUS_LABELS = Object.freeze({
@@ -524,7 +522,7 @@ export default {
           totalUsers: Number(data.totalUsers || 0),
           totalListings: Number(data.totalListings || 0),
           totalOrders: Number(data.totalOrders || 0),
-          afterSaleOrders: Number(data.afterSaleOrders || 0)
+          supportHandlingOrders: Number(data.supportHandlingOrders || 0)
         }
         this.lastLoadedAt = this.formatDateTime(new Date())
       } catch (error) {

@@ -195,18 +195,16 @@ import {
 } from '../utils/api.js'
 import AdminConfirmDialog from './AdminConfirmDialog.vue'
 
+// 与生产库 orders.status ENUM 保持一致（app.js 启动迁移已将历史状态归并：
+// after_sale→support_handling、refund_pending/refunded→cancelled、in_progress→paid）
 const ORDER_STATUS_LABELS = Object.freeze({
   pending_payment: '待付款',
   paid: '已支付',
-  in_progress: '进行中',
-  completed: '已完成',
-  after_sale: '售后中',
   support_handling: '客服处理中',
   settlement_pending: '待结算',
   deposit_holding: '押金保管中',
-  cancelled: '已取消',
-  refund_pending: '退款中',
-  refunded: '已退款'
+  completed: '已完成',
+  cancelled: '已取消'
 })
 
 // 资金在途场景：退款/打款已在处理中，后台再关单会造成重复退款/付款，按钮禁用等对账任务自动收尾
@@ -396,12 +394,12 @@ export default {
     canCloseOrder(item) {
       if (Boolean(this.orderSubmittingMap[item.id])) return false
       if (this.getRefundProcessingSceneLabel(item)) return false
-      return !['cancelled', 'completed', 'refunded'].includes(String(item.status || ''))
+      return !['cancelled', 'completed'].includes(String(item.status || ''))
     },
     // 终态订单保留原客服归属作历史统计；有负责客服的非终态订单才可改派
     canReassignOrder(item) {
       if (!Number(item.support_assignee_id || 0)) return false
-      return !['cancelled', 'completed', 'refunded'].includes(String(item.status || ''))
+      return !['cancelled', 'completed'].includes(String(item.status || ''))
     },
     async openReassignDialog(item) {
       if (!this.canReassignOrder(item)) return
