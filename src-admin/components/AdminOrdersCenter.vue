@@ -15,6 +15,11 @@
           placeholder="搜索订单号、买家、卖家或商品标题"
           @keydown.enter.prevent="searchOrders"
         >
+        <select v-model="status" class="toolbar-select" @change="searchOrders">
+          <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
         <input
           v-model="date"
           type="date"
@@ -24,7 +29,7 @@
         <button type="button" class="row-btn" :disabled="loading" @click="searchOrders">
           {{ loading ? '搜索中...' : '搜索' }}
         </button>
-        <button type="button" class="row-btn" :disabled="loading || !(keyword || date)" @click="resetSearch">
+        <button type="button" class="row-btn" :disabled="loading || !hasActiveFilter" @click="resetSearch">
           重置
         </button>
       </div>
@@ -215,6 +220,11 @@ const REFUND_PROCESSING_SCENE_LABELS = Object.freeze({
 
 const AUTO_REFRESH_INTERVAL_MS = 30000
 
+const ORDER_STATUS_OPTIONS = Object.freeze([
+  { value: 'all', label: '全部状态' },
+  ...Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({ value, label }))
+])
+
 export default {
   name: 'AdminOrdersCenter',
   components: {
@@ -226,6 +236,7 @@ export default {
       error: '',
       keyword: '',
       date: '',
+      status: 'all',
       page: 1,
       pageSize: 20,
       total: 0,
@@ -238,6 +249,7 @@ export default {
       orderSubmittingMap: {},
       actionMessage: '',
       actionMessageType: 'success',
+      statusOptions: ORDER_STATUS_OPTIONS,
       autoRefreshTimer: null,
       refreshing: false,
       handleWindowFocus: null
@@ -251,6 +263,9 @@ export default {
     this.stopAutoRefresh()
   },
   computed: {
+    hasActiveFilter() {
+      return Boolean(this.keyword || this.date) || this.status !== 'all'
+    },
     closeOrderConfirmMessage() {
       const order = this.pendingCloseOrder
       if (!order) return ''
@@ -306,7 +321,8 @@ export default {
         const params = new URLSearchParams({
           page: String(this.page),
           pageSize: String(this.pageSize),
-          keyword: this.keyword
+          keyword: this.keyword,
+          status: this.status
         })
         if (this.date) {
           params.set('date', this.date)
@@ -370,6 +386,7 @@ export default {
     resetSearch() {
       this.keyword = ''
       this.date = ''
+      this.status = 'all'
       this.page = 1
       this.loadOrders()
     },
@@ -574,6 +591,7 @@ export default {
 }
 
 .toolbar-input,
+.toolbar-select,
 .toolbar-date {
   min-height: 40px;
   padding: 0 12px;
@@ -584,6 +602,11 @@ export default {
 
 .toolbar-input {
   flex: 1;
+}
+
+.toolbar-select {
+  min-width: 150px;
+  color: #111827;
 }
 
 .toolbar-date {

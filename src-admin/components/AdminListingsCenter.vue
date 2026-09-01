@@ -15,6 +15,11 @@
           placeholder="搜索发布人、编号、段位、上号方式或状态"
           @keydown.enter.prevent="searchListings"
         >
+        <select v-model="status" class="toolbar-select" @change="searchListings">
+          <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
         <input
           v-model="date"
           type="date"
@@ -24,7 +29,7 @@
         <button type="button" class="row-btn" :disabled="loading" @click="searchListings">
           {{ loading ? '搜索中...' : '搜索' }}
         </button>
-        <button type="button" class="row-btn" :disabled="loading || !(keyword || date)" @click="resetSearch">
+        <button type="button" class="row-btn" :disabled="loading || !hasActiveFilter" @click="resetSearch">
           重置
         </button>
       </div>
@@ -149,6 +154,11 @@ const LISTING_STATUS_LABELS = Object.freeze({
   rented: '已租出'
 })
 
+const LISTING_STATUS_OPTIONS = Object.freeze([
+  { value: 'all', label: '全部状态' },
+  ...Object.entries(LISTING_STATUS_LABELS).map(([value, label]) => ({ value, label }))
+])
+
 export default {
   name: 'AdminListingsCenter',
   components: {
@@ -160,6 +170,7 @@ export default {
       error: '',
       keyword: '',
       date: '',
+      status: 'all',
       page: 1,
       pageSize: 20,
       total: 0,
@@ -167,13 +178,17 @@ export default {
       pendingDeactivateListing: null,
       listingSubmittingMap: {},
       actionMessage: '',
-      actionMessageType: 'success'
+      actionMessageType: 'success',
+      statusOptions: LISTING_STATUS_OPTIONS
     }
   },
   async mounted() {
     await this.loadListings()
   },
   computed: {
+    hasActiveFilter() {
+      return Boolean(this.keyword || this.date) || this.status !== 'all'
+    },
     deactivateListingConfirmMessage() {
       if (!this.pendingDeactivateListing) return ''
       return `确认下架商品 ${this.pendingDeactivateListing.title || `#${this.pendingDeactivateListing.id || '--'}`} 吗？下架后该商品将不再继续展示。`
@@ -204,7 +219,8 @@ export default {
         const params = new URLSearchParams({
           page: String(this.page),
           pageSize: String(this.pageSize),
-          keyword: this.keyword
+          keyword: this.keyword,
+          status: this.status
         })
         if (this.date) {
           params.set('date', this.date)
@@ -235,6 +251,7 @@ export default {
     resetSearch() {
       this.keyword = ''
       this.date = ''
+      this.status = 'all'
       this.page = 1
       this.loadListings()
     },
@@ -354,6 +371,7 @@ export default {
 }
 
 .toolbar-input,
+.toolbar-select,
 .toolbar-date {
   min-height: 40px;
   padding: 0 12px;
@@ -364,6 +382,11 @@ export default {
 
 .toolbar-input {
   flex: 1;
+}
+
+.toolbar-select {
+  min-width: 150px;
+  color: #111827;
 }
 
 .toolbar-date {

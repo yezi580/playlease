@@ -2386,6 +2386,21 @@ app.put(
   }
 )
 
+const ADMIN_ORDER_STATUS_FILTERS = [
+  'all',
+  'pending_payment',
+  'paid',
+  'in_progress',
+  'completed',
+  'after_sale',
+  'support_handling',
+  'settlement_pending',
+  'deposit_holding',
+  'cancelled',
+  'refund_pending',
+  'refunded'
+]
+
 app.get('/api/admin/orders', authRequired, adminOnly, async (req, res) => {
   const page = Math.max(1, Number(req.query?.page || 1) || 1)
   const pageSize = Math.min(100, Math.max(1, Number(req.query?.pageSize || 20) || 20))
@@ -2393,11 +2408,16 @@ app.get('/api/admin/orders', authRequired, adminOnly, async (req, res) => {
   const keyword = sanitizeAdminKeyword(req.query?.keyword)
   const date = sanitizeAdminDate(req.query?.date)
   const nextDate = getNextAdminDate(date)
+  const status = sanitizeAdminSelectValue(req.query?.status, ADMIN_ORDER_STATUS_FILTERS, 'all')
 
   try {
     const whereParts = []
     const params = []
 
+    if (status !== 'all') {
+      whereParts.push('o.status = ?')
+      params.push(status)
+    }
     if (keyword) {
       whereParts.push(`(
         o.order_no LIKE ?
@@ -2451,6 +2471,7 @@ app.get('/api/admin/orders', authRequired, adminOnly, async (req, res) => {
       pageSize,
       keyword,
       date,
+      status,
       list: rows
     })
   } catch (error) {
@@ -2561,6 +2582,15 @@ app.put(
   }
 )
 
+const ADMIN_LISTING_STATUS_FILTERS = [
+  'all',
+  'active',
+  'inactive',
+  'pending_review',
+  'sold_out',
+  'rented'
+]
+
 app.get('/api/admin/listings', authRequired, adminOnly, async (req, res) => {
   const page = Math.max(1, Number(req.query?.page || 1) || 1)
   const pageSize = Math.min(100, Math.max(1, Number(req.query?.pageSize || 20) || 20))
@@ -2568,11 +2598,16 @@ app.get('/api/admin/listings', authRequired, adminOnly, async (req, res) => {
   const keyword = sanitizeAdminKeyword(req.query?.keyword)
   const date = sanitizeAdminDate(req.query?.date)
   const nextDate = getNextAdminDate(date)
+  const status = sanitizeAdminSelectValue(req.query?.status, ADMIN_LISTING_STATUS_FILTERS, 'all')
 
   try {
     const whereParts = []
     const params = []
 
+    if (status !== 'all') {
+      whereParts.push('l.listing_status = ?')
+      params.push(status)
+    }
     if (keyword) {
       whereParts.push(`(
         l.owner_name LIKE ?
@@ -2626,6 +2661,7 @@ app.get('/api/admin/listings', authRequired, adminOnly, async (req, res) => {
       pageSize,
       keyword,
       date,
+      status,
       list: rows
     })
   } catch (error) {
