@@ -7,9 +7,9 @@
         class="toolbar-input"
         maxlength="50"
         placeholder="搜索操作人、动作、对象或备注"
-        @keydown.enter.prevent="loadList"
+        @keydown.enter.prevent="searchList"
       >
-      <select v-model="filters.module" class="toolbar-select">
+      <select v-model="filters.module" class="toolbar-select" @change="searchList">
         <option value="all">全部模块</option>
         <option value="review">商品审核</option>
         <option value="listing">商品管理</option>
@@ -24,9 +24,9 @@
         v-model="filters.date"
         type="date"
         class="toolbar-date"
-        @keydown.enter.prevent="loadList"
+        @keydown.enter.prevent="searchList"
       >
-      <button type="button" class="toolbar-btn" :disabled="loading" @click="loadList">
+      <button type="button" class="toolbar-btn" :disabled="loading" @click="searchList">
         {{ loading ? '加载中...' : '搜索' }}
       </button>
       <button type="button" class="toolbar-btn toolbar-btn--ghost" :disabled="loading" @click="resetFilters">
@@ -39,6 +39,7 @@
     <div v-else class="log-card">
       <div class="card-head">
         <span>共 {{ total }} 条</span>
+        <span v-if="totalPages > 1">第 {{ page }} / {{ totalPages }} 页</span>
       </div>
 
       <div v-if="!list.length" class="state-card state-card--inner">当前没有符合条件的操作日志</div>
@@ -80,6 +81,52 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div v-if="totalPages > 1" class="pager">
+        <button
+          type="button"
+          class="toolbar-btn"
+          :disabled="loading || page <= 1"
+          @click="goPage(1)"
+        >
+          第一页
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn"
+          :disabled="loading || page <= 1"
+          @click="goPage(page - 1)"
+        >
+          上一页
+        </button>
+        <button
+          v-for="p in pageButtons"
+          :key="p"
+          type="button"
+          class="toolbar-btn pager-num"
+          :class="{ 'pager-num--active': p === page }"
+          :disabled="loading"
+          @click="goPage(p)"
+        >
+          {{ p }}
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn"
+          :disabled="loading || page >= totalPages"
+          @click="goPage(page + 1)"
+        >
+          下一页
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn"
+          :disabled="loading || page >= totalPages"
+          @click="goPage(totalPages)"
+        >
+          末页
+        </button>
       </div>
     </div>
   </section>
@@ -123,6 +170,8 @@ export default {
       error: '',
       total: 0,
       list: [],
+      page: 1,
+      pageSize: 20,
       filters: {
         keyword: '',
         module: 'all',
@@ -133,14 +182,32 @@ export default {
   async mounted() {
     await this.loadList()
   },
+  computed: {
+    totalPages() {
+      return Math.max(1, Math.ceil(Number(this.total || 0) / this.pageSize))
+    },
+    pageButtons() {
+      const current = this.page
+      const last = this.totalPages
+      // 以当前页为中心取最多 5 个连续页码，收边不越界
+      let start = Math.max(1, Math.min(current - 2, last - 4))
+      const end = Math.min(last, start + 4)
+      start = Math.max(1, end - 4)
+      const buttons = []
+      for (let p = start; p <= end; p += 1) {
+        buttons.push(p)
+      }
+      return buttons
+    }
+  },
   methods: {
     async loadList() {
       this.loading = true
       this.error = ''
       try {
         const params = new URLSearchParams({
-          page: '1',
-          pageSize: '20',
+          page: String(this.page),
+          pageSize: String(this.pageSize),
           keyword: this.filters.keyword,
           module: this.filters.module
         })
@@ -150,11 +217,25 @@ export default {
         const data = await apiFetch(`/api/admin/operation-logs?${params.toString()}`)
         this.list = Array.isArray(data.list) ? data.list : []
         this.total = Number(data.total || 0)
+        if (Number(data.page)) {
+          this.page = Number(data.page)
+        }
       } catch (error) {
         this.error = error.message || '加载操作日志失败'
       } finally {
         this.loading = false
       }
+    },
+    searchList() {
+      // 换筛选条件后结果集变化，回到第一页
+      this.page = 1
+      this.loadList()
+    },
+    goPage(target) {
+      const next = Math.min(Math.max(1, Number(target) || 1), this.totalPages)
+      if (next === this.page) return
+      this.page = next
+      this.loadList()
     },
     resetFilters() {
       this.filters = {
@@ -162,6 +243,7 @@ export default {
         module: 'all',
         date: ''
       }
+      this.page = 1
       this.loadList()
     },
     formatDateTime(value) {
@@ -234,6 +316,31 @@ export default {
   border-color: #d1d5db;
   background: #fff;
   color: #374151;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.pager-num {
+  min-width: 40px;
+  padding: 0 10px;
+}
+
+.pager-num--active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
 }
 
 .log-card,
