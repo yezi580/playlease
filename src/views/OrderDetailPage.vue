@@ -10,6 +10,7 @@
 
 <script>
 import OrderDetail from '../components/OrderDetail.vue'
+import { sessionReady } from '../composables/useSessionShell.js'
 
 export default {
   name: 'OrderDetailPage',
@@ -34,7 +35,9 @@ export default {
       return this.$route.query.from === 'profile' ? '返回个人中心' : '返回列表'
     }
   },
-  mounted() {
+  async mounted() {
+    if (this.isLoggedIn) return
+    await sessionReady
     if (this.isLoggedIn) return
     this.$emit('require-login', '请先登录')
     this.$router.replace({ name: 'home' })

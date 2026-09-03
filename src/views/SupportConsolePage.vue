@@ -4,6 +4,7 @@
 
 <script>
 import SupportConsole from '../components/SupportConsole.vue'
+import { sessionReady } from '../composables/useSessionShell.js'
 import { showWarningToast } from '../utils/toast.js'
 
 export default {
@@ -22,7 +23,11 @@ export default {
     }
   },
   emits: ['require-login'],
-  mounted() {
+  async mounted() {
+    if (!this.isLoggedIn) {
+      await sessionReady
+    }
+
     if (!this.isLoggedIn) {
       this.$emit('require-login', '请先登录')
       this.$router.replace({ name: 'home' })

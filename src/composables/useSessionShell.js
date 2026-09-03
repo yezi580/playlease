@@ -2,6 +2,15 @@ import { ref } from 'vue'
 import { apiFetch, setAuth, clearAuth, clearLocalAuthCache, getStoredUser } from '../utils/api.js'
 import { showSuccessToast, showWarningToast } from '../utils/toast.js'
 
+// 首次会话探测（initializeSession）完成信号。新标签页深链时 sessionStorage
+// 为空、/api/profile 探测未返回，受保护页 mounted 里的登录校验若不等它，
+// 会把 cookie 仍有效的用户误弹登录并踢回首页。校验先等此 Promise 再判断；
+// 同标签页刷新因 sessionStorage 同步恢复登录态（isLoggedIn 已为 true）不会等待。
+let resolveSessionReady = () => {}
+export const sessionReady = new Promise((resolve) => {
+  resolveSessionReady = resolve
+})
+
 export function useSessionShell({ onAuthenticated = () => {}, onLoggedOut = () => {} } = {}) {
   const isLoggedIn = ref(false)
   const showAuth = ref(false)
@@ -21,28 +30,33 @@ export function useSessionShell({ onAuthenticated = () => {}, onLoggedOut = () =
   }
 
   async function initializeSession() {
-    const storedUser = getStoredUser()
-    if (storedUser && storedUser.username) {
-      applyUserState(storedUser)
-    }
-
     try {
-      const data = await apiFetch('/api/profile')
-      const user = data?.user || null
-      if (!user?.username) {
-        handleLocalLogout()
-        return
+      const storedUser = getStoredUser()
+      if (storedUser && storedUser.username) {
+        applyUserState(storedUser)
       }
 
-      setAuth('', user)
-      applyUserState(user)
-      await notifyAuthenticated()
-    } catch (error) {
-      if (Number(error?.status) === 403) {
-        handleLocalLogout(false)
-        return
+      try {
+        const data = await apiFetch('/api/profile')
+        const user = data?.user || null
+        if (!user?.username) {
+          handleLocalLogout()
+          return
+        }
+
+        setAuth('', user)
+        applyUserState(user)
+        await notifyAuthenticated()
+      } catch (error) {
+        if (Number(error?.status) === 403) {
+          handleLocalLogout(false)
+          return
+        }
+        handleLocalLogout()
       }
-      handleLocalLogout()
+    } finally {
+      // 无论探测结果如何都放行等待中的页面守卫（幂等，重复调用无副作用）
+      resolveSessionReady()
     }
   }
 
@@ -58,6 +72,7 @@ export function useSessionShell({ onAuthenticated = () => {}, onLoggedOut = () =
   }
 
   async function handleAuthSuccess(payload) {
+    resolveSessionReady()
     const user = payload?.user || {}
     const username = user.username || payload?.username || ''
     const role = String(user.role || 'user')
@@ -70,6 +85,7 @@ export function useSessionShell({ onAuthenticated = () => {}, onLoggedOut = () =
   }
 
   function handleLocalLogout(revokeSession = true) {
+    resolveSessionReady()
     if (revokeSession) {
       clearAuth()
     } else {

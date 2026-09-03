@@ -14,6 +14,7 @@
 
 <script>
 import ListingDetail from '../components/ListingDetail.vue'
+import { sessionReady } from '../composables/useSessionShell.js'
 import { canOpenListingDetail, LISTING_DETAIL_LOGIN_TIP } from '../constants/accessPolicy.js'
 
 export default {
@@ -57,10 +58,13 @@ export default {
         && this.$route.query.section === 'published'
     }
   },
-  mounted() {
+  async mounted() {
     requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: 'auto' })
     })
+    if (!canOpenListingDetail({ isLoggedIn: this.isLoggedIn, source: this.source })) {
+      await sessionReady
+    }
     if (!canOpenListingDetail({ isLoggedIn: this.isLoggedIn, source: this.source })) {
       this.$emit('require-login', {
         tip: LISTING_DETAIL_LOGIN_TIP,

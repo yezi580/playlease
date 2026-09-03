@@ -11,6 +11,7 @@
 
 <script>
 import PublishForm from '../components/PublishForm.vue'
+import { sessionReady } from '../composables/useSessionShell.js'
 
 export default {
   name: 'PublishPage',
@@ -36,7 +37,9 @@ export default {
       return this.editingListingId ? `edit-${this.editingListingId}` : 'publish-new'
     }
   },
-  mounted() {
+  async mounted() {
+    if (this.isLoggedIn) return
+    await sessionReady
     if (this.isLoggedIn) return
     this.$emit('require-login', '请先登录后再发布')
     this.$router.replace({ name: 'home' })
