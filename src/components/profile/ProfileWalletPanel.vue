@@ -20,11 +20,15 @@
       </div>
     </div>
 
-    <!-- 已完成入驻：显示余额和提现入口 -->
-    <div v-if="isAccountReady" class="wallet-cashout-notice">
+    <!-- 已完成入驻：显示余额和提现入口（更换银行卡期间隐藏，聚焦换卡表单） -->
+    <div v-if="isAccountReady && !showRebind" class="wallet-cashout-notice">
       <div class="wallet-cashout-info">
         <p>结算打款和邀新返现已自动到账至您的汇付账户，您可以直接在此提现到绑定的银行卡。提现D1到账（次自然日），工作日提现免手续费，节假日提现手续费率0.05%。</p>
         <p class="wallet-cashout-balance">账户可用余额：<strong>{{ balance || '0.00' }}</strong> 元</p>
+        <p class="wallet-cashout-bound">
+          收款银行卡：已绑定
+          <button type="button" class="order-action-btn ghost wallet-rebind-btn" @click="handleStartRebind">更换银行卡</button>
+        </p>
       </div>
       <form class="wallet-cashout-form" @submit.prevent="handleEncashment">
         <input v-model="encashmentForm.amount" type="number" step="0.01" min="0.01" :max="balance || undefined" placeholder="提现金额（元）" :disabled="encashing" class="wallet-cashout-input">
@@ -38,8 +42,8 @@
       </div>
     </div>
 
-    <!-- 未完成入驻：显示两步入驻流程 -->
-    <div v-else class="wallet-onboarding-section">
+    <!-- 未完成入驻：显示两步入驻流程；更换银行卡时重新展示绑卡表单 -->
+    <div v-if="!isAccountReady || showRebind" class="wallet-onboarding-section">
       <!-- 步骤一：个人用户开户 -->
       <div class="wallet-step-card" :class="{ 'wallet-step-card--done': hasHuifuId }">
         <div class="wallet-step-header">
@@ -100,11 +104,11 @@
           <span class="wallet-step-badge" :class="{ 'wallet-step-badge--done': isAccountReady, 'wallet-step-badge--locked': !hasHuifuId }">
             {{ isAccountReady ? '✓' : '2' }}
           </span>
-          <h4>绑定银行卡</h4>
+          <h4>{{ isRebindMode ? '更换银行卡' : '绑定银行卡' }}</h4>
         </div>
-        <p class="wallet-step-desc">绑定银行卡后即可接收结算打款和邀新返现，并支持提现到银行卡。</p>
+        <p class="wallet-step-desc">{{ isRebindMode ? '请填写本人名下新的银行卡信息，提交成功后结算打款与提现将转入新卡。' : '绑定银行卡后即可接收结算打款和邀新返现，并支持提现到银行卡。' }}</p>
 
-        <form v-if="!isAccountReady && hasHuifuId" class="wallet-form-grid" @submit.prevent="handleBindCard">
+        <form v-if="hasHuifuId && (!isAccountReady || showRebind)" class="wallet-form-grid" @submit.prevent="handleBindCard">
           <label class="wallet-form-field">
             <span>持卡人姓名</span>
             <input v-model="bindCardForm.cardName" type="text" maxlength="32" placeholder="请输入持卡人姓名" :disabled="binding">
@@ -157,7 +161,10 @@
           <div v-if="bindCardError" class="wallet-form-error wallet-form-field--full">{{ bindCardError }}</div>
           <div class="wallet-form-actions wallet-form-field--full">
             <button type="submit" class="order-action-btn primary wallet-submit-btn" :disabled="binding">
-              {{ binding ? '正在绑卡...' : '提交绑卡' }}
+              {{ binding ? (isRebindMode ? '正在更换...' : '正在绑卡...') : (isRebindMode ? '确认更换银行卡' : '提交绑卡') }}
+            </button>
+            <button v-if="isRebindMode" type="button" class="order-action-btn ghost" :disabled="binding" @click="showRebind = false">
+              取消
             </button>
           </div>
         </form>
@@ -302,6 +309,10 @@ const onboardingStatusText = computed(() => {
   return '未完成'
 })
 
+// 已绑定用户更换银行卡：重新展示绑卡表单，复用 handleBindCard 提交
+const showRebind = ref(false)
+const isRebindMode = computed(() => isAccountReady.value && showRebind.value)
+
 // 步骤一：开户表单
 const registering = ref(false)
 const registerError = ref('')
@@ -376,6 +387,15 @@ const currentCities = computed(() => {
 
 function onProvChange() {
   bindCardForm.areaId = ''
+}
+
+function handleStartRebind() {
+  showRebind.value = true
+  bindCardError.value = ''
+  // 预填持卡人姓名（换卡一般不换人）；身份证号本地无明文，需用户重新填写
+  if (!bindCardForm.cardName) {
+    bindCardForm.cardName = String(props.accountForm.accountName || '').trim()
+  }
 }
 
 // 步骤三：提现
@@ -469,6 +489,10 @@ async function handleBindCard() {
         bindStatus: res.settlement_account.bind_status || 'active'
       })
       emit('refresh')
+      if (showRebind.value) {
+        showRebind.value = false
+        bindCardForm.cardNo = ''
+      }
     }
   } catch (err) {
     bindCardError.value = err?.body?.message || err?.message || '绑卡失败，请稍后重试'
@@ -553,6 +577,15 @@ async function handleBindCard() {
 .wallet-cashout-balance strong {
   font-size: 18px;
   color: var(--text-main);
+}
+
+.wallet-cashout-bound {
+  margin-top: 4px;
+  font-size: 14px !important;
+  color: var(--text-regular) !important;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .wallet-cashout-form {
@@ -652,6 +685,14 @@ async function handleBindCard() {
   color: var(--success-text-dark);
   font-size: 14px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wallet-rebind-btn {
+  padding: 6px 14px;
+  font-size: 13px;
 }
 
 .wallet-step-locked {
@@ -717,6 +758,9 @@ async function handleBindCard() {
 
 .wallet-form-actions {
   margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .wallet-submit-btn {
