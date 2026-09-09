@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /profile
+Disallow: /orders/
+Disallow: /payment/
+Disallow: /publish
+Disallow: /support-console
+
+Sitemap: https://xysh88.com/sitemap.xml

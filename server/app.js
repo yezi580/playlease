@@ -253,7 +253,7 @@ if (!ADMIN_PASSKEY_ENABLED) {
 if (!SUPPORT_MONEY_STEP_UP_ENABLED) {
   console.warn('[security] SUPPORT_MONEY_STEP_UP_ENABLED 未开启：客服资金操作暂不要求 Passkey 二次校验（客服完成绑定后应尽快开启）')
 }
-const ADMIN_PASSKEY_RP_NAME = String(process.env.PASSKEY_RP_NAME || '天蓬商行管理后台').trim() || '天蓬商行管理后台'
+const ADMIN_PASSKEY_RP_NAME = String(process.env.PASSKEY_RP_NAME || '西游商行管理后台').trim() || '西游商行管理后台'
 const ADMIN_PASSKEY_RP_ID = String(process.env.PASSKEY_RP_ID || '').trim()
 const ADMIN_STEP_UP_POLICIES = Object.freeze({
   updateUserRole: {

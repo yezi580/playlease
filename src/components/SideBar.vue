@@ -2,9 +2,9 @@
   <div class="sidebar">
     <div class="logo-wrap">
       <div class="logo">
-        <img class="logo-mark logo-mark-img" src="/web.jpg" alt="天蓬商行" />
+        <img class="logo-mark logo-mark-img" src="/web.jpg" alt="西游商行" />
         <div class="logo-text">
-          <strong>天蓬商行</strong>
+          <strong>西游商行</strong>
         </div>
       </div>
     </div>
