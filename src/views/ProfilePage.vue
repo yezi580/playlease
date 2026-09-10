@@ -21,6 +21,7 @@
 
 <script>
 import ProfileCenter from '../components/ProfileCenter.vue'
+import { sessionReady } from '../composables/useSessionShell.js'
 
 export default {
   name: 'ProfilePage',
@@ -46,6 +47,14 @@ export default {
     }
   },
   emits: ['require-login', 'logout', 'unread-change'],
+  async mounted() {
+    // 与其它受保护页同款守卫：先等会话探测完成，避免把 cookie 仍有效的新标签页用户误踢
+    if (this.isLoggedIn) return
+    await sessionReady
+    if (this.isLoggedIn) return
+    this.$emit('require-login', '请先登录')
+    this.$router.replace({ name: 'home' })
+  },
   computed: {
     defaultSection() {
       return this.$route.query.section || 'published'
