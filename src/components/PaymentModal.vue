@@ -40,12 +40,7 @@
 
             <div class="payment-method-section">
               <h4 class="payment-method-title">选择支付方式</h4>
-              <div v-if="isWeChatBrowser" class="payment-wechat-guide">
-                <p class="payment-wechat-guide-title">微信内暂不支持付款</p>
-                <p class="payment-wechat-guide-text">当前仅支持支付宝付款，微信内无法拉起支付宝。</p>
-                <p class="payment-wechat-guide-text">请点击页面右上角「···」，选择<span class="payment-wechat-guide-strong">「在浏览器中打开」</span>后再继续完成支付。</p>
-              </div>
-              <div v-else class="payment-method-list">
+              <div class="payment-method-list">
                 <label
                   v-for="method in paymentMethods"
                   :key="method.key"
@@ -93,13 +88,8 @@
           <div class="payment-modal-footer">
             <template v-if="!processing && !awaitingPaymentResult && !payResult">
               <button type="button" class="payment-btn payment-btn-cancel" @click="handleClose">取消</button>
-              <button
-                type="button"
-                class="payment-btn payment-btn-confirm"
-                :disabled="isWeChatBrowser"
-                @click="handleConfirmPay"
-              >
-                {{ isWeChatBrowser ? '请在浏览器中打开后支付' : `确认支付 ￥${formatMoney(total)}` }}
+              <button type="button" class="payment-btn payment-btn-confirm" @click="handleConfirmPay">
+                确认支付 ￥{{ formatMoney(total) }}
               </button>
             </template>
             <button v-else-if="payResult?.success" type="button" class="payment-btn payment-btn-confirm" @click="handleClose">
@@ -193,12 +183,6 @@ export default {
       const userAgent = String(window.navigator?.userAgent || '')
       const isMobile = /Android|iPhone|iPad|iPod|Mobile|HarmonyOS|Windows Phone/i.test(userAgent)
       return isMobile ? 'h5' : 'pc'
-    },
-    // 微信内置浏览器会拦截支付宝唤起，未接入微信支付前只能引导用户去外部浏览器支付
-    isWeChatBrowser() {
-      if (typeof window === 'undefined') return false
-      const userAgent = String(window.navigator?.userAgent || '')
-      return /MicroMessenger/i.test(userAgent)
     },
     defaultMethod() {
       return this.terminalScene === 'h5' ? 'alipay_h5' : 'cashier_pc'
@@ -436,7 +420,6 @@ export default {
       window.location.assign(jumpUrl)
     },
     async handleConfirmPay() {
-      if (this.isWeChatBrowser) return
       this.processing = true
       this.awaitingPaymentResult = false
       this.payResult = null
@@ -646,31 +629,6 @@ export default {
   margin-bottom: 8px;
 }
 
-.payment-wechat-guide {
-  padding: 14px 16px;
-  border: 1px solid var(--warning-border);
-  border-radius: 12px;
-  background: var(--warning-bg);
-}
-
-.payment-wechat-guide-title {
-  margin: 0 0 8px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--warning-text);
-}
-
-.payment-wechat-guide-text {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--warning-text);
-}
-
-.payment-wechat-guide-strong {
-  font-weight: 700;
-}
-
 .payment-method-title {
   margin: 0 0 12px;
   font-size: 15px;
@@ -844,12 +802,6 @@ export default {
 .payment-btn-confirm:hover {
   opacity: 0.92;
   box-shadow: 0 6px 16px rgba(29, 78, 216, 0.35);
-}
-
-.payment-btn-confirm:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-  box-shadow: none;
 }
 
 .payment-btn-retry {
