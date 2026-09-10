@@ -81,7 +81,7 @@
       <div v-else class="admin-shell">
         <aside class="admin-sidebar">
           <div class="admin-brand">
-            <img class="admin-brand-mark admin-brand-mark-img" src="/web.jpg" alt="西游商行" />
+            <img class="admin-brand-mark admin-brand-mark-img" src="/web.jpg?v=20260910" alt="西游商行" />
             <strong>西游商行</strong>
             <span>平台运营管理中心</span>
           </div>
