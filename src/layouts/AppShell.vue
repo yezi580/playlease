@@ -495,6 +495,7 @@ function handleLogout() {
   position: relative;
   background: var(--bg-page);
   min-height: 100vh;
+  min-height: 100dvh;
   font-family: Arial;
   padding-left: 240px;
   display: flex;

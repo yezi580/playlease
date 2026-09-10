@@ -1782,6 +1782,7 @@ export default {
   box-sizing: border-box;
   align-items: flex-start;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .profile-sidebar {
@@ -2054,6 +2055,7 @@ export default {
   min-width: 0;
   padding: 20px;
   min-height: calc(100vh - 116px);
+  min-height: calc(100dvh - 116px);
   display: flex;
   flex-direction: column;
   scrollbar-gutter: stable both-edges;
@@ -2793,7 +2795,9 @@ export default {
   .profile-center {
     padding: 12px 12px 88px 12px;
     gap: 16px;
+    /* dvh 随 iOS 地址栏收起联动，避免 100vh 在下滑时触发 reflow 抖动 */
     min-height: calc(100vh - 60px);
+    min-height: calc(100dvh - 60px);
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -2814,15 +2818,9 @@ export default {
     margin-bottom: -16px;
     padding-top: 12px;
     padding-bottom: 16px;
+    /* 纯色背景跟随主题：backdrop-filter 挂在 sticky 元素上会触发 iOS 滚动抖动，
+       且写死浅色会在夜间模式出现白色横带，故弃用磨砂玻璃效果 */
     background: var(--bg-page);
-  }
-
-  @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
-    .profile-sidebar {
-      background: rgba(243, 244, 246, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-    }
   }
 
   .profile-user-card {
