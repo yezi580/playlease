@@ -184,10 +184,22 @@ export default {
       const isMobile = /Android|iPhone|iPad|iPod|Mobile|HarmonyOS|Windows Phone/i.test(userAgent)
       return isMobile ? 'h5' : 'pc'
     },
+    // 微信内置浏览器里统一收银台只能调起微信支付，文案与流水渠道需按此展示/记录
+    isWeChatBrowser() {
+      if (typeof window === 'undefined') return false
+      const userAgent = String(window.navigator?.userAgent || '')
+      return /MicroMessenger/i.test(userAgent)
+    },
     defaultMethod() {
+      if (this.isWeChatBrowser) return 'wechat_pay'
       return this.terminalScene === 'h5' ? 'alipay_h5' : 'cashier_pc'
     },
     paymentMethods() {
+      if (this.isWeChatBrowser) {
+        return [
+          { key: 'wechat_pay', name: '微信支付', icon: 'W' }
+        ]
+      }
       if (this.terminalScene === 'h5') {
         return [
           { key: 'alipay_h5', name: '支付宝支付', icon: 'A' }

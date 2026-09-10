@@ -123,6 +123,7 @@ export default {
     displayPaymentMethod() {
       if (this.paymentMethod) return this.paymentMethod
       const channel = String(this.transaction?.channel || this.returnContext?.paymentChannel || '').trim().toLowerCase()
+      if (channel === 'wechat_pay') return '微信支付'
       if (channel === 'alipay_h5') return '支付宝支付'
       if (channel === 'cashier_pc') return '支付宝支付'
       return '-'
