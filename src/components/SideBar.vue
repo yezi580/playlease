@@ -310,6 +310,10 @@ export default {
   padding: 10px 16px;
 }
 
+.bottom-btn.login {
+  justify-content: center;
+}
+
 /* 太阳/月亮叠加放置，点击时旋转 + 缩放交叉过渡 */
 .theme-icons {
   position: relative;
