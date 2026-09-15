@@ -70,6 +70,25 @@ else
   echo "✓ upstream 挂载 inode 一致（${host_upstream_inode:-未知/新部署}）"
 fi
 
+echo "=== 检查 nginx 站点配置挂载是否脱离 ==="
+# nginx.prod.conf / nginx.main.conf 同样是单文件挂载（conf.d/default.conf、nginx.conf），
+# tar 解压会重建同名文件换 inode：若脱离，之后 reload 读到的仍是旧 inode 内容，
+# 本次部署的 nginx 配置变更会静默不生效（upstream 已用 cat > 保 inode，这两个文件由
+# tar 带入所以无法保）。检测到脱离只提示、不自动 restart：新配置未经 nginx -t 校验，
+# 直接重启可能把站点打挂。
+for conf_file in nginx.prod.conf:conf.d/default.conf nginx.main.conf:nginx.conf; do
+  file_name="${conf_file%%:*}"
+  container_path="${conf_file##*:}"
+  host_inode=$(stat -c %i "/opt/my-app/deploy/nginx/$file_name" 2>/dev/null || true)
+  container_inode=$(docker exec my-app-prod-nginx-1 stat -c %i "/etc/nginx/$container_path" 2>/dev/null || true)
+  if [ -n "$host_inode" ] && [ -n "$container_inode" ] && [ "$host_inode" != "$container_inode" ]; then
+    echo "⚠️  $file_name 挂载 inode 已脱离（宿主 $host_inode ≠ 容器 $container_inode），本次 nginx 配置变更不会随 reload 生效。"
+    echo "    校验并重建生效：cd /opt/my-app && docker exec my-app-prod-nginx-1 nginx -t && docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml up -d --force-recreate --no-deps nginx"
+  else
+    echo "✓ $file_name 挂载 inode 一致（${host_inode:-未知/新部署}）"
+  fi
+done
+
 echo "=== 验证封禁逻辑已部署 ==="
 grep -n "不能封禁管理员账号" /opt/my-app/server/routes/admin.routes.js
 
