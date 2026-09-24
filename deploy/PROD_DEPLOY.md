@@ -82,7 +82,7 @@
 
 ## 推荐部署步骤
 
-正式部署不要再直接 `scp -r` 整个项目目录。推荐流程是：本地构建前端后，只打包 `deploy`、`dist`、`server` 这几个生产必需目录，再上传压缩包到服务器。
+正式部署不要再直接 `scp -r` 整个项目目录。推荐流程是：本地构建前端后，只打包 `deploy`、`dist`、`server`、`ai-service` 这几个生产必需目录，再上传压缩包到服务器。
 
 1. 本地构建前端:
 
@@ -105,7 +105,10 @@ tar -czf deploy\artifacts\my-app-prod-deploy.tar.gz `
   --exclude=deploy/nginx/admin-allowlist.extra.list `
   --exclude=deploy/nginx/admin-allowlist.own.conf `
   --exclude=deploy/nginx/upstream-backend.conf `
-  deploy dist server
+  --exclude=ai-service/.venv `
+  --exclude=ai-service/cache `
+  --exclude=ai-service/__pycache__ `
+  deploy dist server ai-service
 ```
 
 当前这套打包方式会避开本地大依赖和不该被覆盖的线上数据，重点不上传这些内容:
@@ -113,6 +116,7 @@ tar -czf deploy\artifacts\my-app-prod-deploy.tar.gz `
 - `server/node_modules`
 - `server/uploads`
 - `server/.env`
+- `ai-service/.venv` / `ai-service/cache` / `ai-service/__pycache__`（Python 本地产物与向量缓存；镜像在服务器上构建时自行 pip install）
 - `deploy/nginx/certs`
 - `deploy/nginx/admin-allowlist.prod.conf` / `admin-allowlist.extra.list` / `admin-allowlist.own.conf`（线上由 update-admin-allowlist.sh 生成维护；上传仓库空模板会覆盖线上白名单，导致管理后台对全网开放。全新服务器初始化时需先跑一次该脚本再启动 nginx）
 - `deploy/nginx/upstream-backend.conf`（线上运行状态文件，记录当前活跃色；tar 解压会重建文件换 inode，使 nginx 的单文件 bind mount 脱离、蓝绿切换静默失效——2026-08-26 实际发生。全新服务器解压后由 blue-green-deploy.sh 的 ensure_upstream_conf 自动生成默认状态）
@@ -222,6 +226,34 @@ bash /opt/my-app/deploy/scripts/blue-green-deploy.sh status
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml ps
 docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml logs -f api-blue
 ```
+
+## AI 助手（ai-service）发布
+
+ai-service 是独立的 Python FastAPI 容器，**不参与蓝绿**：单容器常驻，更新即重建（几十秒中断，可接受）。路径：浏览器 → nginx(`/api/ai/`，已配 SSE 关缓冲) → Node（统一限流 `aiChatLimiter` 10次/分钟）→ 内网 `http://ai-service:8000`。
+
+首次上线 / 日常更新：
+
+```bash
+# 0. 首次上线前：服务器上手工编辑 /opt/my-app/deploy/env/prod.env 补 AI 段真实值
+#    （AI_LLM_API_KEY 必填；AI_SERVICE_TOKEN 建议生成随机串；模板见 ai-service/.env.example。
+#     ⚠️ remote-deploy-extract.sh 会用服务器上的 prod.env 覆盖 tar 包带来的版本——本地改了带不过去）
+
+# 1. 常规 tar 包部署后（ai-service 目录已在包里），只动 ai-service 容器：
+docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml up -d --build ai-service
+
+# 2. 首次上线那次还伴随了 nginx conf 变更（新增 /api/ai/ SSE location），需重建 nginx（秒级中断）：
+docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml up -d --force-recreate nginx
+
+# 3. 验证：
+curl -s http://127.0.0.1:3103/health          # 容器直连：llm=true, rag.chunks>0
+docker compose --env-file deploy/env/prod.env -f deploy/compose/docker-compose.prod.yml logs --tail 50 ai-service
+```
+
+要点：
+
+- api-blue/api-green 共挂网络别名 `api`，ai-service 的 `NODE_BASE_URL=http://api:3000` 查商品无需感知蓝绿切换；某色重建窗口期由工具层一次重试兜底。
+- 改 `ai-service/knowledge/faq.md`（RAG 语料）后重启容器即生效；配了 Embedding 时语料指纹变化会自动重新向量化。
+- 日常主站发布（blue-green-deploy.sh）与 ai-service 完全互不影响。
 
 8. 如需维护生产管理员账号，可在服务器执行:
 

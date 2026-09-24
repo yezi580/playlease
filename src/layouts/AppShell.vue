@@ -20,6 +20,7 @@
       @back="handleTopBarBack"
       @invite="goInviteCenter"
       @presale-consultation="openPresaleConsultation"
+      @open-ai-assistant="openAiAssistant"
     />
     <MobileTopBar
       :show-back-action="showTopBarBackAction"
@@ -111,6 +112,19 @@
         </button>
       </div>
       <template v-if="showHomeQuickActions">
+        <div class="quick-action-wrapper ai-action">
+          <button
+            type="button"
+            class="home-quick-action-btn"
+            aria-label="AI 助手"
+            @click="openAiAssistant"
+          >
+            <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
+            </svg>
+          </button>
+          <span class="action-label">AI 助手</span>
+        </div>
         <div class="quick-action-wrapper invite-action">
           <button
             type="button"
@@ -151,6 +165,12 @@
       :user-role="currentUserRole === 'support' ? 'support' : 'user'"
       @close="showPresaleConversationPanel = false"
     />
+
+    <AiChatPanel
+      :visible="showAiPanel"
+      @close="showAiPanel = false"
+      @view-listing="handleAiViewListing"
+    />
   </div>
 </template>
 
@@ -165,6 +185,8 @@ import AppFooter from '../components/AppFooter.vue'
 import AppToast from '../components/AppToast.vue'
 import AppConfirm from '../components/AppConfirm.vue'
 import ConversationPanel from '../components/ConversationPanel.vue'
+import AiChatPanel from '../components/AiChatPanel.vue'
+import { LISTING_DETAIL_LOGIN_TIP } from '../constants/accessPolicy.js'
 import { showWarningToast } from '../utils/toast.js'
 import { useSessionShell } from '../composables/useSessionShell.js'
 import { useUnreadSocket } from '../composables/useUnreadSocket.js'
@@ -174,6 +196,7 @@ const route = useRoute()
 const router = useRouter()
 const pendingAuthRedirect = ref(null)
 const showPresaleConversationPanel = ref(false)
+const showAiPanel = ref(false)
 
 function syncAuthenticatedState() {
   unread.fetchUnreadSummary()
@@ -374,6 +397,26 @@ function openPresaleConsultation() {
   }
   closeAuth()
   showPresaleConversationPanel.value = true
+}
+
+// AI 助手对游客开放（后端 /api/ai/chat 允许匿名），不设登录门槛
+function openAiAssistant() {
+  closeAuth()
+  showAiPanel.value = true
+}
+
+// 从 AI 助手的商品卡片跳详情：详情页要求登录，未登录走统一登录拦截并记录回跳目标
+function handleAiViewListing(listingNo) {
+  if (!listingNo) return
+  if (!isLoggedIn.value) {
+    handleRequireLogin({
+      tip: LISTING_DETAIL_LOGIN_TIP,
+      redirectTo: { name: 'listing-detail', params: { listingNo } }
+    })
+  } else {
+    router.push({ name: 'listing-detail', params: { listingNo } })
+  }
+  showAiPanel.value = false
 }
 
 function openSupportConsole() {

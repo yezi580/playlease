@@ -71,6 +71,12 @@ services:
       PORT: 3000
       # Node 侧同步北京时间：new Date()/序列化落库与 MySQL NOW() 保持同一时区
       TZ: Asia/Shanghai
+    # 双色共挂网络别名 api：ai-service 用 http://api:3000 查商品即可无视蓝绿切换
+    #（只读查询打哪一色都等价；某色重建的窗口期内 DNS 仍返回两 IP，工具层有一次重试兜底）
+    networks:
+      default:
+        aliases:
+          - api
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
@@ -105,6 +111,11 @@ services:
       PORT: 3000
       # Node 侧同步北京时间：new Date()/序列化落库与 MySQL NOW() 保持同一时区
       TZ: Asia/Shanghai
+    # 双色共挂网络别名 api（用途见 api-blue 处注释）
+    networks:
+      default:
+        aliases:
+          - api
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
@@ -121,6 +132,35 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # ===== AI 助手微服务（Python FastAPI：RAG 规则问答 + 智能选号）=====
+  # 单容器、不参与蓝绿（更新 = up -d --build ai-service，短暂中断可接受）；
+  # 不暴露公网：浏览器 → nginx → Node(/api/ai/chat 统一限流鉴权) → 内网到本服务
+  ai-service:
+    build:
+      context: ../../ai-service
+    image: my-app-ai:current
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - ../env/prod.env
+    environment:
+      TZ: Asia/Shanghai
+      # 工具调用查商品：经网络别名 api 直连蓝绿双容器（AI_SERVICE_URL 等其余配置在 prod.env）
+      NODE_BASE_URL: http://api:3000
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # 本机调试用（nginx 走容器内网，不依赖此映射）
+    ports:
+      - "127.0.0.1:${AI_SERVICE_PORT:-3103}:8000"
 
   nginx:
     image: nginx:alpine

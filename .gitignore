@@ -20,6 +20,12 @@ deploy/env/*.env
 deploy/nginx/certs/
 deploy/artifacts/
 
+# ai-service（Python）本地产物
+ai-service/.venv/
+ai-service/cache/
+__pycache__/
+*.pyc
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

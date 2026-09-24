@@ -79,6 +79,10 @@ services:
       MOCK_PAYMENT_AUTO_SUCCESS_SECONDS: ${MOCK_PAYMENT_AUTO_SUCCESS_SECONDS:-3}
       MOCK_PAYMENT_EXPIRES_MINUTES: ${MOCK_PAYMENT_EXPIRES_MINUTES:-15}
       MOCK_WITHDRAW_IMMEDIATE_SUCCESS: ${MOCK_WITHDRAW_IMMEDIATE_SUCCESS:-true}
+      # AI 助手：Node 转发 ai-service 的内网地址与共享令牌
+      AI_SERVICE_URL: http://ai-service:8000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+      AI_CHAT_LIMIT_MAX_PER_MIN: ${AI_CHAT_LIMIT_MAX_PER_MIN:-10}
     # 优雅停机：api 收到 SIGTERM 后先排干在途请求（应用内上限 15s，见 SHUTDOWN_DRAIN_TIMEOUT_MS），
     # 宽限期必须大于应用内排干上限，否则等来的是 SIGKILL，排干失去意义
     stop_grace_period: 30s
@@ -98,6 +102,30 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # ===== AI 助手微服务（Python FastAPI：RAG 规则问答 + 智能选号）=====
+  # 不参与蓝绿：更新即 up -d --build ai-service（短暂中断可接受）
+  ai-service:
+    build: ./ai-service
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+      # LLM 密钥从根目录 .env 或 shell 环境读（.gitignore 已覆盖，git 里只有 ai-service/.env.example）
+      AI_LLM_BASE_URL: ${AI_LLM_BASE_URL:-https://api.deepseek.com}
+      AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
+      AI_LLM_MODEL: ${AI_LLM_MODEL:-deepseek-chat}
+      AI_EMBEDDING_BASE_URL: ${AI_EMBEDDING_BASE_URL:-}
+      AI_EMBEDDING_API_KEY: ${AI_EMBEDDING_API_KEY:-}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+      # 工具调用查商品：compose 内主站服务名就是 api
+      NODE_BASE_URL: http://api:3000
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   nginx:
     image: nginx:alpine

@@ -44,7 +44,15 @@
         <span>售前咨询</span>
       </button>
 
-      <!-- 4. 邀新赚钱 -->
+      <!-- 4. AI 助手（规则问答 + 智能选号） -->
+      <button class="nav-item" @click="$emit('open-ai-assistant')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
+        </svg>
+        <span>AI 助手</span>
+      </button>
+
+      <!-- 5. 邀新赚钱 -->
       <button
         class="nav-item"
         :class="{ active: !showAuth && inviteActive }"
@@ -158,7 +166,7 @@ export default {
     showSupportConsoleEntry: { type: Boolean, default: false },
     supportConsoleLabel: { type: String, default: '工作台' }
   },
-  emits: ['login', 'publish', 'navigate', 'profile', 'back', 'open-support-console', 'invite', 'presale-consultation'],
+  emits: ['login', 'publish', 'navigate', 'profile', 'back', 'open-support-console', 'invite', 'presale-consultation', 'open-ai-assistant'],
   methods: {
     handleNavigate(page) {
       this.$emit('navigate', page)

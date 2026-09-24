@@ -49,7 +49,8 @@ import {
   conversationApiLimiter,
   uploadReadLimiter,
   uploadWriteLimiter,
-  authIpLimiter
+  authIpLimiter,
+  aiChatLimiter
 } from './middleware/security.middleware.js'
 import { createSlidingWindowRateStore } from './infrastructure/rate-limit-store.js'
 import {
@@ -106,6 +107,7 @@ import { registerConversationRoutes } from './routes/conversation.routes.js'
 import { registerMyListingsRoutes } from './routes/my-listings.routes.js'
 import { registerOrdersRoutes } from './routes/order.routes.js'
 import { registerListingRoutes } from './routes/listing.routes.js'
+import { registerAiRoutes } from './routes/ai.routes.js'
 import { createNotificationService } from './modules/notification/notification.service.js'
 import {
   buildBuyerRentPriceSql,
@@ -2715,6 +2717,12 @@ registerAuthRoutes({
   smsCodeService,
   smsProvider,
   loadBusinessSettings
+})
+
+registerAiRoutes({
+  app,
+  aiChatLimiter,
+  getOptionalAuth
 })
 
 registerAdminRoutes({

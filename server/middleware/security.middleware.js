@@ -56,6 +56,7 @@ const conversationLimiterStore = await createExpressRateLimitStore('conversation
 const uploadReadLimiterStore = await createExpressRateLimitStore('upload-read')
 const uploadWriteLimiterStore = await createExpressRateLimitStore('upload-write')
 const authIpLimiterStore = await createExpressRateLimitStore('auth-ip')
+const aiChatLimiterStore = await createExpressRateLimitStore('ai-chat')
 
 function createLimiter({
   store,
@@ -229,4 +230,17 @@ export const conversationApiLimiter = createLimiter({
   max: readPositiveIntEnv('CONVERSATION_API_LIMIT_MAX_PER_MIN', 1800),
   keyGenerator: (req) => buildUserScopedKey(req, 'conversation'),
   message: '聊天请求过于频繁，请稍后再试'
+})
+
+/**
+ * AI 助手对话限流：
+ * - 每次问答都是真实发生成本的大模型调用，阈值远严于普通读接口
+ * - 登录用户按 userId 计数、游客按 IP（依赖 ai.routes.js 在限流前先解析可选登录态）
+ */
+export const aiChatLimiter = createLimiter({
+  store: aiChatLimiterStore,
+  windowMs: 60 * 1000,
+  max: readPositiveIntEnv('AI_CHAT_LIMIT_MAX_PER_MIN', 10),
+  keyGenerator: (req) => buildUserScopedKey(req, 'ai-anonymous'),
+  message: 'AI 请求过于频繁，请稍后再试'
 })
