@@ -2105,6 +2105,7 @@ export default {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+  margin-bottom: 16px;
 }
 
 .toolbar-search {
@@ -2314,6 +2315,7 @@ export default {
 
 .summary-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
 }
 
 /* 售后台 6 张汇总卡一行铺满（售前台 4 张仍保持 4 列） */
