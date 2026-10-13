@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f2b2b"/>
+      <stop offset="1" stop-color="#14283f"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)"/>
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.07">
+    <path d="M0 300 L160 240 L320 300 L480 240 L640 300"/>
+    <path d="M0 340 L160 280 L320 340 L480 280 L640 340"/>
+  </g>
+  <circle cx="540" cy="80" r="46" fill="#ffffff" fill-opacity="0.05"/>
+  <circle cx="540" cy="80" r="30" fill="#ffffff" fill-opacity="0.07"/>
+  <text x="40" y="150" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="64" font-weight="700" fill="#ffffff">黑鹰</text>
+  <text x="40" y="205" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="26" fill="#9fb3d1">哈夫币 180M · 三角洲行动账号</text>
+  <text x="40" y="316" font-family="Consolas, monospace" font-size="16" fill="#5d7396">XYSH DEMO · 202609220002 · B</text>
+</svg>

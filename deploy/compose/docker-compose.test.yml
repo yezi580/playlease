@@ -52,6 +52,24 @@ services:
       redis:
         condition: service_healthy
 
+  # AI 助手微服务（RAG 问答 + 智能选号）；KEY/TOKEN 真实值在服务器上的 test.env 里补
+  ai-service:
+    build:
+      context: ../../ai-service
+    restart: unless-stopped
+    env_file:
+      - ../env/test.env
+    environment:
+      TZ: Asia/Shanghai
+      NODE_BASE_URL: http://api:3000
+    healthcheck:
+      # alpine 容器内 localhost 可能解析为 ::1（uvicorn 只监听 IPv4），必须用 127.0.0.1
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
   nginx:
     image: nginx:alpine
     restart: unless-stopped

@@ -205,7 +205,10 @@ export function createSmsCodeService(options = {}) {
     }
 
     const runtimeConfig = await resolveRuntimeConfig()
-    const code = createNumericCode(codeLength)
+    // 演示/测试环境可设 DEV_SMS_CODE 固定验证码（如 123456），搭配 SMS_PROVIDER=console；
+    // 不设置则照常生成随机码，生产行为不受影响
+    const devFixedCode = String(process.env.DEV_SMS_CODE || '').trim()
+    const code = /^\d{4,8}$/.test(devFixedCode) ? devFixedCode : createNumericCode(codeLength)
     let result = await persistSmsVerificationCode({
       scene,
       phone: safePhone,

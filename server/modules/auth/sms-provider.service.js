@@ -127,6 +127,47 @@ function createUnsupportedSmsProvider(providerName = 'unknown') {
   }
 }
 
+// Console 短信：演示/测试环境专用（SMS_PROVIDER=console）。
+// 不真实下发，验证码/通知内容只打到 api 容器日志（docker logs 可见），
+// 配合 DEV_SMS_CODE 固定验证码使用（见 sms-code.service.js issueCode）。
+function createConsoleSmsProvider(config = {}) {
+  const appName = String(config.appName || 'my-app').trim() || 'my-app'
+  return {
+    mode: 'console',
+    isEnabled: true,
+    getRuntimeConfig() {
+      return { enabled: true, provider: 'console', strictStartupCheck: false }
+    },
+    async sendVerificationCode(payload = {}) {
+      const scene = normalizeSmsScene(payload.scene)
+      console.info(
+        `[sms:console] app=${appName} scene=${scene} phone=${String(payload.phone || '')} code=${String(payload.code || '')}`
+      )
+      return {
+        ok: true,
+        provider: 'console',
+        scene,
+        phone: String(payload.phone || '').trim(),
+        providerMessageId: createProviderMessageId('console'),
+        message: 'Console 模式：验证码仅输出到日志，未真实下发',
+        deliverState: 'logged',
+        sendCode: 'Ok'
+      }
+    },
+    async sendNotification(payload = {}) {
+      console.info(
+        `[sms:console] app=${appName} notification scene=${payload.scene || 'notify'} phone=${String(payload.phone || '')}`
+      )
+      return {
+        ok: true,
+        provider: 'console',
+        deliverState: 'logged',
+        message: 'Console 模式：通知短信未真实下发'
+      }
+    }
+  }
+}
+
 function createTencentSmsProvider(config = {}) {
   const appName = String(config.appName || 'my-app').trim() || 'my-app'
   const secretId = String(config.secretId || process.env.TENCENT_SMS_SECRET_ID || '').trim()
@@ -359,6 +400,10 @@ export function createSmsProvider(config = {}) {
   const providerName = String(config.provider || 'tencent').trim().toLowerCase() || 'tencent'
   if (providerName === 'tencent' || providerName === 'tencentcloud') {
     return createTencentSmsProvider(config)
+  }
+
+  if (providerName === 'console') {
+    return createConsoleSmsProvider(config)
   }
 
   return createUnsupportedSmsProvider(providerName)

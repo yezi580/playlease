@@ -2,7 +2,7 @@
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-header">
-        <div class="tab-item active">登录</div>
+        <div class="auth-title">登录</div>
       </div>
 
       <div class="auth-body">
@@ -18,7 +18,18 @@
           />
         </div>
 
-        <div class="input-group code-group">
+        <div v-if="loginMode === 'password'" class="input-group">
+          <input
+            v-model="form.password"
+            type="password"
+            maxlength="32"
+            placeholder="请输入密码"
+            :disabled="submitting"
+            @keyup.enter="submitAuth"
+          />
+        </div>
+
+        <div v-else class="input-group code-group">
           <input
             v-model.trim="form.code"
             type="text"
@@ -38,7 +49,7 @@
           </button>
         </div>
 
-        <div class="input-group">
+        <div v-if="loginMode === 'sms'" class="input-group">
           <input
             v-model.trim="form.inviteCode"
             type="text"
@@ -54,6 +65,28 @@
         <button class="submit-btn" :disabled="submitting" @click="submitAuth">
           {{ submitText }}
         </button>
+
+        <div class="mode-switch">
+          <button
+            type="button"
+            class="mode-switch__item"
+            :class="{ active: loginMode === 'sms' }"
+            :disabled="submitting"
+            @click="switchLoginMode('sms')"
+          >
+            验证码登录
+          </button>
+          <span class="mode-switch__divider"></span>
+          <button
+            type="button"
+            class="mode-switch__item"
+            :class="{ active: loginMode === 'password' }"
+            :disabled="submitting"
+            @click="switchLoginMode('password')"
+          >
+            密码登录
+          </button>
+        </div>
 
         <div class="agreement-wrap">
           <label class="agreement-label">
@@ -218,8 +251,10 @@ export default {
       form: {
         phone: '',
         code: '',
+        password: '',
         inviteCode: ''
-      }
+      },
+      loginMode: 'sms'
     }
   },
   computed: {
@@ -356,25 +391,23 @@ export default {
       return true
     },
     async ensureCaptchaConfig() {
-      if (this.captchaConfigLoaded) {
-        if (!this.captchaEnabled) {
-          throw new Error('腾讯云验证码未配置完成，请联系管理员')
+      if (!this.captchaConfigLoaded) {
+        this.captchaLoading = true
+        try {
+          const data = await apiFetch('/api/auth/captcha/config')
+          this.captchaConfigLoaded = true
+          this.captchaEnabled = Boolean(data.enabled)
+          this.captchaAppId = String(data.captcha_app_id || '').trim()
+          this.captchaJsUrl = String(data.js_url || '').trim()
+          this.captchaUserLanguage = String(data.user_language || 'zh-cn').trim() || 'zh-cn'
+        } finally {
+          this.captchaLoading = false
         }
-        return
       }
-      this.captchaLoading = true
-      try {
-        const data = await apiFetch('/api/auth/captcha/config')
-        this.captchaConfigLoaded = true
-        this.captchaEnabled = Boolean(data.enabled)
-        this.captchaAppId = String(data.captcha_app_id || '').trim()
-        this.captchaJsUrl = String(data.js_url || '').trim()
-        this.captchaUserLanguage = String(data.user_language || 'zh-cn').trim() || 'zh-cn'
-        if (!this.captchaEnabled || !this.captchaAppId || !this.captchaJsUrl) {
-          throw new Error('腾讯云验证码未配置完成，请联系管理员')
-        }
-      } finally {
-        this.captchaLoading = false
+      // enabled:false 表示后端关闭了滑块（如 console 演示模式），发码时免票据直接提交；
+      // 只有「已启用但 appId/jsUrl 缺失」才是配置错误
+      if (this.captchaEnabled && (!this.captchaAppId || !this.captchaJsUrl)) {
+        throw new Error('腾讯云验证码未配置完成，请联系管理员')
       }
     },
     async ensureTencentCaptchaScript() {
@@ -382,6 +415,9 @@ export default {
         return
       }
       await this.ensureCaptchaConfig()
+      if (!this.captchaEnabled) {
+        throw new Error('腾讯云验证码未启用，无需加载脚本')
+      }
       if (typeof window.TencentCaptcha === 'function') {
         this.captchaScriptLoaded = true
         return
@@ -459,7 +495,11 @@ export default {
       let captchaResult = null
       try {
         this.captchaLoading = true
-        captchaResult = await this.openTencentCaptcha()
+        await this.ensureCaptchaConfig()
+        // 后端关闭滑块（console 演示模式）时跳过验证码，免票据直接发码
+        if (this.captchaEnabled) {
+          captchaResult = await this.openTencentCaptcha()
+        }
       } catch (error) {
         this.alertMessage(error.message || '拉起腾讯云验证码失败')
         return
@@ -467,7 +507,7 @@ export default {
         this.captchaLoading = false
       }
 
-      if (!captchaResult?.ticket || !captchaResult?.randstr) {
+      if (this.captchaEnabled && (!captchaResult?.ticket || !captchaResult?.randstr)) {
         return
       }
 
@@ -478,8 +518,8 @@ export default {
           body: JSON.stringify({
             phone,
             scene: this.currentSmsScene,
-            captcha_ticket: captchaResult.ticket,
-            captcha_randstr: captchaResult.randstr
+            captcha_ticket: String(captchaResult?.ticket || '').trim(),
+            captcha_randstr: String(captchaResult?.randstr || '').trim()
           })
         })
         const retryAfterSeconds = Math.max(0, Number(data.retry_after_seconds || 60) || 60)
@@ -493,10 +533,12 @@ export default {
         this.codeSending = false
       }
     },
+    switchLoginMode(mode) {
+      if (this.submitting) return
+      this.loginMode = mode === 'password' ? 'password' : 'sms'
+    },
     async submitAuth() {
       const phone = String(this.form.phone || '').trim()
-      const code = String(this.form.code || '').trim()
-      const inviteCode = String(this.form.inviteCode || '').trim().toUpperCase()
 
       if (!this.agreement) {
         this.alertMessage('请先阅读并同意用户协议与隐私政策')
@@ -504,6 +546,36 @@ export default {
       }
 
       if (!this.validatePhone(phone)) return
+
+      if (this.loginMode === 'password') {
+        const password = String(this.form.password || '')
+        if (password.length < 8) {
+          this.alertMessage('请输入正确的密码')
+          return
+        }
+
+        this.submitting = true
+        try {
+          const data = await apiFetch('/api/auth/password/login', {
+            method: 'POST',
+            body: JSON.stringify({ phone, password })
+          })
+
+          this.$emit('auth-success', {
+            username: data.user?.username || data.user?.phone || phone,
+            token: data.token,
+            user: data.user
+          })
+        } catch (error) {
+          this.alertMessage(error?.data?.message || error?.message || '登录失败，请稍后重试')
+        } finally {
+          this.submitting = false
+        }
+        return
+      }
+
+      const code = String(this.form.code || '').trim()
+      const inviteCode = String(this.form.inviteCode || '').trim().toUpperCase()
 
       if (!/^\d{4,8}$/.test(code)) {
         this.alertMessage('请输入正确的验证码')
@@ -559,26 +631,23 @@ export default {
   align-items: center;
   padding: 0 32px;
   margin-top: 32px;
-  gap: 24px;
   border-bottom: 1px solid transparent;
 }
 
-.tab-item {
-  font-size: 22px;
-  font-weight: 600;
+.auth-title {
+  font-size: 24px;
+  font-weight: 700;
   color: var(--text-main);
   position: relative;
-  padding-bottom: 8px;
-  transition: all 0.3s;
+  padding-bottom: 10px;
 }
 
-.tab-item.active::after {
+.auth-title::after {
   content: '';
   position: absolute;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 24px;
+  left: 0;
+  width: 28px;
   height: 4px;
   background: var(--info);
   border-radius: 2px;
@@ -693,6 +762,43 @@ export default {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.mode-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.mode-switch__item {
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.mode-switch__item:hover:not(:disabled):not(.active) {
+  color: var(--text-regular);
+}
+
+.mode-switch__item.active {
+  color: var(--info);
+  font-weight: 600;
+}
+
+.mode-switch__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mode-switch__divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border-color);
 }
 
 .agreement-wrap {

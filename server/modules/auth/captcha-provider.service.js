@@ -57,6 +57,32 @@ function createUnavailableTencentCaptchaProvider() {
 }
 
 
+// Console 验证码：演示/测试环境专用（CAPTCHA_PROVIDER=console）。
+// 前端 getClientConfig 返回 enabled:false（不弹滑块），服务端票据校验直接通过。
+function createConsoleCaptchaProvider() {
+  return {
+    mode: 'console',
+    isEnabled: false,
+    getClientConfig() {
+      return {
+        enabled: false,
+        provider: 'console',
+        jsUrl: '',
+        captchaAppId: '',
+        userLanguage: 'zh-cn'
+      }
+    },
+    async verifyTicket() {
+      return {
+        ok: true,
+        provider: 'console',
+        reason: '',
+        message: 'Console 模式：验证码校验跳过'
+      }
+    }
+  }
+}
+
 function createUnsupportedCaptchaProvider(providerName = 'unknown') {
   return {
     mode: providerName,
@@ -205,6 +231,10 @@ export function createCaptchaProvider(config = {}) {
 
   if (providerName === 'tencent') {
     return createTencentCaptchaProvider(config)
+  }
+
+  if (providerName === 'console' || providerName === 'none') {
+    return createConsoleCaptchaProvider()
   }
 
   return createUnsupportedCaptchaProvider(providerName)

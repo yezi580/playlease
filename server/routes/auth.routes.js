@@ -443,6 +443,53 @@ export function registerAuthRoutes(deps) {
     res.status(410).json({ message: '密码登录已下线，请使用验证码登录' })
   })
 
+  // 演示/测试环境密码登录：仅 DEMO_PASSWORD_LOGIN=true 时注册此端点，
+  // 逻辑复用 2026-08-12（db85b16 改仅验证码登录）之前的 /api/login 实现。
+  // 生产环境不设置该变量，端点不存在，行为不变。
+  if (['1', 'true', 'yes', 'on'].includes(String(process.env.DEMO_PASSWORD_LOGIN || '').trim().toLowerCase())) {
+    app.post('/api/auth/password/login', authIpLimiter, authLimiter, async (req, res) => {
+      const phone = String(req.body?.phone || '').trim()
+      const password = String(req.body?.password || '')
+
+      if (!phone || !password) {
+        return res.status(400).json({ message: '手机号和密码不能为空' })
+      }
+
+      try {
+        const user = await findUserByPhone(pool, phone)
+        if (!user) {
+          return res.status(401).json({ message: '手机号或密码错误' })
+        }
+        if (isAdminRole(user.role)) {
+          return res.status(403).json({ message: buildAdminPortalOnlyMessage() })
+        }
+        const isPassOk = await bcrypt.compare(password, user.password_hash)
+        if (!isPassOk) {
+          return res.status(401).json({ message: '手机号或密码错误' })
+        }
+        if (isUserCurrentlyBanned(user)) {
+          return res.status(403).json({ message: buildBannedUserMessage(user) })
+        }
+
+        const { token, tokenMaxAgeMs } = await issueAuthSession(req, user, {
+          authLevel: 'password',
+          amr: ['pwd']
+        })
+        setAuthCookie(req, res, token, { maxAgeMs: tokenMaxAgeMs })
+        res.json({
+          user: {
+            id: user.id,
+            username: user.username,
+            phone: user.phone,
+            role: user.role
+          }
+        })
+      } catch (_error) {
+        res.status(500).json({ message: '登录失败' })
+      }
+    })
+  }
+
   app.post('/api/auth/sms/send', authIpLimiter, authLimiter, async (req, res) => {
     const phone = String(req.body?.phone || '').trim()
     const scene = String(req.body?.scene || 'login').trim() || 'login'

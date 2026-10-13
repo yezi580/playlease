@@ -317,25 +317,23 @@ export default {
       }, 1000)
     },
     async ensureCaptchaConfig() {
-      if (this.captchaConfigLoaded) {
-        if (!this.captchaEnabled) {
-          throw new Error('腾讯云验证码未配置完成，请联系管理员')
+      if (!this.captchaConfigLoaded) {
+        this.captchaLoading = true
+        try {
+          const data = await apiFetch('/api/auth/captcha/config')
+          this.captchaConfigLoaded = true
+          this.captchaEnabled = Boolean(data.enabled)
+          this.captchaAppId = String(data.captcha_app_id || '').trim()
+          this.captchaJsUrl = String(data.js_url || '').trim()
+          this.captchaUserLanguage = String(data.user_language || 'zh-cn').trim() || 'zh-cn'
+        } finally {
+          this.captchaLoading = false
         }
-        return
       }
-      this.captchaLoading = true
-      try {
-        const data = await apiFetch('/api/auth/captcha/config')
-        this.captchaConfigLoaded = true
-        this.captchaEnabled = Boolean(data.enabled)
-        this.captchaAppId = String(data.captcha_app_id || '').trim()
-        this.captchaJsUrl = String(data.js_url || '').trim()
-        this.captchaUserLanguage = String(data.user_language || 'zh-cn').trim() || 'zh-cn'
-        if (!this.captchaEnabled || !this.captchaAppId || !this.captchaJsUrl) {
-          throw new Error('腾讯云验证码未配置完成，请联系管理员')
-        }
-      } finally {
-        this.captchaLoading = false
+      // enabled:false 表示后端关闭了滑块（如 console 演示模式），发码时免票据直接提交；
+      // 只有「已启用但 appId/jsUrl 缺失」才是配置错误
+      if (this.captchaEnabled && (!this.captchaAppId || !this.captchaJsUrl)) {
+        throw new Error('腾讯云验证码未配置完成，请联系管理员')
       }
     },
     async ensureTencentCaptchaScript() {
@@ -343,6 +341,9 @@ export default {
         return
       }
       await this.ensureCaptchaConfig()
+      if (!this.captchaEnabled) {
+        throw new Error('腾讯云验证码未启用，无需加载脚本')
+      }
       if (typeof window.TencentCaptcha === 'function') {
         this.captchaScriptLoaded = true
         return
@@ -428,7 +429,11 @@ export default {
       let captchaResult = null
       try {
         this.captchaLoading = true
-        captchaResult = await this.openTencentCaptcha()
+        await this.ensureCaptchaConfig()
+        // 后端关闭滑块（console 演示模式）时跳过验证码，免票据直接发码
+        if (this.captchaEnabled) {
+          captchaResult = await this.openTencentCaptcha()
+        }
       } catch (error) {
         this.loginError = error.message || '拉起腾讯云验证码失败'
         return
@@ -436,7 +441,7 @@ export default {
         this.captchaLoading = false
       }
 
-      if (!captchaResult?.ticket || !captchaResult?.randstr) {
+      if (this.captchaEnabled && (!captchaResult?.ticket || !captchaResult?.randstr)) {
         return
       }
 
@@ -447,8 +452,8 @@ export default {
           body: JSON.stringify({
             phone,
             scene: 'admin_login',
-            captcha_ticket: captchaResult.ticket,
-            captcha_randstr: captchaResult.randstr
+            captcha_ticket: String(captchaResult?.ticket || '').trim(),
+            captcha_randstr: String(captchaResult?.randstr || '').trim()
           })
         })
         const retryAfterSeconds = Math.max(0, Number(data.retry_after_seconds || 60) || 60)
