@@ -112,19 +112,6 @@
         </button>
       </div>
       <template v-if="showHomeQuickActions">
-        <div class="quick-action-wrapper ai-action">
-          <button
-            type="button"
-            class="home-quick-action-btn"
-            aria-label="AI 助手"
-            @click="openAiAssistant"
-          >
-            <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
-            </svg>
-          </button>
-          <span class="action-label">AI 助手</span>
-        </div>
         <div class="quick-action-wrapper invite-action">
           <button
             type="button"
