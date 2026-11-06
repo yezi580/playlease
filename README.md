@@ -1,6 +1,6 @@
 # PlayLease · 游戏账号租赁平台
 
-> 全栈游戏账号租赁平台（已上线运营）：Vue3 用户站 + 管理后台、Node/Express 主服务、资金冻结与结算、实时聊天，以及独立的 **AI 助手微服务**（RAG 规则问答 + Function Calling 智能选号，SSE 流式输出）。
+> 全栈游戏账号租赁平台：Vue3 用户站 + 管理后台、Node/Express 主服务、资金冻结与结算、实时聊天，以及独立的 **AI 助手微服务**（RAG 规则问答 + Function Calling 智能选号，SSE 流式输出）。
 
 ![Vue 3](https://img.shields.io/badge/Vue-3.5-42b883?logo=vuedotjs&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
@@ -9,7 +9,17 @@
 ![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?logo=mysql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-cache-DC382D?logo=redis&logoColor=white)
 
-线上站点：<https://xysh88.com>
+## 在线演示
+
+主站 <https://sparks.pub> ｜ 管理后台 <https://admin.sparks.pub>（演示环境，数据可随意操作）
+
+| 角色 | 账号 | 凭据 |
+|---|---|---|
+| 普通用户 / 卖家 | `18500006601` ~ `18800006604` | 密码 `Demo@123456`，或验证码 `123456` |
+| 客服 | `18900006605` | `Demo@123456` |
+| 管理员 | `19900006606` | 后台仅验证码 `123456` |
+
+也支持任意手机号现场注册（验证码统一 `123456`）。
 
 ## 架构
 
