@@ -74,7 +74,7 @@ copy .env.example .env      # 填 AI_LLM_API_KEY（必填），Embedding 三项�
 uvicorn app.main:app --reload --port 8000
 ```
 
-生产部署（Docker Compose + nginx + 蓝绿发布）见 [deploy/PROD_DEPLOY.md](deploy/PROD_DEPLOY.md)。
+生产部署采用 Docker Compose + nginx，蓝绿双 api 容器零停机发布，秒级回滚。
 
 ## 目录结构
 
@@ -93,5 +93,4 @@ uvicorn app.main:app --reload --port 8000
 - [产品需求文档](docs/产品需求文档.md)
 - [开发设计文档](docs/开发设计文档.md)
 - [资金冻结与结算设计](docs/freeze-funds-and-settlement.md)
-- [生产部署手册](deploy/PROD_DEPLOY.md)
 - [AI 助手服务说明](ai-service/README.md)

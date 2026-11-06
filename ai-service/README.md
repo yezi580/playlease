@@ -53,4 +53,4 @@ knowledge/faq.md   RAG 语料（⚠️ 只放用户可见的公开规则，内�
 
 - 改 `knowledge/faq.md` 后重启即生效；配了 Embedding 时语料指纹（md5）变化会自动重新向量化
 - `cache/embeddings.json` 是语料向量缓存，删掉会触发重新付费向量化（很便宜，几十条一次几厘钱）
-- 部署：单容器、不参与蓝绿；更新 = 服务器上 `docker compose ... up -d --build ai-service`（见主仓库 `deploy/PROD_DEPLOY.md`）
+- 部署：单容器、不参与蓝绿；更新 = 服务器上 `docker compose ... up -d --build ai-service`
